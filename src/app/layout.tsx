@@ -2,13 +2,14 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { ThirdwebProvider } from "@/app/thirdweb";
+import { TokenGateProvider } from 'collabland-tokengate-react-context';
+import { Providers } from "./providers";
 
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "thirdweb SDK + Next starter",
-  description:
-    "Starter template for using thirdweb SDK with Next.js App router",
+  title: "Creative TV",
+  description: "The way content should be",
 };
 
 export default function RootLayout({
@@ -19,7 +20,13 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={inter.className}>
-        <ThirdwebProvider>{children}</ThirdwebProvider>
+        <Providers>
+          <ThirdwebProvider>
+            <TokenGateProvider>
+              {children}
+            </TokenGateProvider>
+          </ThirdwebProvider>
+        </Providers>
       </body>
     </html>
   );
