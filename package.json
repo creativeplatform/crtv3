@@ -17,6 +17,7 @@
     "@livepeer/react": "^4.1.14",
     "@wert-io/widget-initializer": "^6.1.1",
     "collabland-tokengate-react-context": "^1.0.6",
+    "formik": "^2.4.5",
     "framer-motion": "^11.0.25",
     "livepeer": "^3.0.2",
     "next": "14.1.0",
@@ -24,9 +25,11 @@
     "react-dom": "^18",
     "react-icons": "^5.0.1",
     "sonner": "^1.4.41",
+    "styled-components": "^6.1.8",
     "tailwind-merge": "^2.2.2",
     "thirdweb": "^5",
     "uuid": "^9.0.1",
+    "yup": "^1.4.0",
     "zod": "^3.22.4"
   },
   "devDependencies": {
