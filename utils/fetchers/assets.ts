@@ -1,7 +1,8 @@
+import { Component } from 'react'
 import livepeer from '../../src/app/livepeer'
 
 export type AssetData = {
-  id: any
+  assetId: string | null
   user: string
   title: string
   description: string
@@ -10,7 +11,7 @@ export type AssetData = {
 }
 
 export type Video = {
-  id?: any | null
+  assetId?: string | null
   name: string
   status: { phase: string | null; updatedAt: bigint; progress: string | null; errorMessage: string | null }
   playbackId: string
@@ -47,7 +48,7 @@ export type Video = {
 
 export type Views = {
   [x: string]: any
-  id?: any | null
+  assetId?: string | null
   playbackId: string
   publicViews: any
 }
@@ -60,22 +61,86 @@ export const getAllAssets = async () => {
   return [assets]
 }
 
-export const fetchAssetId = async (id: any) => {
-  const [, { assetId }] = id.queryKey
-  console.log('Fetching asset...')
-  const response = await livepeer?.asset?.get(assetId)
-  const asset = response
+export const fetchAssetId = async (id: string | { queryKey: [unknown, { assetId: string }] })  => {
+  let assetId: string;
 
-  console.log('Asset: ', asset)
-  return [asset]
+  if (typeof id === 'string') {
+    // Handle the case where `id` is a string
+    assetId = id;
+  } else {
+    // Handle the case where `id` is an object with a `queryKey` property
+    const [, { assetId: queryAssetId }] = id.queryKey;
+    assetId = queryAssetId;
+  }
+
+  console.log('Fetching asset...');
+  const response = await livepeer?.asset?.get(assetId);
+  const asset = response;
+
+  console.log('Asset: ', asset);
+  return asset;
 }
 
-export const updateAsset = async (id: any, data: any) => {
-  const [, { assetId }] = id.queryKey
-  console.log('Updating asset')
+export const updateAsset = async (id: string | { queryKey: [unknown, { assetId: string }] }, data: any) => {
+  let assetId: string;
+
+  if (typeof id === 'string') {
+    // Handle the case where `id` is a string
+    assetId = id;
+  } else {
+    // Handle the case where `id` is an object with a `queryKey` property
+    const [, { assetId: queryAssetId }] = id.queryKey;
+    assetId = queryAssetId;
+  }
+
+  console.log('Updating asset...')
   const response = await livepeer?.asset?.update(assetId, data)
   const asset = response
 
-  console.log('Asset: ', asset)
-  return [asset]
+  console.log('Updated: ', asset)
+  return asset
+}
+
+export const deleteAsset = async (id: string | { queryKey: [unknown, { assetId: string }] }, data: any) => {
+  let assetId: string;
+
+  if (typeof id === 'string') {
+    // Handle the case where `id` is a string
+    assetId = id;
+  } else {
+    // Handle the case where `id` is an object with a `queryKey` property
+    const [, { assetId: queryAssetId }] = id.queryKey;
+    assetId = queryAssetId;
+  }
+
+  console.log('Deleting asset...')
+  const response = await livepeer?.asset?.delete(assetId, data)
+  const asset = response
+
+  console.log('Deleted: ', asset)
+  return asset
+}
+
+export const createViaUrl = async (data: any, config: any) => {
+  try {
+  console.log('Creating URL...')
+  const response = await livepeer?.asset?.createViaURL(data, config)
+  const asset = response;
+    console.log('Created: ', asset);
+    return [asset];
+  } catch (error) {
+    console.error('Error creating url:', error);
+  }
+}
+
+export const createAsset = async (data: any, config: any) => {
+  try {
+  console.log('Creating asset...')
+  const response = await livepeer?.asset?.create(data, config)
+  const asset = response;
+    console.log('Created: ', asset);
+    return [asset]; 
+  } catch (error) {
+    console.error('Error creating asset:', error);
+  }
 }
