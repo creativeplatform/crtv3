@@ -1,4 +1,4 @@
-import axios from 'axios'
+import livepeer from '../../src/app/livepeer'
 
 export type AssetData = {
   id: any
@@ -52,21 +52,19 @@ export type Views = {
   publicViews: any
 }
 
-// TODO: use Reat-Query's useQueryClient to invalidate the cache
-export const videoApi = axios.create({
-  baseURL: 'https://livepeer.studio/api/asset',
-  headers: {
-    Authorization: `Bearer ${process.env.LIVEPEER_API_KEY}`,
-    Accept: 'application/json',
-    'Content-Type': 'application/json',
-  },
-})
+export const getAllAssets = async () => {
+  const response = await livepeer?.asset.getAll()
+  const assets = response
+
+  console.log('Assets: ', assets)
+  return [assets]
+}
 
 export const fetchAssetId = async (id: any) => {
   const [, { assetId }] = id.queryKey
-  console.log('Fetching asset')
-  const response = await videoApi.get<AssetData['video']>(`/${assetId}?details=true`)
-  const asset = response.data
+  console.log('Fetching asset...')
+  const response = await livepeer?.asset?.get(assetId)
+  const asset = response
 
   console.log('Asset: ', asset)
   return [asset]
@@ -75,8 +73,8 @@ export const fetchAssetId = async (id: any) => {
 export const updateAsset = async (id: any, data: any) => {
   const [, { assetId }] = id.queryKey
   console.log('Updating asset')
-  const response = await videoApi.patch<AssetData['video']>(`/${assetId}`, data)
-  const asset = response.data
+  const response = await livepeer?.asset?.update(assetId, data)
+  const asset = response
 
   console.log('Asset: ', asset)
   return [asset]

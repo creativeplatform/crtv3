@@ -1,3 +1,4 @@
+import React from'react';
 import { Card, CardHeader, CardBody, CardFooter, Heading, Text, Flex, Avatar, Box, Stack, HStack, Divider, Button, Badge, Spacer, ButtonGroup } from '@chakra-ui/react';
 import { Player } from '@livepeer/react';
 import { useRouter } from 'next/navigation';
