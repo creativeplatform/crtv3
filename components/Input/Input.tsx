@@ -1,3 +1,4 @@
+import React from 'react';
 import { Input as ChackraUIInput, InputProps } from '@chakra-ui/react';
 
 const Input: React.FC<InputProps> = (p) => {

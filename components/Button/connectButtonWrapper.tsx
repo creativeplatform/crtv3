@@ -1,4 +1,5 @@
 'use client';
+import React from "react";
 import { ConnectButton } from "thirdweb/react";
 import { client } from "../../src/app/client";
 import { ACCOUNT_FACTORY_ADDRESS } from "../../utils/context";

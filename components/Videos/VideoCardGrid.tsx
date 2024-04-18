@@ -15,7 +15,7 @@ const VideoCardGrid: React.FC<VideoCardGridProps> = ({ videos }) => {
     <Box p={5}>
       <SimpleGrid minChildWidth="300px" spacing="40px" autoColumns={'max-content'}>
         {videos.map((video) => (
-          <VideoCard key={video.id} video={video} />
+          <VideoCard key={video?.assetId} video={video} />
         ))}
       </SimpleGrid>
     </Box>

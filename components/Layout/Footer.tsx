@@ -1,5 +1,5 @@
+import React, { ReactNode } from 'react'
 import { Box, Container, Flex, Image, SimpleGrid, Stack, Tag, Text, Link } from '@chakra-ui/react'
-import { ReactNode } from 'react'
 import { CREATIVE_ICON, FOOTER_LINKS, SOCIAL_LINKS, SITE_COPYRIGHT } from '../../utils/context'
  
 

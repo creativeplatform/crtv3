@@ -1,3 +1,4 @@
+import React from 'react'
 import { Image } from '@chakra-ui/react'
 
 export const PosterImage = (props: { imgSrc: string; alt: string }) => {

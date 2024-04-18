@@ -1,4 +1,4 @@
-
+import React from 'react';
 import { SimpleGrid, Heading } from '@chakra-ui/react';
 import VideoCardGrid from './VideoCardGrid';
 

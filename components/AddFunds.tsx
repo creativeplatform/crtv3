@@ -1,3 +1,4 @@
+import React from 'react';
 import type { NextPage } from 'next';
 import WertWidget from '@wert-io/widget-initializer';
 import type { Options } from '@wert-io/widget-initializer/types';

@@ -3,7 +3,7 @@ import { Card, CardHeader, CardBody, CardFooter, Heading, Text, Flex, Avatar, Bo
 import { Player } from '@livepeer/react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { PosterImage } from './PosterImage';
+import { PosterImage } from '../Player/PosterImage';
 import { SITE_LOGO, CREATIVE_LOGO_WHT } from '../../utils/context';
 import { AssetData } from '../../utils/fetchers/assets';
 
@@ -15,7 +15,7 @@ const VideoCard: React.FC<VideoCardProps> = ({ video }) => {
     const navigation = useRouter(); // Using App Router navigation
 
     return (
-        <Card key={video.id} maxW="md" variant={'elevated'} mb={12}>
+        <Card key={video?.assetId} maxW="md" variant={'elevated'} mb={12}>
             <CardHeader>
                 <Flex flex={1} gap={4} align="center" flexWrap={'wrap'}>
                     <Avatar name="creative" src={SITE_LOGO} />
@@ -76,7 +76,7 @@ const VideoCard: React.FC<VideoCardProps> = ({ video }) => {
                             flex="1"
                             variant="ghost"
                             aria-label={`Comment on ${video.name}`}
-                            onClick={() => navigation.push(`discover/${encodeURIComponent(video?.id)}`)}> {/* Updated navigation method */}
+                            onClick={() => navigation.push(`discover/${video?.assetId}`)}> {/* Updated navigation method */}
                             Comment
                         </Button>
                         <Button

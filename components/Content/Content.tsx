@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useActiveAccount } from 'thirdweb/react';
 import Member from '../Member/Member';
 import NonLoggedInView from './NonLoggedInView/NonLoggedInView';
