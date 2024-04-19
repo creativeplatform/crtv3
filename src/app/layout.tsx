@@ -1,10 +1,12 @@
+import React from "react";
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import { ThirdwebProvider } from "@/app/thirdweb";
+import { ThirdwebProvider } from "../app/thirdweb";
 import { TokenGateProvider } from 'collabland-tokengate-react-context';
 import { Providers } from "./providers";
 import { ReactQueryClientProvider } from '../../components/ReactQueryClientProvider'
+import Layout from "../../components/Layout/layout"
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -25,7 +27,9 @@ export default function RootLayout({
           <Providers>
             <ThirdwebProvider>
               <TokenGateProvider>
+                <Layout>
                 {children}
+                </Layout>
               </TokenGateProvider>
             </ThirdwebProvider>
           </Providers>

@@ -4,13 +4,9 @@ import { BreadcrumbItem, BreadcrumbLink, Breadcrumb, Box, Heading, Flex, Text } 
 import Link from 'next/link';
 import AllAssets from '../../../components/Videos/AllAssets';
 
-
-
-
 const AllVideosPage =() => {
   return (
     <main>
-
       <Box my={10} p={4}>
         <Breadcrumb>
           <BreadcrumbItem>

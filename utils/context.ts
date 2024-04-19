@@ -1848,6 +1848,33 @@ export const ACCOUNT_FACTORY_ABI = [
   }
 ];
 
+export const CURRENT_PRICES = [
+  {
+    name: "Fan",
+    features: ["Lorem iptsum dolor" , "mmm hmmm"],
+    info: "Fusce purus tellus, tristique quis libero sit amet..."
+  },
+  {
+    name: "Creator",
+    price: "$10",
+    popular: true,
+    features: ["Lorem iptsum dolor" , "mmm hmmm"],
+    info: "Fusce purus tellus, tristique quis libero sit amet..."
+  },
+  {
+    name: "Supporter",
+    price: "$100",
+    features: ["Lorem iptsum dolor" , "mmm hmmm"],
+    info: "Fusce purus tellus, tristique quis libero sit amet..."
+  },
+  {
+    name: "Business",
+    price: "$250",
+    features: ["Lorem iptsum dolor" , "mmm hmmm"],
+    info: "Fusce purus tellus, tristique quis libero sit amet..."
+  }
+];
+
 export const ROLES = {
     "sepolia": {
         "test": {

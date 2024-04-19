@@ -1,7 +1,6 @@
+import React from "react";
 import { Metadata } from "next";
 import Content from "../../components/Content/Content";
-import Header from "../../components/Layout/Header";
-import Footer from "../../components/Layout/Footer";
 
 export const metadata: Metadata = {
   title: "Creative TV",
@@ -28,14 +27,10 @@ export const metadata: Metadata = {
 export default function Home() {
    
   return (
-    <div>
-      <Header />
       <main className="p-4 pb-5 min-h-[100vh] flex items-center justify-center container max-w-screen-xl mx-auto">
         <div className="py-10">
           <Content />
         </div>
       </main>
-      <Footer />
-    </div>
   );
 }

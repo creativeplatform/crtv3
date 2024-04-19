@@ -208,7 +208,7 @@ const Member = () => {
                 </Link>
                 <Link
                   className="underline"
-                  href="https://creativeplatform.xyz/blog"
+                  href="/pricing"
                   target="_blank"
                 >
                   Membership Pricing
