@@ -1,11 +1,12 @@
 "use client";
-import React from "react";
+import React, { useState } from "react";
 import {
   Flex,
   Heading,
   VStack,
   Stack,
   Box,
+  Button,
   Grid,
   Text,
   BreadcrumbItem, 
@@ -13,12 +14,17 @@ import {
   Breadcrumb,
   useColorModeValue,
 } from "@chakra-ui/react";
-import PricingBox from "../../../components/Pricing/PricingBox";
-import { CURRENT_PRICES } from "../../../utils/context";
+import PricingBoxA from "../../../components/Pricing/PricingBoxA";
+import PricingBoxB from "../../../components/Pricing/PricingBoxB";
+import { QUARTERLY_PRICES, ANNUAL_PRICES } from "../../../utils/context";
 
-const prices = CURRENT_PRICES;
+const aPrices = QUARTERLY_PRICES;
+const bPrices = ANNUAL_PRICES;
 
-const Pricing = () => (
+const Pricing = () => {
+  const [isAnnual, setIsAnnual] = useState(false);
+
+  return (
   <main>
     <Box my={5} p={4}>
         <Breadcrumb>
@@ -26,7 +32,7 @@ const Pricing = () => (
                 <BreadcrumbLink href='/'><span role="img" aria-label="home">🏠</span> Home</BreadcrumbLink>
             </BreadcrumbItem>
             <BreadcrumbItem isCurrentPage>
-                <BreadcrumbLink>Membership Pricing</BreadcrumbLink>
+                <BreadcrumbLink href='#'>Membership Pricing</BreadcrumbLink>
             </BreadcrumbItem>
         </Breadcrumb>
     </Box>
@@ -56,7 +62,7 @@ const Pricing = () => (
           spacing={0}
           border="1px solid"
           borderColor="#EC407A"
-          borderRadius="4px"
+          borderRadius="6px"
           justifyContent="center"
           alignItems="stretch"
           display="flex"
@@ -64,12 +70,12 @@ const Pricing = () => (
           backgroundColor={useColorModeValue("inherit","#1a202C")}
           mb={3}
         >
-          <Box backgroundColor="#EC407A" color={'white'} p=".3rem 1rem">
+          <Box as={Button} backgroundColor={!isAnnual ? "#EC407A" : "inherit"} color={!isAnnual ? 'white' : 'inherit'} _hover={{color: "inherit"}} p=".3rem 1rem" onClick={() => setIsAnnual(false)}>
             <Text>
-              Monthly
+              Quarterly
             </Text>
           </Box>
-          <Box p=".3rem 1rem">
+          <Box as={Button} backgroundColor={isAnnual ? "#EC407A" : "inherit"} color={isAnnual ? 'white' : 'inherit'} _hover={{color: "inherit"}} p=".3rem 1rem" onClick={() => setIsAnnual(true)}>
             <Text>Annually</Text>
           </Box>
         </Stack>
@@ -82,13 +88,15 @@ const Pricing = () => (
             md: "repeat( auto-fit, 250px )"
           }}
         >
-          {prices.map((price) => (
-            <PricingBox key={price.name} {...price} />
-          ))}
+          {!isAnnual
+            ? aPrices.map((price) => (<PricingBoxA key={price.name} {...price} />))
+            : bPrices.map((price) => (<PricingBoxB key={price.name} {...price} />))
+          }
         </Grid>
       </Stack>
     </Flex>
   </main>
-);
+  );
+};
 
 export default Pricing;

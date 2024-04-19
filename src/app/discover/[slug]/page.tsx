@@ -1,3 +1,4 @@
+import React from'react';
 import { Text, Heading, Box } from '@chakra-ui/react';
 
 export default function VideoDetailsPage({ params }: { params: { slug: string } }) {

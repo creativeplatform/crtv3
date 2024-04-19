@@ -13,6 +13,7 @@ import {
     useColorModeValue,
 } from "@chakra-ui/react";
 import { ArrowForwardIcon, CheckCircleIcon } from "@chakra-ui/icons";
+import Link from "next/link";
 
 // Define an interface for the props
 interface PricingBoxProps {
@@ -21,10 +22,11 @@ interface PricingBoxProps {
     price?: string;
     info?: string;
     features: string[];
+    url: string;
 }
 
-const PricingBox: React.FC<PricingBoxProps> = ({ popular = false, name, price, info = "", features }) => {
-    const listItemColor = useColorModeValue("gray.500", "white");
+const PricingBoxA: React.FC<PricingBoxProps> = ({ popular = false, name, price, info = "", features, url }) => {
+    const listItemColor = useColorModeValue("gray.600", "white");
     return (
         <Stack
             spacing={2}
@@ -51,13 +53,13 @@ const PricingBox: React.FC<PricingBoxProps> = ({ popular = false, name, price, i
                     POPULAR
                 </Box>
             )}
-            <Text color={ useColorModeValue('gray.500','white')} textTransform="uppercase">{name}</Text>
+            <Text color={ useColorModeValue('gray.600','white')} textTransform="uppercase">{name}</Text>
             <HStack>
-                <Heading color={useColorModeValue('gray.500','white')}>{price ?? "Free"}</Heading>
+                <Heading color={useColorModeValue('gray.600','white')}>{price ?? "Free"}</Heading>
                 {price && (
                     <Box as="span">
-                        <Text color={"gray.500"} fontSize={'small'} >
-                            / mo
+                        <Text color={"gray.600"} fontSize={'small'} >
+                            / 3 mo
                         </Text>
                     </Box>
                 )}
@@ -72,26 +74,28 @@ const PricingBox: React.FC<PricingBoxProps> = ({ popular = false, name, price, i
                 ))}
             </List>
             <Box>
-                <Button
-                    variant="solid"
-                    size="sm"
-                    width="100%"
-                    rightIcon={<ArrowForwardIcon />}
-                    borderRadius={0}
-                    display="flex"
-                    justifyContent="space-between"
-                    backgroundColor={popular ? "#EC407A" : "gray.400"}
-                    _hover={{
-                        backgroundColor: popular ? "#EC407A" : "gray.300"
-                    }}
-                    color="white"
-                >
-                    Buy
-                </Button>
-                <Text color={useColorModeValue('gray.500','white')} fontSize="xs">{info}</Text>
+                <Link href={url} target={"blank"}>
+                    <Button
+                        variant="solid"
+                        size="sm"
+                        width="100%"
+                        rightIcon={<ArrowForwardIcon />}
+                        borderRadius={0}
+                        display="flex"
+                        justifyContent="space-between"
+                        backgroundColor={popular ? "#EC407A" : "gray.400"}
+                        _hover={{
+                            backgroundColor: popular ? "#EC407A" : "gray.300"
+                        }}
+                        color="white"
+                    >
+                        Buy
+                    </Button>
+                </Link>
+                <Text color={useColorModeValue('gray.600','white')} fontSize="xs">{info}</Text>
             </Box>
         </Stack>
     );
 };
 
-export default PricingBox;
+export default PricingBoxA;

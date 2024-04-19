@@ -26,16 +26,17 @@ import * as S from '../Content/Content.styled';
 
 const defaultRules = {
     type: 'ERC721',
-    chainId: 11155111, // Sepolia
+    chainId: 137, // Polygon
     minToken: '1',
-    contractAddress: ROLES.sepolia.test.address, // NFT contract address
+    contractAddress: ROLES?.polygon.fan.address, // NFT contract address
     roleId: ROLES.sepolia.test.role, // NFT role id
-};
+}
+
 
 const RulesValidationSchema = Yup.object().shape({
     type: Yup.string().required('Required'),
     chainId: Yup.number().required('Required'),
-    minToken: Yup.number().positive().required('Required'),
+    minToken: Yup.string().required('Required'),
     contractAddress: Yup.string().required('Required'),
     roleId: Yup.string().required('Required'),
 });

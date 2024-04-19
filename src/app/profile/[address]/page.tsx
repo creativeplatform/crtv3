@@ -1,3 +1,6 @@
+import React from "react";
+import { Text } from "@chakra-ui/react";
+
 export default function Profile(){
-  return <p>My Profile Page</p>;
+  return <Text>My Profile Page</Text>;
 }

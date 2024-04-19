@@ -1,19 +1,18 @@
 "use client";
 import React from 'react';
 import { BreadcrumbItem, BreadcrumbLink, Breadcrumb, Box, Heading, Flex, Text } from '@chakra-ui/react';
-import Link from 'next/link';
 import AllAssets from '../../../components/Videos/AllAssets';
 
 const AllVideosPage =() => {
   return (
     <main>
-      <Box my={10} p={4}>
+      <Box my={5} p={4}>
         <Breadcrumb>
           <BreadcrumbItem>
             <BreadcrumbLink href='/'><span role="img" aria-label="home">🏠</span> Home</BreadcrumbLink>
           </BreadcrumbItem>
           <BreadcrumbItem isCurrentPage>
-            <BreadcrumbLink>Discover</BreadcrumbLink>
+            <BreadcrumbLink href='#'>Discover</BreadcrumbLink>
           </BreadcrumbItem>
         </Breadcrumb>
       </Box>
