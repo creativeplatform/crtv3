@@ -201,17 +201,9 @@ const Member = () => {
               <VStack alignItems="flex-start" gap={0} fontSize="md">
                 <Link
                   className="underline"
-                  href="https://app.creativeplatform.xyz"
-                  target="_blank"
-                >
-                  Creative Terminal
-                </Link>
-                <Link
-                  className="underline"
                   href="/pricing"
-                  target="_blank"
                 >
-                  Membership Pricing
+                  <span role={'img'} aria-label={'Membership'}>🎫</span> Membership Pricing
                 </Link>
               </VStack>
               {result?.roles?.[0] && (

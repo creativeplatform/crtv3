@@ -9,7 +9,8 @@ import {
     List,
     ListIcon,
     ListItem,
-    Button
+    Button,
+    useColorModeValue,
 } from "@chakra-ui/react";
 import { ArrowForwardIcon, CheckCircleIcon } from "@chakra-ui/icons";
 
@@ -23,15 +24,16 @@ interface PricingBoxProps {
 }
 
 const PricingBox: React.FC<PricingBoxProps> = ({ popular = false, name, price, info = "", features }) => {
+    const listItemColor = useColorModeValue("gray.500", "white");
     return (
         <Stack
             spacing={2}
             border="3px solid"
-            borderColor={popular ? "teal.300" : "gray.300"}
+            borderColor={popular ? "#EC407A" : "gray.300"}
             borderRadius="0.7rem"
             p={4}
             h="350px"
-            backgroundColor="white"
+            backgroundColor={useColorModeValue("whitesmoke","#161D2F")}
             position="relative"
         >
             {popular && (
@@ -39,7 +41,7 @@ const PricingBox: React.FC<PricingBoxProps> = ({ popular = false, name, price, i
                     position="absolute"
                     top="0"
                     right="0"
-                    backgroundColor="teal.300"
+                    backgroundColor="#EC407A"
                     color="white"
                     paddingX={2}
                     paddingY={1}
@@ -49,19 +51,21 @@ const PricingBox: React.FC<PricingBoxProps> = ({ popular = false, name, price, i
                     POPULAR
                 </Box>
             )}
-            <Text textTransform="uppercase">{name}</Text>
+            <Text color={ useColorModeValue('gray.500','white')} textTransform="uppercase">{name}</Text>
             <HStack>
-                <Heading>{price ?? "Free"}</Heading>
+                <Heading color={useColorModeValue('gray.500','white')}>{price ?? "Free"}</Heading>
                 {price && (
-                    <Box as="span" color="gray.600" fontSize="sm">
-                        / mo
+                    <Box as="span">
+                        <Text color={"gray.500"} fontSize={'small'} >
+                            / mo
+                        </Text>
                     </Box>
                 )}
             </HStack>
             <Divider borderColor="blackAlpha.500" />
             <List flex="1">
                 {features.map((feat, index) => (
-                    <ListItem key={index}>
+                    <ListItem key={index} color={listItemColor}>
                         <ListIcon as={CheckCircleIcon} color="gray.400" />
                         {feat}
                     </ListItem>
@@ -76,15 +80,15 @@ const PricingBox: React.FC<PricingBoxProps> = ({ popular = false, name, price, i
                     borderRadius={0}
                     display="flex"
                     justifyContent="space-between"
-                    backgroundColor={popular ? "teal.300" : "gray.400"}
+                    backgroundColor={popular ? "#EC407A" : "gray.400"}
                     _hover={{
-                        backgroundColor: popular ? "teal.500" : "gray.300"
+                        backgroundColor: popular ? "#EC407A" : "gray.300"
                     }}
                     color="white"
                 >
                     Buy
                 </Button>
-                <Text fontSize="xs">{info}</Text>
+                <Text color={useColorModeValue('gray.500','white')} fontSize="xs">{info}</Text>
             </Box>
         </Stack>
     );

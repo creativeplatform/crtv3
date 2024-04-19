@@ -11,6 +11,7 @@ import {
   BreadcrumbItem, 
   BreadcrumbLink, 
   Breadcrumb,
+  useColorModeValue,
 } from "@chakra-ui/react";
 import PricingBox from "../../../components/Pricing/PricingBox";
 import { CURRENT_PRICES } from "../../../utils/context";
@@ -19,13 +20,13 @@ const prices = CURRENT_PRICES;
 
 const Pricing = () => (
   <main>
-    <Box my={10} p={4}>
+    <Box my={5} p={4}>
         <Breadcrumb>
             <BreadcrumbItem>
                 <BreadcrumbLink href='/'><span role="img" aria-label="home">🏠</span> Home</BreadcrumbLink>
             </BreadcrumbItem>
             <BreadcrumbItem isCurrentPage>
-                <BreadcrumbLink>Membership Price</BreadcrumbLink>
+                <BreadcrumbLink>Membership Pricing</BreadcrumbLink>
             </BreadcrumbItem>
         </Breadcrumb>
     </Box>
@@ -33,9 +34,8 @@ const Pricing = () => (
       direction="column"
       alignItems="center"
       justifyContent="center"
-      minH="100vh"
+      minH="50vh"
       w="full"
-      backgroundColor="gray.200"
     >
       <Stack
         spacing={5}
@@ -47,27 +47,31 @@ const Pricing = () => (
         paddingX={[5, 0]}
       >
         <VStack alignItems="center" w="full">
-          <Heading color="teal.300">Pricing</Heading>
+          <Heading color="#EC407A">Pricing</Heading>
           <Text mb={5} textAlign="center">
-            Neque porro quisquam est qui dolorem ipsum quia dolor sit amet
+            Choose the path that best suits your creative journey with our tailored membership plans. Whether you&apos;re here to explore, create, support, or expand your business, we&apos;ve got the tools and perks to enhance your experience. Unlock a world of possibilities and take the next step towards shaping the future of entertainment. Select a plan that resonates with your aspirations and join the revolution of empowered creatives.
           </Text>
         </VStack>
         <Stack
           spacing={0}
           border="1px solid"
-          borderColor="teal.300"
+          borderColor="#EC407A"
           borderRadius="4px"
           justifyContent="center"
           alignItems="stretch"
           display="flex"
           width="fit-content"
-          backgroundColor="white"
+          backgroundColor={useColorModeValue("inherit","#1a202C")}
           mb={3}
         >
-          <Box backgroundColor="teal.300" color="white" p=".3rem 1rem">
-            Monthly
+          <Box backgroundColor="#EC407A" color={'white'} p=".3rem 1rem">
+            <Text>
+              Monthly
+            </Text>
           </Box>
-          <Box p=".3rem 1rem">Annually</Box>
+          <Box p=".3rem 1rem">
+            <Text>Annually</Text>
+          </Box>
         </Stack>
         <Grid
           w="full"

@@ -1851,27 +1851,27 @@ export const ACCOUNT_FACTORY_ABI = [
 export const CURRENT_PRICES = [
   {
     name: "Fan",
-    features: ["Lorem iptsum dolor" , "mmm hmmm"],
-    info: "Fusce purus tellus, tristique quis libero sit amet..."
+    features: ["Free-mium Content", "Creative Influence"],
+    info: "Enjoy content that inspires and elevate your influence!"
   },
   {
     name: "Creator",
     price: "$10",
     popular: true,
-    features: ["Lorem iptsum dolor" , "mmm hmmm"],
-    info: "Fusce purus tellus, tristique quis libero sit amet..."
+    features: ["Premium Content" , "Creative Earnings", "Content Insights" ],
+    info: "Unlock premium access and earn as you create."
   },
   {
     name: "Supporter",
     price: "$100",
-    features: ["Lorem iptsum dolor" , "mmm hmmm"],
-    info: "Fusce purus tellus, tristique quis libero sit amet..."
+    features: ["Exclusive Content", "Vesting Opportunities", "Live Portfolio Analytics", "Profit Perks", "Personalized Support" ],
+    info: "Experience investment exclusivity with top-tier content and insights."
   },
   {
     name: "Business",
     price: "$250",
-    features: ["Lorem iptsum dolor" , "mmm hmmm"],
-    info: "Fusce purus tellus, tristique quis libero sit amet..."
+    features: ["Ad Privileges" , "Ad Metrics", "Referral Rewards", "VIP Support"],
+    info: "Amplify your business with advanced ad capabilities tailored for success."
   }
 ];
 

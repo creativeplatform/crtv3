@@ -18,6 +18,15 @@ export default function ConnectButtonWrapper() {
   return (
     <ConnectButton
       client={client}
+      connectButton={{
+          label: "Get Started",
+          className: "my-custom-class",
+          style: {
+            backgroundColor: "#EC407A",
+            color: "white",
+            borderRadius: "10px",
+        },
+      }}
       accountAbstraction={smartWalletConfig}
       wallets={[inAppWallet]}
       chain={chain}
