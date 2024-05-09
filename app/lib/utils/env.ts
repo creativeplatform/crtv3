@@ -1,7 +1,6 @@
 const NEXT_PUBLIC_TEMPLATE_CLIENT_ID =
   process.env.NEXT_PUBLIC_TEMPLATE_CLIENT_ID || '';
 const LIVEPEER_API_KEY = process.env.LIVEPEER_API_KEY || '';
-const LIVEPEER_API_URL = process.env.LIVEPEER_API_URL || '';
 const SNAPSHOT_API_KEY = process.env.SNAPSHOT_API_KEY || '';
 const THIRDWEB_ADMIN_PRIVATE_KEY = process.env.THIRDWEB_ADMIN_PRIVATE_KEY || '';
 const JWT_SECRET = process.env.JWT_SECRET || '';
@@ -11,7 +10,6 @@ const NODE_ENV = process.env.NODE_ENV || '';
 export {
   JWT_SECRET,
   LIVEPEER_API_KEY,
-  LIVEPEER_API_URL,
   NEXT_PUBLIC_TEMPLATE_CLIENT_ID,
   NODE_ENV,
   SNAPSHOT_API_KEY,
