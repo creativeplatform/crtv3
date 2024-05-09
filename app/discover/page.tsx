@@ -1,4 +1,4 @@
-import { livepeer } from '@app/lib/sdk/livepeer/client';
+import { fetchAllAssets } from '@app/lib/utils/actions/livepeer';
 import {
   Box,
   Breadcrumb,
@@ -10,6 +10,7 @@ import {
 } from '@chakra-ui/react';
 
 const AllVideosPage = async () => {
+<<<<<<< HEAD
   try {
 
     /**
@@ -32,6 +33,10 @@ const AllVideosPage = async () => {
      */
     console.log('error101: ', err.rawValue);
   }
+=======
+  const assets = await fetchAllAssets();
+  console.log(assets);
+>>>>>>> g2-updates-collab
 
   return (
     <main>
@@ -54,8 +59,8 @@ const AllVideosPage = async () => {
         <Heading mb={10}>Discover Content</Heading>
         <Flex flexDirection="column" my={10} gap={5} maxW="md">
           <Text>This is the Discover page.</Text>
-          {/* {JSON.stringify(allAssets)} */}
-          {/* <VideoCardGrid  />  */}
+          {/* <VideoCardGrid  assets={assets} />  */}
+          <button ></button>
         </Flex>
       </Box>
     </main>
