@@ -3,7 +3,10 @@ import { fullLivepeer } from '@app/lib/sdk/livepeer/fullClient';
 import Image from 'next/image';
 import React, { useState, useRef, useEffect } from 'react';
 import { BiCloud, BiMusic, BiPlus } from 'react-icons/bi';
-import { NewAssetPayload } from 'livepeer/models/components';
+import {
+  NewAssetFromUrlPayload,
+  NewAssetPayload,
+} from 'livepeer/models/components';
 import { useActiveAccount } from 'thirdweb/react';
 import { client } from '@app/lib/sdk/thirdweb/client';
 import {
@@ -29,10 +32,7 @@ import { ACCOUNT_FACTORY_ADDRESS } from '@app/lib/utils/context';
 import { toast } from 'sonner'; // Add this import for error notifications
 import FileUpload from './FileUpload';
 import PreviewVideo from './PreviewVideo';
-import {
-  createAsset as createLivepeerAsset,
-  createViaUrl as createLivepeerUrl,
-} from '@app/api/livepeer/actions'; // Import the createAsset function
+import { createAsset, createViaUrl } from '@app/api/livepeer/actions'; // Import the createAsset function
 
 export default function Upload() {
   // Creating state for the input field
@@ -62,33 +62,13 @@ export default function Upload() {
     window.history.back();
   };
 
-  // const requestUploadUrl = async () => {
-  //   const response = await fetch(
-  //     `${process.env.LIVEPEER_API_URL}/api/asset/request-upload`,
-  //     {
-  //       method: 'POST',
-  //       headers: {
-  //         'Content-Type': 'application/json',
-  //         Authorization: `Bearer ${process.env.LIVEPEER_FULL_API_KEY}`,
-  //       },
-  //     },
-  //   );
-
-  //   if (!response.ok) {
-  //     throw new Error('Failed to request upload URL');
-  //   }
-
-  //   return response.json(); // This should return the upload URL
-  // };
-
-  const uploadVideo = async (uploadUrl: NewAssetPayload, file: File) => {
-    const response = await fetch(uploadUrl.name, {
-      method: 'PUT',
-      body: file,
+  const uploadVideo = async (payload: NewAssetFromUrlPayload) => {
+    const response = await fetch(payload.url, {
+      method: 'Post',
       headers: {
-        'Content-Type': file.type,
-        'Access-Control-Allow-Origin': `${process.env.NEXT_PUBLIC_THIRDWEB_AUTH_DOMAIN}`,
+        'Content-Type': 'application/json',
       },
+      body: JSON.stringify(payload),
     });
 
     if (!response.ok) {
@@ -104,44 +84,48 @@ export default function Upload() {
     setIsSubmitting(true);
     try {
       // Step 1: Request the upload URL
-      const uploadData = fullLivepeer.asset;
-      const uploadUrlResponse = await uploadData.createViaUrl({
-        // Await the promise to get the actual upload URL
-        name: 'filename.mp4',
-        staticMp4: true,
-        playbackPolicy: {
-          type: Type.Webhook,
-          webhookId: '1bde4o2i6xycudoy',
-          webhookContext: {
-            streamerId: 'my-custom-id',
-          },
-          refreshInterval: 600,
-        },
-        url: 'https://s3.amazonaws.com/my-bucket/path/filename.mp4',
-        profiles: [
-          {
-            width: 1280,
-            name: '720p',
-            height: 720,
-            bitrate: 3000000,
-            quality: 23,
-            fps: 30,
-            fpsDen: 1,
-            gop: '2',
-            profile: TranscodeProfileProfile.H264Baseline,
-            encoder: TranscodeProfileEncoder.H264,
-          },
-        ],
-      });
+      // const uploadData = fullLivepeer.asset;
+      // const uploadUrlResponse = await uploadData.createViaUrl({
+      //   // Await the promise to get the actual upload URL
+      //   name: videoFile?.name || '',
+      //   staticMp4: true,
+      //   playbackPolicy: {
+      //     type: Type.Webhook,
+      //     webhookId: '1bde4o2i6xycudoy',
+      //     webhookContext: {
+      //       streamerId: 'my-custom-id',
+      //     },
+      //     refreshInterval: 600,
+      //   },
+      //   url: videoUrl,
+      //   profiles: [
+      //     {
+      //       width: 1280,
+      //       name: '720p',
+      //       height: 720,
+      //       bitrate: 3000000,
+      //       quality: 23,
+      //       fps: 30,
+      //       fpsDen: 1,
+      //       gop: '2',
+      //       profile: TranscodeProfileProfile.H264Baseline,
+      //       encoder: TranscodeProfileEncoder.H264,
+      //     },
+      //   ],
+      // });
 
-      const uploadUrl: NewAssetPayload = {
-        name: uploadUrlResponse?.contentType, // Ensure name is included
-        ...uploadUrlResponse, // Spread other properties if necessary
-      };
+      // const uploadUrlResponse = createViaUrl({
+      //   name: videoFile?.name || '',
+      //   url: videoUrl,
+      // });
 
-      if (videoFile) {
+      if (videoFile && videoUrl) {
         // Check if videoFile is not null
-        const videoUrl = await uploadVideo(uploadUrl, videoFile); // Use the videoFile state
+        const uploadedVideoUrl = await uploadVideo({
+          name: title,
+          url: videoUrl,
+        });
+        setVideoUrl(uploadedVideoUrl);
 
         // Step 3: Create the asset using the createAsset function
         const assetData = {
@@ -177,7 +161,8 @@ export default function Upload() {
       toast.error('Please enter a description');
       return false;
     }
-    if (!video) {
+    if (!videoFile && !videoUrl) {
+      // Change this line
       toast.error('Please upload a video');
       return false;
     }
@@ -232,20 +217,6 @@ export default function Upload() {
     return videoNFT;
   };
 
-  // const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-  //   const file = event.target.files?.[0] || null; // Get the selected file
-  //   if (file) {
-  //     setVideoFile(file); // Update the state with the selected file
-  //     const videoUrl = URL.createObjectURL(file); // Create a URL for the video
-  //     setVideoUrl(videoUrl); // Update the state with the video URL
-
-  //     // Refresh the page after a short delay to allow the file to be processed
-  //     setTimeout(() => {
-  //       window.location.reload(); // Refresh the page
-  //     }, 100); // Adjust the delay as needed
-  //   }
-  // };
-
   const handleCancelVideo = () => {
     setVideoFile(null); // Clear the video file
     setVideoUrl(''); // Clear the video URL
@@ -279,7 +250,7 @@ export default function Upload() {
       </div>
 
       <div className="flex flex-col lg:flex-row">
-        <div className="mb-4 flex w-full flex-col lg:w-3/4">
+        <div className="flex w-full flex-col p-4 lg:w-1/2">
           <label htmlFor="title" className="text-sm">
             Title
           </label>
@@ -288,7 +259,7 @@ export default function Upload() {
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="Rick Astley - Never Gonna Give You Up (Official Music Video)"
-            className="mt-2 h-12 w-full rounded-md border border-[#444752] p-2 text-gray-600 placeholder:text-gray-200 focus:outline-none"
+            className="mt-2 h-12 w-full rounded-md border border-[#444752] p-2 text-gray-600 placeholder:text-gray-400 focus:outline-none"
             required
           />
           <label className="mt-10">Description</label>
@@ -296,7 +267,7 @@ export default function Upload() {
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder="Never Gonna Give You Up was a global smash on its release in July 1987, topping the charts in 25 countries including Rick's native UK and the US Billboard Hot 100.  It also won the Brit Award for Best single in 1988. Stock Aitken and Waterman wrote and produced the track which was the lead-off single and lead track from Rick's debut LP "
-            className="mt-2 h-32 w-full rounded-md border border-[#444752] p-2 text-gray-600 placeholder:text-gray-200 focus:outline-none"
+            className="mt-2 h-32 w-full rounded-md border border-[#444752] p-2 text-gray-600 placeholder:text-gray-400 focus:outline-none"
           />
 
           <div className="mt-10 flex w-full flex-col justify-between lg:flex-row">
@@ -307,7 +278,7 @@ export default function Upload() {
                 onChange={(e) => setLocation(e.target.value)}
                 type="text"
                 placeholder="New York - United States"
-                className="mt-2 h-12 w-full rounded-md border border-[#444752] p-2 text-gray-600 placeholder:text-gray-200 focus:outline-none"
+                className="mt-2 h-12 w-full rounded-md border border-[#444752] p-2 text-gray-600 placeholder:text-gray-400 focus:outline-none"
               />
             </div>
             <div className="flex w-full flex-col lg:w-2/5">
@@ -374,7 +345,7 @@ export default function Upload() {
           />
         </div>
 
-        <div className="mx-auto flex w-full flex-col items-center justify-center pl-4 lg:w-96">
+        <div className="mx-auto flex w-full flex-col items-center justify-center pl-4 lg:w-1/2">
           <div
             onClick={() => {
               videoRef?.current;
@@ -383,41 +354,19 @@ export default function Upload() {
           >
             {/* hide element once videoUrl is available */}
             <div className="">
-              {videoUrl ? (
-                <div>
-                  {videoFile ? (
-                    <PreviewVideo video={videoFile} /> // Pass the videoFile directly
-                  ) : null}
-                </div>
-              ) : (
-                <FileUpload
-                  onFileSelect={setVideoFile}
-                  onFileUploaded={(videoUrl) => {
-                    // TODO: save video url in state
-                    setVideoUrl(videoUrl);
-                  }}
-                />
-              )}
+              <FileUpload
+                onFileSelect={(file) => {
+                  console.log('Selected file:', file); // Debugging line
+                  setVideoFile(file);
+                }}
+                onFileUploaded={(videoUrl: string) => {
+                  console.log('Uploaded video URL:', videoUrl); // Debugging line
+                  setVideoUrl(videoUrl);
+                }}
+              />
             </div>
           </div>
-          {/* {videoFile && (
-            <div className="mb-4 flex justify-end">
-              <div className="flex items-center">
-                <button
-                  onClick={handleCancelVideo} // Call the cancel function
-                  className="m-2 rounded-sm border border-[#EC407A] px-4 py-2 text-[#EC407A] hover:border-[#A6335A] hover:text-[#A6335A] focus:border-[#A6335A] focus:text-[#A6335A]"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={() => createLivepeerAsset(videoFile)}
-                  className="m-2 rounded-sm border border-[#A6335A] bg-[#EC407A] px-4 py-2 text-white hover:bg-[#A6335A] focus:bg-[#A6335A]"
-                >
-                  Save
-                </button>
-              </div>
-            </div>
-          )} */}
+          {videoFile && <PreviewVideo video={videoFile} />}
         </div>
       </div>
 

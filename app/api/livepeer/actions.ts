@@ -1,7 +1,11 @@
 'use server';
 
 import { fullLivepeer } from '@app/lib/sdk/livepeer/fullClient';
-import { Asset, NewAssetPayload } from 'livepeer/models/components';
+import {
+  Asset,
+  NewAssetFromUrlPayload,
+  NewAssetPayload,
+} from 'livepeer/models/components';
 
 // FETCH ALL ASSETS
 export const fetchAllAssets = async (): Promise<Asset[] | {}> => {
@@ -80,13 +84,10 @@ export const createAsset = async (data: NewAssetPayload) => {
 };
 
 // CREATE ASSET VIA URL
-export const createViaUrl = async (url: string) => {
+export const createViaUrl = async (data: NewAssetFromUrlPayload) => {
   try {
     console.log('Creating URL...');
-    const response = await fullLivepeer?.asset?.createViaUrl({
-      url,
-      name: 'My test upload',
-    });
+    const response = await fullLivepeer?.asset?.createViaUrl(data);
     const asset = response;
     console.log('Created: ', asset);
     return [asset];

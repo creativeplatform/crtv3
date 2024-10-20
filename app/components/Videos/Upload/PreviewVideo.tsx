@@ -12,20 +12,24 @@ const PreviewVideo: FC<PreviewVideoProps> = ({ video }) => {
       const objectUrl = URL.createObjectURL(video);
       setVideoUrl(objectUrl);
 
+      // Clean up the object URL when the component unmounts or video changes
       return () => {
         URL.revokeObjectURL(objectUrl);
       };
+    } else {
+      setVideoUrl(null); // Reset the video URL if no video is provided
     }
-  }, [video]);
+  }, [video]); // Dependency on video prop
 
   return (
     <div className="flex w-full justify-center">
       {videoUrl && (
         <video
           controls
-          style={{ maxWidth: '100%', maxHeight: '400px', marginTop: '8px' }}
+          src={videoUrl} // Directly set src attribute
+          className="mt-2 max-h-96 max-w-full"
         >
-          <source src={videoUrl} type="video/mp4" />
+          Your browser does not support the video tag.
         </video>
       )}
     </div>
