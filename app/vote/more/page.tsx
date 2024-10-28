@@ -9,7 +9,7 @@ import {
 import { Suspense } from 'react';
 import { Slash } from 'lucide-react';
 import More from '@app/components/Voting/More/More';
-import Skeleton from '@app/components/ui/skeleton';
+import { Skeleton } from '@app/components/ui/skeleton';
 
 export default function MorePage() {
   return (

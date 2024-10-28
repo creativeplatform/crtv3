@@ -27,7 +27,7 @@ import {
   EnterFullscreenIcon,
   ExitFullscreenIcon,
 } from '@livepeer/react/assets';
-import Skeleton from '@app/components/ui/skeleton';
+import { Skeleton } from '@app/components/ui/skeleton';
 import { getDetailPlaybackSource } from '@app/lib/utils/hooks/useDetailPlaybackSources';
 
 type VideoDetailsProps = {

@@ -10,7 +10,7 @@ import { Src } from '@livepeer/react';
 import { PlayIcon } from '@livepeer/react/assets';
 import { DemoPlayer } from '../Player/DemoPlayer';
 import { getHeroPlaybackSource } from '@app/lib/utils/hooks/useHeroPlaybackSource';
-import Skeleton from '@app/components/ui/skeleton';
+import { Skeleton } from '@app/components/ui/skeleton';
 import { HERO_VIDEO_TITLE } from '../../lib/utils/context';
 
 const HeroSection: React.FC = () => {
@@ -65,8 +65,9 @@ const HeroSection: React.FC = () => {
         <div className="relative mt-8 flex-1 md:ml-8 md:mt-0">
           <div className="relative z-0 h-auto overflow-hidden rounded-2xl shadow-2xl">
             {loading ? (
+              // Skeleton displayed while loading
               <div className="flex flex-col space-y-3">
-                <Skeleton className="h-[340px] w-[450px] rounded-xl"></Skeleton>
+                <Skeleton className="h-[340px] w-[450px] rounded-xl" />
               </div>
             ) : (
               <DemoPlayer src={src} title={HERO_VIDEO_TITLE} />

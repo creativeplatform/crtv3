@@ -4,7 +4,7 @@ import { Src } from '@livepeer/react';
 import { FEATURED_VIDEO_TITLE } from '@app/lib/utils/context';
 import { getFeaturedPlaybackSource } from '@app/lib/utils/hooks/useFeaturePlaybackSource';
 import { DemoPlayer } from '../Player/DemoPlayer';
-import Skeleton from '@app/components/ui/skeleton';
+import { Skeleton } from '@app/components/ui/skeleton';
 
 const FeaturedVideo: React.FC = () => {
   const [src, setSrc] = useState<Src[] | null>(null);
@@ -27,7 +27,12 @@ const FeaturedVideo: React.FC = () => {
     fetchSource();
   }, []);
   if (loading) {
-    return <div>Loading...</div>;
+    return (
+      <div className="relative aspect-video w-full max-w-2xl overflow-hidden rounded-lg">
+        {/* Skeleton displayed while loading */}
+        <Skeleton className="h-[340px] w-full" />
+      </div>
+    );
   }
 
   if (error) {
@@ -37,14 +42,7 @@ const FeaturedVideo: React.FC = () => {
     <section className="w-full py-12 md:py-24 lg:py-32">
       <div className="container grid items-center gap-6 px-4 md:px-6 lg:grid-cols-2 lg:gap-10">
         <div className="relative aspect-video w-full max-w-2xl overflow-hidden rounded-lg">
-          {loading ? (
-            <div className="flex flex-col space-y-3">
-              <Skeleton className="h-[340px] w-[450px] rounded-xl"></Skeleton>
-            </div>
-          ) : (
-            <DemoPlayer src={src} title={FEATURED_VIDEO_TITLE} />
-          )}
-
+          <DemoPlayer src={src} title={FEATURED_VIDEO_TITLE} />
           <div className="absolute inset-x-0 top-0 bg-gradient-to-b from-black/50 to-transparent p-4 text-lg text-white">
             <div className="line-clamp-1">{FEATURED_VIDEO_TITLE}</div>
           </div>

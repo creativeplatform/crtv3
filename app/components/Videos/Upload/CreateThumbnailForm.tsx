@@ -17,7 +17,7 @@ import { Label } from '@app/components/ui/label';
 import { getLivePeerAiGeneratedImages } from '@app/api/livepeer/livepeerAiActions';
 import { Media } from 'livepeer/models/components';
 import { RadioGroup, RadioGroupItem } from '@app/components/ui/radio-group';
-import Skeleton from '@app/components/ui/skeleton';
+import { Skeleton } from '@app/components/ui/skeleton';
 
 interface FormValues {
   aiModel: string;

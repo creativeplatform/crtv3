@@ -28,12 +28,14 @@
     "@radix-ui/react-select": "^2.1.2",
     "@radix-ui/react-separator": "^1.1.0",
     "@radix-ui/react-slot": "^1.1.0",
+    "@radix-ui/react-tabs": "^1.1.1",
     "@radix-ui/react-tooltip": "^1.1.2",
     "@radix-ui/react-visually-hidden": "^1.1.0",
     "@snapshot-labs/snapshot.js": "^0.12.4",
     "@stackso/js-core": "^0.4.16",
     "@tanstack/react-query": "^5.29.2",
     "@thirdweb-dev/storage": "^2.0.15",
+    "@types/video.js": "^7.3.58",
     "@unlock-protocol/networks": "^0.0.23",
     "@unlock-protocol/paywall": "^0.7.1",
     "@useorbis/db-sdk": "^0.0.60-alpha",
@@ -67,6 +69,9 @@
     "thirdweb": "^5.63.2",
     "tus-js-client": "^4.2.3",
     "uuid": "^9.0.1",
+    "videojs-contrib-quality-levels": "^4.1.0",
+    "videojs-http-source-selector": "^1.1.6",
+    "videojs-quality-selector-hls": "^1.1.1",
     "viem": "^2.21.34",
     "wagmi": "^2.12.5",
     "yup": "^1.4.0",
@@ -89,7 +94,8 @@
     "prettier": "^3.2.5",
     "prettier-plugin-tailwindcss": "0.5.14",
     "tailwindcss": "^3.4.3",
-    "typescript": "^5"
+    "typescript": "^5",
+    "video.js": "^8.19.1"
   },
   "engines": {
     "node": ">=18.17.0"

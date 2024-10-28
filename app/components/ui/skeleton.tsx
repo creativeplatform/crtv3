@@ -14,4 +14,4 @@ const Skeleton: React.FC<{
   );
 };
 
-export default Skeleton;
+export { Skeleton };

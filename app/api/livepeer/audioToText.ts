@@ -18,45 +18,49 @@ interface SubtitleEntry {
 function secondsToVTTTime(seconds: number): string {
   // Handle negative numbers or invalid input
   if (seconds < 0) seconds = 0;
-  
+
   const hours = Math.floor(seconds / 3600);
   const minutes = Math.floor((seconds % 3600) / 60);
   const secs = Math.floor(seconds % 60);
   const milliseconds = Math.floor((seconds * 1000) % 1000);
 
   // Format with leading zeros and ensure milliseconds has 3 digits
-  return `${hours.toString().padStart(2, '0')}:${
-    minutes.toString().padStart(2, '0')}:${
-    secs.toString().padStart(2, '0')}.${
-    milliseconds.toString().padStart(3, '0')}`;
+  return `${hours.toString().padStart(2, '0')}:${minutes
+    .toString()
+    .padStart(2, '0')}:${secs.toString().padStart(2, '0')}.${milliseconds
+    .toString()
+    .padStart(3, '0')}`;
 }
 
 function generateVTTFile(subtitles: SubtitleEntry[]): string {
   // Sort subtitles by start time to ensure proper sequence
   // const sortedSubtitles = [...subtitles].sort((a, b) => a.timestamp[0] - b.timestamp[0]);
-  
+
   // Start with the WebVTT header
   let vttContent = 'WEBVTT\n\n';
-  
+
   // Process each subtitle entry
   subtitles.forEach((subtitle, index) => {
     const [startTime, endTime] = subtitle.timestamp;
-    
+
     // Add cue number (optional but helpful for debugging)
     vttContent += `${index + 1}\n`;
-    
+
     // Add timestamp line
     vttContent += `${secondsToVTTTime(startTime)} --> ${secondsToVTTTime(endTime)}\n`;
-    
+
     // Add subtitle text and blank line
     vttContent += `${subtitle.text}\n\n`;
   });
-  
+
   return vttContent;
 }
 
 // Helper function to save VTT content to a file (browser environment)
-async function downloadVTT(vttContent: string, filename: string = 'subtitles.vtt'): void {
+async function downloadVTT(
+  vttContent: string,
+  filename: string = 'subtitles.vtt',
+): Promise<void> {
   const blob = new Blob([vttContent], { type: 'text/vtt' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -69,7 +73,6 @@ async function downloadVTT(vttContent: string, filename: string = 'subtitles.vtt
 }
 
 const generateSubtitles = async (video: any) => {
-
   try {
     const myHeaders = new Headers();
     myHeaders.append('Content-Type', 'application/json');
@@ -80,42 +83,45 @@ const generateSubtitles = async (video: any) => {
     });
 
     const requestOptions: RequestInit = {
-        method: 'POST',
-        headers: myHeaders,
-        body: raw,
-        redirect: 'follow',
-      };
-  
-      const response = await fetch(
-        'https://dream-gateway.livepeer.cloud/audio-to-text',
-        requestOptions,
-      );
-  
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Error: ${response.status} - ${errorText}`);
-      }
-  
-      const result = await response.json();
+      method: 'POST',
+      headers: myHeaders,
+      body: raw,
+      redirect: 'follow',
+    };
 
-      // Add label and srclang to each subtitle
-      result.chunks = result.chunks.map((subtitle: any) => {
-        subtitle.label = 'English';
-        subtitle.srclang = 'en';
-        return subtitle
-      });
+    const response = await fetch(
+      'https://dream-gateway.livepeer.cloud/audio-to-text',
+      requestOptions,
+    );
 
-      // Generate VTT file from chunks and append to response as vtt property
-      result.vtt = generateVTTFile(result.chunks);
-
-      return result;
-    } catch (error: any) {
-      console.error('Error in generateSubtitles API:', error);
-      return { error: error.message || 'Internal Server Error' };
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Error: ${response.status} - ${errorText}`);
     }
+
+    const result = await response.json();
+
+    // Add label and srclang to each subtitle
+    result.chunks = result.chunks.map((subtitle: any) => {
+      subtitle.label = 'English';
+      subtitle.srclang = 'en';
+      return subtitle;
+    });
+
+    // Generate VTT file from chunks and append to response as vtt property
+    result.vtt = generateVTTFile(result.chunks);
+
+    return result;
+  } catch (error: any) {
+    console.error('Error in generateSubtitles API:', error);
+    return { error: error.message || 'Internal Server Error' };
+  }
 };
 
-const audioToTextHandler = async (req: NextApiRequest, res: NextApiResponse) => {
+const audioToTextHandler = async (
+  req: NextApiRequest,
+  res: NextApiResponse,
+) => {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method Not Allowed' });
   }
@@ -133,30 +139,30 @@ const audioToTextHandler = async (req: NextApiRequest, res: NextApiResponse) => 
     });
 
     const requestOptions: RequestInit = {
-        method: 'POST',
-        headers: myHeaders,
-        body: raw,
-        redirect: 'follow',
-      };
-  
-      const response = await fetch(
-        'https://dream-gateway.livepeer.cloud/audio-to-text',
-        requestOptions,
-      );
-  
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Error: ${response.status} - ${errorText}`);
-      }
-  
-      const result = await response.json();
-      return res.status(200).json(result);
-    } catch (error: any) {
-      console.error('Error in audioToText API:', error);
-      return res
-        .status(500)
-        .json({ error: error.message || 'Internal Server Error' });
+      method: 'POST',
+      headers: myHeaders,
+      body: raw,
+      redirect: 'follow',
+    };
+
+    const response = await fetch(
+      'https://dream-gateway.livepeer.cloud/audio-to-text',
+      requestOptions,
+    );
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Error: ${response.status} - ${errorText}`);
     }
+
+    const result = await response.json();
+    return res.status(200).json(result);
+  } catch (error: any) {
+    console.error('Error in audioToText API:', error);
+    return res
+      .status(500)
+      .json({ error: error.message || 'Internal Server Error' });
+  }
 };
 
 export default audioToTextHandler;

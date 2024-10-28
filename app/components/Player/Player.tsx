@@ -17,7 +17,7 @@ import {
 } from '@livepeer/react/assets';
 import { Src } from '@livepeer/react';
 import * as Player from '@livepeer/react/player';
-//import Skeleton from '../ui/skeleton';
+//import { Skeleton } from '../ui/skeleton';
 
 export const PlayerComponent: React.FC<{
   src: Src[] | null;

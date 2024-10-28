@@ -14,6 +14,10 @@ const nextConfig = {
         protocol: 'https',
         hostname: 'obj-store.livepeer.cloud',
       },
+      {
+        protocol: 'https',
+        hostname: 'storage.unlock-protocol.com',
+      },
     ],
   },
 };
