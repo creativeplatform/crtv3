@@ -1,11 +1,25 @@
 'use client';
-import { useState, useEffect } from 'react';
-import { useParams } from 'next/navigation';
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from '@app/components/ui/tabs';
+import { client } from '@app/lib/sdk/thirdweb/client';
+import { CREATIVE_ADDRESS, ROLES, ROLES_ABI } from '@app/lib/utils/context';
 import { NextPage } from 'next';
-import { Button } from '../ui/button';
-import { toast } from 'sonner';
 import Link from 'next/link';
-import { Input } from '../ui/input';
+import { useParams } from 'next/navigation';
+import { useEffect, useState } from 'react';
+import { toast } from 'sonner';
+import { getContract, prepareContractCall } from 'thirdweb';
+import { polygon } from 'thirdweb/chains';
+import { getNFT, getOwnedTokenIds } from 'thirdweb/extensions/erc721';
+import {
+  TransactionButton,
+  useActiveAccount,
+  useReadContract,
+} from 'thirdweb/react';
 import {
   Card,
   CardContent,
@@ -33,8 +47,6 @@ import {
 } from '@app/components/ui/tabs';
 import { Label } from '../ui/label';
 import MemberCard from './MemberCard';
-import { getNFT, getOwnedTokenIds } from 'thirdweb/extensions/erc721';
-import { CREATIVE_ADDRESS } from '@app/lib/utils/context';
 import CreateMetoken from '../MeToken/createMetoken';
 import Unlock from '@app/lib/utils/Unlock.json';
 import AssetDetails from './AssetDetails';
@@ -153,6 +165,24 @@ const ProfilePage: NextPage = () => {
               >
                 Cancel
               </TransactionButton>
+            </CardFooter>
+          </Card>
+        </TabsContent>
+        <TabsContent value="Uploads">
+          <Card className="w-full">
+            <CardHeader>
+              <CardTitle>Upload</CardTitle>
+              <CardDescription>Pick a video to be uploaded.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <div className="space-y-1">
+                <Link href={`/profile/${activeAccount?.address}/upload`}>
+                  Go to upload
+                </Link>
+              </div>
+            </CardContent>
+            <CardFooter className="space-x-2">
+              {/* TODO: load list of uploaded videos here*/}
             </CardFooter>
           </Card>
         </TabsContent>
