@@ -13,6 +13,7 @@ import { useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { getContract, prepareContractCall } from 'thirdweb';
+import { base } from 'thirdweb/chains';
 import { getNFT, getOwnedTokenIds } from 'thirdweb/extensions/erc721';
 
 import Unlock from '@app/lib/utils/Unlock.json';
@@ -49,6 +50,9 @@ const ProfilePage: NextPage = () => {
 
   /*******  CONTRACT READING ********/
   const unlockContract = getContract({
+    // chain: polygon,
+    // address: ROLES?.polygon.creator.contractAddress,
+    // abi: ROLES_ABI,
     client: client,
     chain: base,
     address: '0xf7c4cd399395d80f9d61fde833849106775269c6',
