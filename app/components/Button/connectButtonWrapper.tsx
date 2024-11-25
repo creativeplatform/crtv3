@@ -1,6 +1,14 @@
 'use client';
-import { defineChain, base } from 'thirdweb/chains';
-import { createWallet, inAppWallet } from 'thirdweb/wallets';
+import { client } from '@app/lib/sdk/thirdweb/client';
+import { ACCOUNT_FACTORY_ADDRESS } from '@app/lib/utils/context';
+import {
+  base,
+  defineChain,
+  optimism,
+  polygon,
+  zora,
+  zoraSepolia,
+} from 'thirdweb/chains';
 import {
   generatePayload,
   authedOnly,
@@ -18,6 +26,9 @@ import {
 } from 'thirdweb/auth';
 import { ACCOUNT_FACTORY_ADDRESS } from '@app/lib/utils/context';
 import { useActiveWallet } from 'thirdweb/react';
+
+import { ConnectButton } from 'thirdweb/react';
+import { createWallet, inAppWallet } from 'thirdweb/wallets';
 
 export default function ConnectButtonWrapper() {
   const { isConnected, orbisLogin } = useOrbisContext();
