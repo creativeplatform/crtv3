@@ -73,25 +73,40 @@ const ProfilePage: NextPage = () => {
           contract: unlockContract,
           owner: activeAccount.address,
         });
+
         setOwnedIds(ownedTokenIds);
-
-        // Fetch NFT metadata
-        if (ownedTokenIds.length > 0) {
-          const metadata = await getNFT({
-            contract: unlockContract,
-            tokenId: ownedIds[0], // Use first token ID instead of the whole array
-          });
-          setNftData(metadata);
-        }
-
-        // Set member data and balance (you can customize this based on your logic)
-        setMemberData(activeAccount); // Example: setting active account as member data
-        setBalance('0'); // Example: set balance to 0 or fetch actual balance
       }
     };
 
     fetchData();
-  }, [activeAccount, ownedIds, unlockContract]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeAccount]);
+
+  useEffect(() => {
+    console.log('ownedIds: ', ownedIds);
+
+    const fetchNFTData = async () => {
+      const metadata = await getNFT({
+        contract: unlockContract,
+        tokenId: ownedIds[0],
+      });
+
+      console.log('metadata: ', metadata);
+      setNftData(metadata);
+    };
+
+    if (ownedIds.length > 0) {
+      fetchNFTData();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ownedIds]);
+
+  useEffect(() => {
+    if (activeAccount) {
+      setMemberData(activeAccount);
+      setBalance('0');
+    }
+  }, [activeAccount]);
 
   return (
     <div className="container mx-auto my-5 px-4">
