@@ -8,18 +8,18 @@
  *  =>  16/01/2024 13:13
  */
 function parseTimestampToDate(ts: number) {
-  if (!ts) {
+  if (ts <= 0) {
     return 'Not available';
-  } else {
-    const d = new Date(ts);
-    const longEnUSFormat = new Intl.DateTimeFormat('en-US', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    });
-
-    return longEnUSFormat.format(d);
   }
+
+  const d = new Date(ts);
+  const longEnUSFormat = new Intl.DateTimeFormat('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
+
+  return longEnUSFormat.format(d);
 }
 
 export { parseTimestampToDate };
