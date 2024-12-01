@@ -44,4 +44,9 @@ const wordWrap = (txt: string, wrapAfter: number) => {
   return txt;
 };
 
-export { parseTimestampToDate, wordWrap };
+const titleCase = (txt: string) => {
+  if (txt === '') throw new Error('Can not parse empty string');
+  return txt.slice(0, 1).toUpperCase() + txt.slice(1);
+};
+
+export { parseTimestampToDate, titleCase, wordWrap };
