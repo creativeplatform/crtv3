@@ -22,4 +22,26 @@ function parseTimestampToDate(ts: number) {
   return longEnUSFormat.format(d);
 }
 
-export { parseTimestampToDate };
+/**
+ * The function wrap a sentence at particular length of characters
+ * @param txt The sentence body
+ * @param wrapAfter The number of characters to start
+ * @returns The wrapped sentence
+ */
+const wordWrap = (txt: string, wrapAfter: number) => {
+  txt = txt.trim();
+
+  if (txt.length < wrapAfter) {
+    throw new Error(
+      `String lenght of ${txt.length} is shorter than wrapAfter of ${wrapAfter}`,
+    );
+  }
+
+  if (txt.length > wrapAfter) {
+    return txt.slice(0, wrapAfter) + '...';
+  }
+
+  return txt;
+};
+
+export { parseTimestampToDate, wordWrap };
