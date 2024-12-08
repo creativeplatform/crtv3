@@ -45,7 +45,11 @@ const wordWrap = (txt: string, wrapAfter: number) => {
 };
 
 const titleCase = (txt: string) => {
+  if (typeof txt != 'string') {
+    throw new Error(`The argument ${txt} is not a string`);
+  }
   if (txt === '') throw new Error('Can not parse empty string');
+  
   return txt.slice(0, 1).toUpperCase() + txt.slice(1);
 };
 
