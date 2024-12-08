@@ -15,14 +15,13 @@ import { toast } from 'sonner';
 import { getContract, prepareContractCall } from 'thirdweb';
 import { base } from 'thirdweb/chains';
 import { getNFT, getOwnedTokenIds } from 'thirdweb/extensions/erc721';
-
 import Unlock from '@app/lib/utils/Unlock.json';
-import { base } from 'thirdweb/chains';
 import {
   TransactionButton,
   useActiveAccount,
   useReadContract,
 } from 'thirdweb/react';
+import ListUploadedAssets from '../list-uploaded-assets/ListUploadedAssets';
 import CreateMetoken from '../MeToken/createMetoken';
 import {
   Card,
@@ -50,9 +49,6 @@ const ProfilePage: NextPage = () => {
 
   /*******  CONTRACT READING ********/
   const unlockContract = getContract({
-    // chain: polygon,
-    // address: ROLES?.polygon.creator.contractAddress,
-    // abi: ROLES_ABI,
     client: client,
     chain: base,
     address: '0xf7c4cd399395d80f9d61fde833849106775269c6',
@@ -83,15 +79,12 @@ const ProfilePage: NextPage = () => {
   }, [activeAccount]);
 
   useEffect(() => {
-    console.log('ownedIds: ', ownedIds);
-
     const fetchNFTData = async () => {
       const metadata = await getNFT({
         contract: unlockContract,
         tokenId: ownedIds[0],
       });
 
-      console.log('metadata: ', metadata);
       setNftData(metadata);
     };
 
@@ -184,7 +177,7 @@ const ProfilePage: NextPage = () => {
               </div>
             </CardContent>
             <CardFooter className="space-x-2">
-              {/* TODO: load list of uploaded videos here*/}
+              <ListUploadedAssets activeAccount={activeAccount} />
             </CardFooter>
           </Card>
         </TabsContent>
