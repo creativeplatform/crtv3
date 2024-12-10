@@ -3,9 +3,11 @@ import { client } from '@app/lib/sdk/thirdweb/client';
 import { ACCOUNT_FACTORY_ADDRESS } from '@app/lib/utils/context';
 import {
   base,
+  baseSepolia,
   defineChain,
   optimism,
   polygon,
+  polygonAmoy,
   zora,
   zoraSepolia,
 } from 'thirdweb/chains';
@@ -96,7 +98,16 @@ export default function ConnectButtonWrapper() {
   return (
     <ConnectButton
       client={client}
-      chains={[base]}
+      chains={[
+        polygon,
+        polygonAmoy,
+        base,
+        baseSepolia,
+        optimism,
+        storyTestnet,
+        zora,
+        zoraSepolia,
+      ]}
       connectButton={{
         label: 'Get Started',
         className: 'my-custom-class',
