@@ -4343,7 +4343,8 @@ export const CONTRACT_ADDRESS = {
   },
   editionDrop: {
     erc1155: {
-      address: '0xbbC0bC56f44B744aC159311D9b46a819545F735B',
+      baseSepolia: '0xbbC0bC56f44B744aC159311D9b46a819545F735B',
+      amoy: '0xeB408a1A51179fE2E7C02e73df50432753374EEE',
       abi: [
         {
           inputs: [],
