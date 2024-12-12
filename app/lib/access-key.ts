@@ -6,9 +6,13 @@ export function generateAccessKey(
   address: string,
   context: WebhookContext
 ): string {
-  const secret = process.env.ACCESS_KEY_SECRET || '';
+  const secret = process.env.ACCESS_KEY_SECRET as string;
   // const timestamp = Date.now();
   
+  if (!secret) {
+    throw new Error("No secret provided");
+  }
+
   const payload = JSON.stringify({
     address,
     context
@@ -26,7 +30,9 @@ export function validateAccessKey(
   address: string,
   context: WebhookContext
 ): boolean {
+  // console.log({ msg: 'validateAccessKey()', accessKey, address, context });
   const regeneratedKey = generateAccessKey(address, context);
+  // console.log({ msg: 'validateAccessKey()', regeneratedKey });
   return crypto.timingSafeEqual(
     new Uint8Array(Buffer.from(accessKey)), 
     new Uint8Array(Buffer.from(regeneratedKey))

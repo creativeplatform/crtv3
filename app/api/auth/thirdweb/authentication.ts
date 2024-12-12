@@ -27,12 +27,12 @@ export async function login(payload: VerifyLoginPayloadParams) {
 
 export const getJwtContext: () => Promise<JwtContext> = async () => {
   const jwt = cookies().get("jwt");
-
-  if (!jwt?.value) {
-    throw new Error(`Failed to fetch JWT context, jwt.value is not defined`);
-  }
   
-  const { payload, signature } = decodeJWT(jwt as unknown as string);
+  if (!jwt?.value) {
+    throw new Error(`Failed to fetch JWT context, jwt is not defined`);
+  }
+
+  const { payload, signature } = decodeJWT(jwt.value as unknown as string);
 
   if (!payload?.ctx) {
     throw new Error(`Failed to fetch JWT context, payload.ctx is not defined`);

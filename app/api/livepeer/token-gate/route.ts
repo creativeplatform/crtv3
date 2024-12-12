@@ -5,11 +5,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getContract } from 'thirdweb';
 import { balanceOf as balanceOfERC1155 } from "thirdweb/extensions/erc1155";
 
-import { client } from '@app/lib/sdk/thirdweb/client';
-import { validateAccessKey } from '@app/lib/access-key';
+import { generateAccessKey, validateAccessKey } from '@app/lib/access-key';
 import { getJwtContext } from '@app/api/auth/thirdweb/authentication';
 import { defineChain } from 'thirdweb';
-
+import { createThirdwebClient } from 'thirdweb';
 
 export interface WebhookPayload {
   accessKey: string;
@@ -26,27 +25,35 @@ export interface WebhookContext {
 
 export async function POST(request: NextRequest) {
   try {
-    // Parse the incoming JSON payload
     const payload: WebhookPayload = await request.json();
 
-    if (!payload.accessKey || !payload.context || !payload.timestamp) {
+    console.log({ payload });
+
+    if (
+      !payload.accessKey 
+      || !payload.context.creatorAddress 
+      || !payload.context.tokenId
+      || !payload.context.contractAddress
+      || !payload.context.chain
+      || !payload.timestamp
+    ) {
       return NextResponse.json({ 
         allowed: false,
         message: 'Bad request, missing required fields' 
       }, { status: 400 });
     }
 
-    // Implement your custom access control logic here
+    // Implement custom access control logic here
     const isAccessAllowed = await validateAccess(payload);
 
+    console.log({ isAccessAllowed });
+
     if (isAccessAllowed) {
-      // Access granted
       return NextResponse.json({ 
         allowed: true,
         message: 'Access granted' 
       }, { status: 200 });
     } else {
-      // Access denied
       return NextResponse.json({ 
         allowed: false,
         message: 'Access denied' 
@@ -61,50 +68,135 @@ export async function POST(request: NextRequest) {
   }
 }
 
+export async function GET(request: NextRequest) {
+  try {
+    const address = request.nextUrl.searchParams.get("address") as string;
+    const creatorAddress = request.nextUrl.searchParams.get("creatorAddress") as string;
+    const tokenId = request.nextUrl.searchParams.get("tokenId") as string;
+    const contractAddress = request.nextUrl.searchParams.get("contractAddress") as string;
+    const chain = parseInt(request.nextUrl.searchParams.get("chain") as string);
+
+    console.log({ 
+      address, 
+      creatorAddress,
+      tokenId,
+      contractAddress,
+      chain
+    });
+
+    if (!address /* || !context */) {
+      return NextResponse.json({ 
+        allowed: false,
+        message: 'Bad request, missing required fields' 
+      }, { status: 400 });
+    }
+
+    const accessKey = generateAccessKey(
+      address, 
+      {
+        creatorAddress,
+        tokenId,
+        contractAddress,
+        chain
+      }
+    );
+
+    console.log({ accessKey });
+
+    if (accessKey) {
+      return NextResponse.json({ 
+        allowed: true,
+        accessKey: accessKey
+      }, { status: 200 });
+    } else {
+      return NextResponse.json({ 
+        allowed: false,
+        message: 'Failed to generate access key.'
+      }, { status: 400 });
+    }
+  } catch (error) {
+    console.error('Generate access key error:', error);
+    return NextResponse.json({ 
+      allowed: false,
+      message: 'Internal server error' 
+    }, { status: 500 });
+  }
+}
+
 async function validateAccess(payload: WebhookPayload): Promise<boolean> {
   const { accessKey, context, timestamp } = payload;
 
   const { address } = await getJwtContext();
 
+  console.log({ address });
+
   // 1. Validate WebhookContext
-  if (!address || !context?.tokenId || !context.contractAddress || !context.chain) {
+  if (
+    !address 
+    || !context.creatorAddress
+    || !context.tokenId 
+    || !context.contractAddress 
+    || !context.chain
+  ) {
+    console.error({ address, context });
     return false;
   }
   
   // 2. Validate access key
-  if (!validateAccessKey(accessKey, address, context)) {
+  const isAccessKeyValid = validateAccessKey(accessKey, address, context);
+  console.log({ isAccessKeyValid });
+  if (!isAccessKeyValid) {
     return false;
   }
 
   // 3. Check user-specific conditions
   const userHasToken = await checkUserTokenBalances(address, context);
+  console.log({ userHasToken });
   if (!userHasToken) {
     return false;
   }
 
   // 4. Asset or stream-specific checks
-  const isAssetAccessible = await checkAssetAccessibility(context);
-  if (!isAssetAccessible) {
-    return false;
-  }
+  // const isAssetAccessible = await checkAssetAccessibility(context);
+  // console.log({ isAssetAccessible });
+  // if (!isAssetAccessible) {
+  //   return false;
+  // }
 
   return true;
 }
 
 async function checkUserTokenBalances(address: string, context: WebhookContext): Promise<boolean> {
-  const videoTokenContract = getContract({
-    address: context.contractAddress,
-    chain: defineChain(context.chain),
-    client,
-  });
+  try {
+    const clientId = process.env.NEXT_PUBLIC_TEMPLATE_CLIENT_ID as string;
 
-  const videoTokenBalance = await balanceOfERC1155({
-    contract: videoTokenContract,
-    tokenId: BigInt(context.tokenId),
-    owner: address,
-  });
+    if (!clientId) {
+      throw new Error('No client ID provided');
+    }
+    
+    const client = createThirdwebClient({
+      clientId: clientId,
+    });
 
-  return videoTokenBalance > 0n;
+    const videoTokenContract = getContract({
+      address: context.contractAddress,
+      chain: defineChain(context.chain),
+      client,
+    });
+
+    const videoTokenBalance = await balanceOfERC1155({
+      contract: videoTokenContract,
+      tokenId: BigInt(context.tokenId),
+      owner: address,
+    });
+
+    console.log({ videoTokenBalance });
+
+    return videoTokenBalance > 0n;
+  } catch (error) {
+    console.error('Error checking token balances...', error);
+    return false; 
+  }
 }
 
 async function checkAssetAccessibility(context: WebhookContext): Promise<boolean> {
