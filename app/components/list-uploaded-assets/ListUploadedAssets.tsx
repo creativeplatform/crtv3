@@ -1,36 +1,61 @@
+'use client';
 import { fetchAllAssets } from '@app/api/livepeer/actions';
-import useLazyMint from '@app/hooks/useLazyMint';
-import * as helpers from '@app/lib/helpers';
+import { videoContract } from '@app/lib/sdk/thirdweb/get-contract';
 import { Asset } from '@app/lib/types';
-import { Box, Link, Spinner } from '@chakra-ui/react';
+import { Box } from '@chakra-ui/react';
 import { useEffect, useMemo, useState } from 'react';
-import Modal from '../Modal';
+import { tokensLazyMintedEvent } from 'thirdweb/extensions/erc1155';
+import { useContractEvents } from 'thirdweb/react';
+import UploadAsset from './UploadedAsset';
 
 type ListUploadedAssetsProps = {
   [index: string]: any;
   activeAccount: any;
 };
 
+let fetchUploadedAssets: () => void;
+
 export default function ListUploadedAssets(props: ListUploadedAssetsProps) {
   const [assets, setAssets] = useState<Asset[] | {}>();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(false);
 
+  const lazyMintedEvent = useContractEvents({
+    contract: videoContract,
+    events: [
+      tokensLazyMintedEvent({
+        startTokenId: 0n,
+      }),
+    ],
+  });
+
   useEffect(() => {
-    fetchAllAssets()
-      .then((ast) => {
+    fetchUploadedAssets = async () => {
+      try {
         setIsLoading(true);
 
-        setAssets(ast as any);
+        const ast = await fetchAllAssets();
+        setAssets(ast);
+
         setIsLoading(false);
-      })
-      .catch((err) => {
+      } catch (err: any) {
         setError(err.message);
-      })
-      .finally(() => {
+      } finally {
         setIsLoading(false);
-      });
+      }
+    };
+
+    fetchUploadedAssets();
   }, [props]);
+
+  // useEffect(() => {
+  //   if (lazyMintedEvent.isSuccess) {
+  //     console.log('lazyMintedEvent: ', lazyMintedEvent.data);
+  //     fetchUploadedAssets();
+  //   } else {
+  //     console.error('lazyMintedEvent::error ', lazyMintedEvent.error?.message);
+  //   }
+  // }, [lazyMintedEvent.data, lazyMintedEvent.isSuccess]);
 
   const filteredCreatorAssets: Asset[] = useMemo(() => {
     return Array.isArray(assets)
@@ -41,6 +66,7 @@ export default function ListUploadedAssets(props: ListUploadedAssetsProps) {
               props.activeAccount.address.toLowerCase(),
         )
       : [];
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [assets, props.activeAccount.address]);
 
   if (error) {
@@ -52,8 +78,10 @@ export default function ListUploadedAssets(props: ListUploadedAssetsProps) {
   }
 
   return (
-    <div>
-      {isLoading && <Spinner />}
+    <div className="mx-0 flex flex-col">
+      {isLoading && filteredCreatorAssets.length === 0 && (
+        <p className="text-[--brand-red-shade]">Loading assets...</p>
+      )}
 
       {filteredCreatorAssets.length > 0 && (
         <>
@@ -63,6 +91,7 @@ export default function ListUploadedAssets(props: ListUploadedAssetsProps) {
           <table className="w-full table-auto">
             <thead>
               <tr className="text-sm text-gray-600">
+                <th className="border border-slate-600 px-4 py-1 ">S/No.</th>
                 <th className="border border-slate-600 px-4 py-1 ">Name</th>
                 <th className="border border-slate-600 px-4 py-1">Created</th>
                 <th className="border border-slate-600 px-4 py-1">Updated</th>
@@ -71,117 +100,17 @@ export default function ListUploadedAssets(props: ListUploadedAssetsProps) {
             </thead>
             <tbody>
               {filteredCreatorAssets.map((video, i) => (
-                <tr key={i}>
-                  <td className="border border-slate-700 px-4 py-1">
-                    <Link
-                      href={`${props.activeAccount.addresss}/${video.id}?video=${JSON.stringify(video)}`}
-                    >
-                      {helpers.titleCase(
-                        video?.name.length > 12
-                          ? video?.name.slice(0, 9) + '...'
-                          : video?.name,
-                      )}
-                    </Link>
-                  </td>
-                  <td className="border border-slate-700 px-4 py-1">
-                    {helpers.parseTimestampToDate(video?.createdAt as any)}
-                  </td>
-                  <td className="border border-slate-700 px-4 py-1">
-                    {helpers.parseTimestampToDate(
-                      video?.status?.updatedAt as any,
-                    )}
-                  </td>
-
-                  <td className="border border-slate-700 px-4 py-1">
-                    {/* TODO: Need to check how to fix this with
-                      1. Fetch lazyMinted 
-                      2. Filter its data against `filteredCreatorAssets`
-                    */}
-                    {video.storage && video.storage.ipfs.nftMetadata ? (
-                      <Modal
-                        title="Lazy Mint"
-                        triggerText="Need Minting"
-                        body={
-                          <Body
-                            baseURIForToken={
-                              video.storage &&
-                              String(video.storage.ipfs.nftMetadata.gatewayUrl)
-                            }
-                          />
-                        }
-                      />
-                    ) : (
-                      'Minted'
-                    )}
-                  </td>
-                </tr>
+                <UploadAsset
+                  activeAccount={props.activeAccount}
+                  asset={video}
+                  idx={i}
+                  key={i}
+                />
               ))}
             </tbody>
           </table>
-
-          <div className="modal-box"></div>
         </>
       )}
     </div>
-  );
-}
-
-type BodyProps = {
-  baseURIForToken: string;
-};
-
-function Body(props: BodyProps) {
-  const { lazyMint } = useLazyMint();
-  const [formData, setFormData] = useState<Record<string, string>>({});
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const target = e.target;
-    const value = target.value;
-    const name = target.name;
-
-    setFormData((prev) => {
-      return { ...prev, [name]: value };
-    });
-  };
-
-  const handleLazyMinting = (e: React.FormEvent) => {
-    e.preventDefault();
-
-    lazyMint(formData.amount, props.baseURIForToken, {
-      price: formData.price,
-    });
-  };
-
-  return (
-    <>
-      <form>
-        <div>
-          <label htmlFor="amount">
-            <input
-              type="text"
-              name="amount"
-              id="amount"
-              placeholder="Amount to mint"
-              onChange={handleChange}
-            />
-          </label>
-        </div>
-        <div>
-          <label htmlFor="price">
-            <input
-              type="text"
-              name="price"
-              id="price"
-              placeholder="Price of NFT"
-              onChange={handleChange}
-            />
-          </label>
-        </div>
-
-        <button onClick={handleLazyMinting}>
-          {status === 'pending' ? 'Minting' : 'Mint'}
-        </button>
-      </form>
-    </>
   );
 }
