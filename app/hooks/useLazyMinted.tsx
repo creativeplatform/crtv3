@@ -1,16 +1,9 @@
 import { videoContract } from '@app/lib/sdk/thirdweb/get-contract';
+import { NFT } from '@app/types/nft';
 import { useEffect, useState } from 'react';
 import { getNFTs } from 'thirdweb/extensions/erc1155';
 import { NFTMetadata } from 'thirdweb/utils';
 
-export type NFT = {
-  metadata: NFTMetadata;
-  owner: string | null;
-  id: bigint;
-  tokenURI: string;
-  type: 'ERC1155';
-  supply: bigint;
-};
 
 export default function useLazyMinted() {
   const [nfts, setNFTs] = useState<NFT[]>([]);
@@ -27,6 +20,7 @@ export default function useLazyMinted() {
         const nfts = await getNFTs({
           contract: videoContract,
           start: 0,
+          count: 4 // TODO: remove before before final production
         });
 
         //////////////////////////////////////
