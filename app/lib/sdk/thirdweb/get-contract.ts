@@ -1,13 +1,10 @@
-import { getContract as gContract } from 'thirdweb';
-import { Chain, sepolia } from 'thirdweb/chains';
+import { CONTRACT_ADDRESS } from '@app/lib/utils/context';
+import { getContract } from 'thirdweb';
+import { polygonAmoy } from 'thirdweb/chains';
 import { client } from './client';
 
-const getContract = (address: string, chain: Chain = sepolia) => {
-  return gContract({
-    client,
-    address,
-    chain,
-  });
-};
-
-export default getContract;
+export const videoContract = getContract({
+  address: CONTRACT_ADDRESS.editionDrop.erc1155.amoy,
+  chain: polygonAmoy,
+  client,
+});
