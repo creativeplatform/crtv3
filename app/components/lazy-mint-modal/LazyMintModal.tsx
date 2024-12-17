@@ -16,8 +16,6 @@ export default function LazyMintModal(props: LazyMintProps) {
   const [formData, setFormData] = useState<Record<string, string>>({});
   const selectTagOptions = [{ value: 'DAI', label: 'DAI' }];
 
-  console.log('ModalProps: ', props.baseURIForToken);
-
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
   ) => {
