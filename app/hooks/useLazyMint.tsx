@@ -1,65 +1,69 @@
-import getContract from '@app/lib/sdk/thirdweb/get-contract';
-import { CONTRACT_ADDRESS } from '@app/lib/utils/context';
+import { videoContract } from '@app/lib/sdk/thirdweb/get-contract';
 import { ethers } from 'ethers';
-import { useState } from 'react';
-import { prepareContractCall, sendTransaction, toWei } from 'thirdweb';
+import { useCallback, useState } from 'react';
+import { prepareContractCall, sendTransaction } from 'thirdweb';
 import { useActiveAccount } from 'thirdweb/react';
 
 function useLazyMint() {
   const wallet = useActiveAccount();
   const [txnHash, setTxnHash] = useState('');
-  const [error, setError] = useState({});
-  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<Error>();
+  const [isProcessing, setIsProcessing] = useState(false);
 
-  const lazyMint = async (
-    amount: string,
-    baseURIForTokens: string,
-    data: any,
-  ) => {
-    const args: Record<string, any | string> = {
-      amount,
-      baseURIForTokens,
-      data,
-    };
+  const lazyMint = useCallback(
+    async (amount: string, baseURIForTokens: string, data: any) => {
+      const args: Record<string, any | string> = {
+        amount,
+        baseURIForTokens,
+        data,
+      };
 
-    for (let key in args) {
-      if (!args[key]) {
-        throw new Error(`${key} is required`);
+      // TODO: get this validated
+      for (let key in args) {
+        if (!args[key]) {
+          throw new Error(`${key} is required`);
+        }
       }
-    }
 
-    const jsonString = JSON.stringify(data);
-    const byteArr = Array.from(jsonString, (c) => c.charCodeAt(0));
-    const hexData = ethers.hexlify(new Uint8Array(byteArr)) as `0x${string}`;
+      const priceInWei = ethers.parseUnits(data.price, 18);
+      const abiCoder = new ethers.AbiCoder();
 
-    const transaction = prepareContractCall({
-      contract: getContract(CONTRACT_ADDRESS.editionDrop.erc1155.amoy),
-      method:
-        'function lazyMint(uint256 _amount, string _baseURIForTokens, bytes _data) returns (uint256 batchId)',
-      params: [toWei(amount), baseURIForTokens, hexData],
-    });
+      const priceInWeiString = priceInWei.toString();
+      const encodedData = abiCoder.encode(
+        ['uint256'],
+        [priceInWeiString],
+      ) as `0x${string}`;
 
-    try {
-      setLoading(true);
-      const { transactionHash } = await sendTransaction({
-        transaction,
-        account: wallet!,
+      const transaction = prepareContractCall({
+        contract: videoContract,
+        method:
+          'function lazyMint(uint256 _amount, string _baseURIForTokens, bytes _data) returns (uint256 batchId)',
+        params: [ethers.toBigInt(amount), baseURIForTokens, encodedData],
       });
 
-      setTxnHash(transactionHash);
-      setLoading(false);
-    } catch (err: any) {
-      console.error(err);
-      setError(err);
-      setLoading(false);
-    }
-  };
+      try {
+        setIsProcessing(true);
+        const { transactionHash } = await sendTransaction({
+          transaction,
+          account: wallet!,
+        });
+
+        setTxnHash(transactionHash);
+        setIsProcessing(false);
+      } catch (err: any) {
+        console.error(err);
+        setError(err);
+        setIsProcessing(false);
+      }
+    },
+    [wallet],
+  );
 
   return {
     lazyMint,
     txnHash,
     error,
-    loading,
+    isProcessing,
   };
 }
 
