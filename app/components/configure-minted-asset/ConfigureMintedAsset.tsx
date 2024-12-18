@@ -1,6 +1,6 @@
-import { NFT } from '@app/types/nft';
+import { videoContract } from '@app/lib/sdk/thirdweb/get-contract';
+import { NFT, ResolvedReturnType } from '@app/types/nft';
 import {
-  HStack,
   Tab,
   TabList,
   TabPanel,
@@ -8,7 +8,10 @@ import {
   Tabs,
   VStack,
 } from '@chakra-ui/react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { getClaimConditions } from 'thirdweb/extensions/erc1155';
+import { useReadContract } from 'thirdweb/react';
+import ListClaimConditions from '../ListClaimConditions/ListClaimConditions';
 
 type ConfigureMintedAssetProps = {
   nft: NFT;
@@ -16,13 +19,60 @@ type ConfigureMintedAssetProps = {
 };
 
 export default function ConfigureMintedAsset(props: ConfigureMintedAssetProps) {
-  console.log('ConfigureMintedAsset::props ', props.nft.id);
-  const [tabIndex, setTabIndex] = useState(0);
+
   const tabList = ['Details', 'Claim Conditions', 'Claim'];
+  const [tabIndex, setTabIndex] = useState(0);
+  const [claimConditions, setClaimConditions] = useState<
+    ResolvedReturnType<ReturnType<typeof getClaimConditions>>
+  >([]);
+
+  const [processingClaimConditions, setProcessingClaimConditions] =
+    useState(false);
+
+  const {
+    data: activeClaimCondition,
+    error: activeClaimError,
+    isLoading: isActiveClaimLoading,
+    isPending,
+  } = useReadContract({
+    contract: videoContract,
+    method:
+      'function getActiveClaimConditionsId(uint256 _tokenId) view returns (uint256)',
+    params: [props.nft.id],
+  });
+
+  console.log('activeClaimCondition: ', activeClaimCondition);
 
   const handleTabsChange = (idx: number) => {
     setTabIndex(idx);
   };
+
+  useEffect(() => {
+    const getClaimConditionsById = async (tokenId: bigint) => {
+      console.log('getClaimConditionsById: ', tokenId);
+
+      try {
+        setProcessingClaimConditions(true);
+        // fetch all existing claim conditions
+        const cc = await getClaimConditions({
+          contract: videoContract,
+          tokenId,
+        });
+        console.log('claimConditions: ', cc);
+
+        if (cc && cc?.length > 0) {
+          setProcessingClaimConditions(false);
+
+          setClaimConditions([...cc]);
+        }
+      } catch (err: any) {
+        setProcessingClaimConditions(false);
+        console.error(err);
+      }
+    };
+
+    getClaimConditionsById(props.nft.id);
+  }, [props.nft.id, videoContract]);
 
   return (
     <div className="fixed inset-0 h-screen overflow-y-auto bg-black bg-opacity-50 ">
@@ -35,47 +85,70 @@ export default function ConfigureMintedAsset(props: ConfigureMintedAssetProps) {
         </button>
 
         <Tabs index={tabIndex} onChange={handleTabsChange}>
-          <TabList style={{ gap: 48, marginBottom: 24 }}>
+          <TabList className="mb-8 gap-16">
             {tabList.length > 0 &&
               tabList.map((label, i) => (
-                <Tab key={i} fontWeight={500} name={label}>
+                <Tab
+                  key={i}
+                  fontWeight={300}
+                  name={label}
+                  className="text-slate-400"
+                  style={{
+                    padding: '2px 6px',
+                    backgroundColor:
+                      label === tabList[tabList.length - 1] &&
+                      activeClaimCondition === undefined
+                        ? '#1e1e1e'
+                        : '',
+                  }}
+                  _hover={{
+                    cursor:
+                      label === tabList[tabList.length - 1] &&
+                      activeClaimCondition === undefined
+                        ? 'not-allowed'
+                        : 'pointer',
+                  }}
+                >
                   {label}
                 </Tab>
               ))}
           </TabList>
-
+          
           <TabPanels>
             <TabPanel>
-              <HStack spacing={12} my={4}>
-                <VStack
-                  spacing={4}
-                  alignItems={'flex-start'}
-                  style={{ fontWeight: 400 }}
-                  className="text-slate-400"
-                >
-                  <span>Token Type: </span>
-                  <span>Token ID: </span>
-                  <span>Suppy:</span>
-                </VStack>
-                <VStack
-                  spacing={2}
-                  alignItems={'flex-start'}
-                  style={{ fontWeight: 400 }}
-                  color={'gray.300'}
-                >
-                  <p>{props.nft.type}</p>
-                  <p>{props.nft.id.toString()}</p>
-                  <p>{props.nft.supply.toString()}</p>
-                </VStack>
-              </HStack>
+              <div className="my-8 flex flex-col gap-2 font-medium text-slate-400">
+                <p className="flex">
+                  <span className="min-w-28"> Token Type: </span>
+                  <span className="text-slate-300">{props.nft.type}</span>
+                </p>
+
+                <p className="flex">
+                  <span className="min-w-28">Token ID:</span>
+                  <span className="text-slate-300">
+                    {props.nft.id.toString()}
+                  </span>
+                </p>
+
+                <p className="flex">
+                  <span className="min-w-28">Suppy:</span>
+                  <span className="text-slate-300">
+                    {props.nft.supply.toString()}
+                  </span>
+                </p>
+              </div>
             </TabPanel>
             <TabPanel>
               <VStack spacing={0} alignItems={'flex-start'} my={4}>
-                {/* ListClaimConditions */}
+                <ListClaimConditions
+                  processingClaimConditions={processingClaimConditions}
+                  nftContract={videoContract}
+                  nft={props.nft!}
+                  claimConditions={claimConditions}
+                />
               </VStack>
             </TabPanel>
 
-            <TabPanel>{/*  ClaimNFTForCreator */}</TabPanel>
+            <TabPanel>{/* ClaimNFTForCreator */}</TabPanel>
           </TabPanels>
         </Tabs>
       </div>
