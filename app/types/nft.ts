@@ -1,4 +1,4 @@
-import { NFTMetadata } from "thirdweb/utils";
+import { NFTMetadata } from 'thirdweb/utils';
 
 export type NFT = {
   metadata: NFTMetadata;
@@ -8,3 +8,5 @@ export type NFT = {
   type: 'ERC1155';
   supply: bigint;
 };
+
+export type ResolvedReturnType<T> = T extends Promise<infer U> ? U : T;
