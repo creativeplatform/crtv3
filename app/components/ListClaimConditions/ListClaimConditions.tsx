@@ -1,3 +1,4 @@
+import { videoContract } from '@app/lib/sdk/thirdweb/get-contract';
 import { NFT, ResolvedReturnType } from '@app/types/nft';
 import { AddIcon, CloseIcon, DeleteIcon, EditIcon } from '@chakra-ui/icons';
 import {
@@ -13,8 +14,10 @@ import {
   VStack,
 } from '@chakra-ui/react';
 import { ethers } from 'ethers';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { prepareEvent } from 'thirdweb';
 import { getClaimConditions } from 'thirdweb/extensions/erc1155';
+import { useContractEvents } from 'thirdweb/react';
 import AddClaimPhaseButton from '../AddClaimPhase/AddClaimPhaseButton';
 // import { parseCurrencyDecimals } from 'utils/helpers';
 
@@ -27,17 +30,17 @@ type ListClaimConditionsProps = {
   processingClaimConditions: boolean;
 };
 
+const preparedClaimConditionsUpdatedEvent = prepareEvent({
+  signature:
+    'event ClaimConditionsUpdated(uint256 indexed tokenId, (uint256 startTimestamp, uint256 maxClaimableSupply, uint256 supplyClaimed, uint256 quantityLimitPerWallet, bytes32 merkleRoot, uint256 pricePerToken, address currency, string metadata)[] claimConditions, bool resetEligibility)',
+});
+
 export default function ListClaimConditions(props: ListClaimConditionsProps) {
   const [canEditClaim, setCanEditClaim] = useState(false);
 
-  useEffect(() => {
-    // TODO: Listen to  `updateClaimCondition` event and refetch latest `claimConditions`
-
- 
-
-    return () => {
-   
-    };
+  const { data: ccEvents, error: ccErrorEvents } = useContractEvents({
+    contract: videoContract,
+    events: [preparedClaimConditionsUpdatedEvent],
   });
 
   const deleteClaimById = async (tokenId: string) => {
@@ -115,7 +118,53 @@ export default function ListClaimConditions(props: ListClaimConditionsProps) {
                     </Button>
                   </ButtonGroup>
                 </Stack>
- 
+
+                {canEditClaim ? (
+                  //   <EditClaimConditions
+                  //     nftContract={props.nftContract}
+                  //     nft={props.nft}
+                  //     ccIndex={i}
+                  //     claimCondition={props.claimConditions[i]}
+                  //     setCanEditClaim={setCanEditClaim}
+                  //   />
+                  <p>Can edit here</p>
+                ) : (
+                  <h4>Show here</h4>
+                  //   <div className="body" key={c .startTime.toDateString()}>
+                  //     <HStack spacing="24px" style={{ fontSize: '14px' }}>
+                  //       <div>
+                  //         <p style={{ fontWeight: 600, marginBottom: '12px' }}>
+                  //           Name
+                  //         </p>
+                  //         <span>{c.metadata?.name}</span>
+                  //       </div>
+                  //       <div>
+                  //         <p style={{ fontWeight: 600, marginBottom: '12px' }}>
+                  //           Start time
+                  //         </p>
+                  //         <span>{c.startTime.toDateString()}</span>
+                  //       </div>
+                  //       <div>
+                  //         <p style={{ fontWeight: 600 }}>Num to drop</p>
+                  //         <span>{c.availableSupply}</span>
+                  //       </div>
+                  //       <div>
+                  //         <p style={{ fontWeight: 600 }}>Price</p>
+                  //         {/* {parseCurrencyDecimals(
+                  //           c.price as any,
+                  //           c.currencyMetadata.decimals,
+                  //         )} */}{' '}
+                  //         0<span>{c.currencyMetadata.symbol}</span>
+                  //       </div>
+                  //       <div>
+                  //         <p style={{ fontWeight: 600 }}>
+                  //           Limit per wallet
+                  //         </p>
+                  //         <span>{c.maxClaimablePerWallet}</span>
+                  //       </div>
+                  //     </HStack>
+                  //   </div>
+                )}
               </div>
             ))}
           </>
