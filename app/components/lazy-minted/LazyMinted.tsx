@@ -13,6 +13,7 @@ export default function LazyMintedAsset(props: LazyMintedProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [nft, setNFT] = useState<NFT>();
 
+
   const toggleModal = useCallback(() => {
     setIsModalOpen((prevState) => !prevState);
   }, []);
@@ -28,11 +29,11 @@ export default function LazyMintedAsset(props: LazyMintedProps) {
         <p className="text-[--brand-red-shade]">Loading minted nft(s)...</p>
       )}
 
-      {nfts && nfts.length === 0 && (
+      {!isProcessing && nfts.length === 0 && (
         <p className="text-sm text-gray-400">No minted nft yet!</p>
       )}
 
-      {error && <p className="text-sm text-red-500">{error}</p>}
+      {error && <p className="text-sm text-red-500">{error.message}</p>}
 
       {nfts && nfts.length > 0 && (
         <table className="w-full table-auto">
