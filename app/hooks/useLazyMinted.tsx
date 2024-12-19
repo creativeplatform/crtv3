@@ -1,87 +1,50 @@
 import { videoContract } from '@app/lib/sdk/thirdweb/get-contract';
 import { NFT } from '@app/types/nft';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { getNFTs } from 'thirdweb/extensions/erc1155';
-import { NFTMetadata } from 'thirdweb/utils';
-
+import { useActiveAccount } from 'thirdweb/react';
 
 export default function useLazyMinted() {
+  const activeAccount = useActiveAccount();
+
   const [nfts, setNFTs] = useState<NFT[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<any>({});
 
+  const fetchLazyMintedNFTs = useCallback(async () => {
+    if (!activeAccount) return;
+
+    setIsProcessing(true);
+
+    try {
+      const data = (await getNFTs({
+        contract: videoContract,
+        start: 0,
+      })) as NFT[];
+      
+      setIsProcessing(false);
+      setNFTs(data);
+    } catch (err) {
+      setIsProcessing(false);
+      console.error(err);
+      setError(err);
+    }
+  }, [activeAccount]);
+
   useEffect(() => {
-    //
-    const getLazyMintedNFTs = async () => {
+    fetchLazyMintedNFTs();
+  }, [activeAccount, fetchLazyMintedNFTs]);
 
-      try {
-        setIsProcessing(true);
-
-        const nfts = await getNFTs({
-          contract: videoContract,
-          start: 0,
-          count: 4 // TODO: remove before before final production
-        });
-
-        //////////////////////////////////////
-        //TODO: filter nfts by owner as activeAccount
-        /////////////////////////////////////
-
-        const arr = Array.from(nfts) as Array<NFT>;
-        const parsedNFTs = await parseMetadata(arr);
-
-        setNFTs([...parsedNFTs]);
-        setIsProcessing(false);
-      } catch (err) {
-        console.error(err);
-        setIsProcessing(false);
-        setError(err);
-      }
-    };
-
-    getLazyMintedNFTs();
-  }, []);
+  const activeAccountNFTs = useMemo(() => {
+    return nfts.filter(
+      (nft) =>
+        nft.metadata.properties?.creatorAddress === activeAccount?.address,
+    );
+  }, [nfts, activeAccount]);
 
   return {
-    nfts,
+    nfts: activeAccountNFTs,
     isProcessing,
     error,
   };
-}
-
-function extractCID(ipfsUri: string) {
-  return ipfsUri.split(/\/\//g)[1];
-}
-
-async function parseMetadata(arr: NFT[]) {
-  const ast: NFT[] = [];
-  const delimiter = 'ipfs/';
-
-  for (let i = 0; i < arr.length; i++) {
-    let cid = arr[i].metadata.uri.split(delimiter)[1].substring(0, 59);
-
-    if (cid != undefined) {
-      const res = await fetch(
-        `https://ipfs.livepeer.studio/${delimiter}${cid}`,
-      );
-
-      const mtd: NFTMetadata = await res.json();
-
-      if (mtd.animation_url != undefined || mtd.animation_url !== '') {
-        mtd.animation_url = `https://ipfs.livepeer.studio/${delimiter}${extractCID(mtd.animation_url!!)}`;
-      }
-
-      if (mtd.image != undefined || mtd.image !== '') {
-        mtd.image = `https://ipfs.livepeer.studio/${delimiter}${extractCID(mtd.image!!)}`
-      }
-
-      arr[i].metadata = {
-        ...mtd,
-      };
-    }
-
-    ast.push(arr[i]);
-  }
-
-  return ast;
 }
