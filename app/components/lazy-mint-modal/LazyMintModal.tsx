@@ -8,7 +8,7 @@ type LazyMintProps = {
 
 export default function LazyMintModal(props: LazyMintProps) {
   const {
-    lazyMint,
+    handleLazyMint,
     isProcessing,
     error: lazyMintError,
     txnHash,
@@ -31,15 +31,11 @@ export default function LazyMintModal(props: LazyMintProps) {
   const handleLazyMinting = (e: React.FormEvent) => {
     e.preventDefault();
 
-    lazyMint(formData.amount, props.baseURIForToken, {
-      price: formData.price,
-    });
+    handleLazyMint(formData.amount, formData.price, props.baseURIForToken);
   };
 
   return (
     <>
-      {lazyMintError && <h4>{lazyMintError.message}</h4>}
-      {txnHash && <h4>{txnHash}</h4>}
       <div className="fixed inset-0 h-screen overflow-y-auto bg-black bg-opacity-50 ">
         <div className="relative top-96 mx-auto w-full max-w-md rounded-lg bg-white p-8 shadow dark:bg-slate-800">
           <button
@@ -121,6 +117,13 @@ export default function LazyMintModal(props: LazyMintProps) {
             >
               Cancel
             </button>
+          </div>
+
+          <div className="space-x-2 text-sm mt-6">
+            {lazyMintError && (
+              <p className="text-rose-500">{lazyMintError.message}</p>
+            )}
+            {txnHash && <p className="text-white">Txn Hash: {txnHash}</p>}
           </div>
         </div>
       </div>
