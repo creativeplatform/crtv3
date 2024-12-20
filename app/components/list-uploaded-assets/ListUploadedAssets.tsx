@@ -20,15 +20,6 @@ export default function ListUploadedAssets(props: ListUploadedAssetsProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(false);
 
-  const lazyMintedEvent = useContractEvents({
-    contract: videoContract,
-    events: [
-      tokensLazyMintedEvent({
-        startTokenId: 0n,
-      }),
-    ],
-  });
-
   useEffect(() => {
     fetchUploadedAssets = async () => {
       try {
@@ -47,15 +38,6 @@ export default function ListUploadedAssets(props: ListUploadedAssetsProps) {
 
     fetchUploadedAssets();
   }, [props]);
-
-  // useEffect(() => {
-  //   if (lazyMintedEvent.isSuccess) {
-  //     console.log('lazyMintedEvent: ', lazyMintedEvent.data);
-  //     fetchUploadedAssets();
-  //   } else {
-  //     console.error('lazyMintedEvent::error ', lazyMintedEvent.error?.message);
-  //   }
-  // }, [lazyMintedEvent.data, lazyMintedEvent.isSuccess]);
 
   const filteredCreatorAssets: Asset[] = useMemo(() => {
     return Array.isArray(assets)
