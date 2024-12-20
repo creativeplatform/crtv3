@@ -4344,7 +4344,7 @@ export const CONTRACT_ADDRESS = {
   editionDrop: {
     erc1155: {
       baseSepolia: '0xbbC0bC56f44B744aC159311D9b46a819545F735B',
-      amoy: '0xeB408a1A51179fE2E7C02e73df50432753374EEE',
+      amoy: '0xF054c2257dE5Aa336CadA58f13aab1415EEC8266',
       abi: [
         {
           inputs: [],
@@ -6575,6 +6575,174 @@ export const CONTRACT_ADDRESS = {
         },
       ],
     },
+  },
+  erc20: {
+    TESTR: {
+      chain: {
+        polygon: {
+          mumbai: '0xc0823427fE72cFD105c71BEAd0476412283B07c5',
+          mainnet: '',
+        },
+        ethereum: {
+          mainnet: '',
+          sepolia: '',
+        },
+      },
+    },
+    USDC: {
+      chain: {
+        polygon: {
+          mumbai: '0x9999f7fea5938fd3b1e26a12c3f2fb024e194f97',
+          mainnet: '',
+        },
+        ethereum: {
+          mainnet: '',
+          sepolia: '',
+        },
+      },
+    },
+    DAI: {
+      chain: {
+        polygon: {
+          mumbai: '0xcB1e72786A6eb3b44C2a2429e317c8a2462CFeb1',
+          mainnet: '',
+        },
+        ethereum: {
+          sepolia: '',
+          goerli: '0xE65Ce7f6a02F50d4717b5966e3Bd65B3FDCB480a',
+          mainnet: '0x6B175474E89094C44Da98b954EedeAC495271d0F',
+        },
+      },
+    },
+    abi: [
+      {
+        constant: true,
+        inputs: [],
+        name: 'name',
+        outputs: [
+          {
+            name: '',
+            type: 'string',
+          },
+        ],
+        payable: false,
+        type: 'function',
+      },
+      {
+        constant: true,
+        inputs: [],
+        name: 'decimals',
+        outputs: [
+          {
+            name: '',
+            type: 'uint8',
+          },
+        ],
+        payable: false,
+        type: 'function',
+      },
+      {
+        constant: true,
+        inputs: [
+          {
+            name: '_owner',
+            type: 'address',
+          },
+        ],
+        name: 'balanceOf',
+        outputs: [
+          {
+            name: 'balance',
+            type: 'uint256',
+          },
+        ],
+        payable: false,
+        type: 'function',
+      },
+      {
+        constant: true,
+        inputs: [],
+        name: 'symbol',
+        outputs: [
+          {
+            name: '',
+            type: 'string',
+          },
+        ],
+        payable: false,
+        type: 'function',
+      },
+      {
+        constant: false,
+        inputs: [
+          {
+            name: '_spender',
+            type: 'address',
+          },
+          {
+            name: '_value',
+            type: 'uint256',
+          },
+        ],
+        name: 'approve',
+        outputs: [
+          {
+            name: '',
+            type: 'bool',
+          },
+        ],
+        payable: false,
+        stateMutability: 'nonpayable',
+        type: 'function',
+      },
+      {
+        constant: false,
+        inputs: [
+          {
+            name: '_to',
+            type: 'address',
+          },
+          {
+            name: '_value',
+            type: 'uint256',
+          },
+        ],
+        name: 'transfer',
+        outputs: [
+          {
+            name: '',
+            type: 'bool',
+          },
+        ],
+        payable: false,
+        stateMutability: 'nonpayable',
+        type: 'function',
+      },
+      {
+        inputs: [
+          {
+            internalType: 'address',
+            name: 'owner',
+            type: 'address',
+          },
+          {
+            internalType: 'address',
+            name: 'spender',
+            type: 'address',
+          },
+        ],
+        name: 'allowance',
+        outputs: [
+          {
+            internalType: 'uint256',
+            name: '',
+            type: 'uint256',
+          },
+        ],
+        stateMutability: 'view',
+        type: 'function',
+      },
+    ],
   },
 };
 
