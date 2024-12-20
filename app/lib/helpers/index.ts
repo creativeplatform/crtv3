@@ -1,3 +1,7 @@
+import { NFT } from '@app/types/nft';
+import { NFTMetadata } from 'thirdweb/utils';
+import { CONTRACT_ADDRESS } from '../utils/context';
+
 /**
  * Function to parse timestamp to readable date
  * @param dateString The date object to parse
@@ -7,7 +11,7 @@
  * const date = parseDate('Tue Jan 16 2024 13:13:32')
  *  =>  16/01/2024 13:13
  */
-function parseTimestampToDate(ts: number) {
+export function parseTimestampToDate(ts: number) {
   if (ts <= 0) {
     return 'Not available';
   }
@@ -28,7 +32,7 @@ function parseTimestampToDate(ts: number) {
  * @param wrapAfter The number of characters to start
  * @returns The wrapped sentence
  */
-const wordWrap = (txt: string, wrapAfter: number) => {
+export const wordWrap = (txt: string, wrapAfter: number) => {
   txt = txt.trim();
 
   if (txt.length < wrapAfter) {
@@ -44,13 +48,87 @@ const wordWrap = (txt: string, wrapAfter: number) => {
   return txt;
 };
 
-const titleCase = (txt: string) => {
+export const titleCase = (txt: string) => {
   if (typeof txt != 'string') {
     throw new Error(`The argument ${txt} is not a string`);
   }
   if (txt === '') throw new Error('Can not parse empty string');
-  
+
   return txt.slice(0, 1).toUpperCase() + txt.slice(1);
 };
 
-export { parseTimestampToDate, titleCase, wordWrap };
+export const claimConditionsOptions = {
+  phase: {
+    'Select phase': '',
+    'Phase 1': 'Phase 1',
+  },
+  waitInSecondsOptions: {
+    'Select period': '',
+    '5 mins': 60 * 5,
+    '15 mins': 60 * 15,
+    '30 mins': 60 * 30,
+    '1 hr': 60 * 60 * 1,
+    '3 hrs': 60 * 60 * 3,
+    '6 hrs': 60 * 60 * 6,
+    '9 hrs': 60 * 60 * 9,
+    '12 hrs': 60 * 60 * 12,
+    '24 hrs': 60 * 60 * 24,
+    '48 hrs': 60 * 60 * 24 * 2,
+    '72 hrs': 60 * 60 * 24 * 3,
+    '96 hrs': 60 * 60 * 24 * 4,
+    '120 hrs': 60 * 60 * 24 * 5,
+  },
+  currency: {
+    // The tokens accepted for payment by the buyer
+    USDC: CONTRACT_ADDRESS.erc20.USDC.chain.polygon.mumbai,
+    TESTR: CONTRACT_ADDRESS.erc20.TESTR.chain.polygon.mumbai,
+  },
+};
+
+function extractCID(ipfsUri: string) {
+  return ipfsUri.split(/\/\//g)[1];
+}
+
+export async function parseMetadata(arr: NFT[]) {
+  const ast: NFT[] = [];
+  const delimiter = 'ipfs/';
+
+  for (let i = 0; i < arr.length; i++) {
+    let cid = arr[i].metadata.uri.split(delimiter)[1].substring(0, 59);
+
+    if (cid != undefined) {
+      const res = await fetch(
+        `https://ipfs.livepeer.studio/${delimiter}${cid}`,
+      );
+
+      const mtd: NFTMetadata = await res.json();
+
+      if (mtd.animation_url != undefined || mtd.animation_url !== '') {
+        mtd.animation_url = `https://ipfs.livepeer.studio/${delimiter}${extractCID(mtd.animation_url!!)}`;
+      }
+
+      if (mtd.image != undefined || mtd.image !== '') {
+        mtd.image = `https://ipfs.livepeer.studio/${delimiter}${extractCID(mtd.image!!)}`;
+      }
+
+      arr[i].metadata = {
+        ...mtd,
+      };
+    }
+
+    ast.push(arr[i]);
+  }
+
+  return ast;
+}
+
+export function parseIpfsUri(
+  uri: string,
+  baseURIGateway = 'https://ipfs.livepeer.studio/',
+) {
+  const delimiter = 'ipfs://';
+  const cid = uri.split(delimiter)[1];
+  const itemUri = baseURIGateway + 'ipfs/' + cid;
+
+  return itemUri;
+}
