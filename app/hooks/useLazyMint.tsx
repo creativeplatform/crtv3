@@ -1,51 +1,51 @@
+import { parseIpfsUri } from '@app/lib/helpers';
 import { videoContract } from '@app/lib/sdk/thirdweb/get-contract';
-import { ethers } from 'ethers';
 import { useCallback, useState } from 'react';
-import { prepareContractCall, sendTransaction } from 'thirdweb';
+import { sendTransaction } from 'thirdweb';
+import { lazyMint } from 'thirdweb/extensions/erc1155';
 import { useActiveAccount } from 'thirdweb/react';
 
 function useLazyMint() {
-  const wallet = useActiveAccount();
+  const activeAccount = useActiveAccount();
   const [txnHash, setTxnHash] = useState('');
   const [error, setError] = useState<Error>();
   const [isProcessing, setIsProcessing] = useState(false);
 
-  const lazyMint = useCallback(
-    async (amount: string, baseURIForTokens: string, data: any) => {
+  const handleLazyMint = useCallback(
+    async (amount: string, price: string, baseURIForTokens: string) => {
       const args: Record<string, any | string> = {
         amount,
+        price,
         baseURIForTokens,
-        data,
       };
 
       // TODO: get this validated
       for (let key in args) {
         if (!args[key]) {
-          throw new Error(`${key} is required`);
+          // throw new Error(`${key} is required`);
         }
       }
 
-      const priceInWei = ethers.parseUnits(data.price, 18);
-      const abiCoder = new ethers.AbiCoder();
+      const res = await fetch(baseURIForTokens);
+      const data = await res.json();
+      const tknMetadata = Object.assign(data, {
+        properties: {
+          amount,
+          price,
+          creatorAddress: activeAccount?.address!,
+        },
+      });
 
-      const priceInWeiString = priceInWei.toString();
-      const encodedData = abiCoder.encode(
-        ['uint256'],
-        [priceInWeiString],
-      ) as `0x${string}`;
-
-      const transaction = prepareContractCall({
+      const transaction = lazyMint({
         contract: videoContract,
-        method:
-          'function lazyMint(uint256 _amount, string _baseURIForTokens, bytes _data) returns (uint256 batchId)',
-        params: [ethers.toBigInt(amount), baseURIForTokens, encodedData],
+        nfts: [tknMetadata],
       });
 
       try {
         setIsProcessing(true);
         const { transactionHash } = await sendTransaction({
           transaction,
-          account: wallet!,
+          account: activeAccount!,
         });
 
         setTxnHash(transactionHash);
@@ -56,11 +56,11 @@ function useLazyMint() {
         setIsProcessing(false);
       }
     },
-    [wallet],
+    [activeAccount],
   );
 
   return {
-    lazyMint,
+    handleLazyMint,
     txnHash,
     error,
     isProcessing,
