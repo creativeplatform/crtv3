@@ -1,4 +1,5 @@
 import useListLazyMinted from '@app/hooks/useLazyMinted';
+import { parseIpfsUri } from '@app/lib/helpers';
 import { NFT } from '@app/types/nft';
 import { useCallback, useState } from 'react';
 import ConfigureMintedAsset from '../configure-minted-asset/ConfigureMintedAsset';
@@ -12,7 +13,7 @@ export default function LazyMintedAsset(props: LazyMintedProps) {
   const { error, isProcessing, nfts } = useListLazyMinted();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [nft, setNFT] = useState<NFT>();
-
+  const [addClaimPhase, setAddClaimPhase] = useState(false);
 
   const toggleModal = useCallback(() => {
     setIsModalOpen((prevState) => !prevState);
@@ -25,15 +26,19 @@ export default function LazyMintedAsset(props: LazyMintedProps) {
 
   return (
     <>
-      {isProcessing && (
-        <p className="text-[--brand-red-shade]">Loading minted nft(s)...</p>
+      {isProcessing && nfts.length === 0 && (
+        <p className="my-2 text-lg text-[--brand-red-shade]">
+          Loading minted nft(s)...
+        </p>
       )}
+
+      {error && <p className="my-2 text-lg text-red-500">{error.message}</p>}
 
       {!isProcessing && nfts.length === 0 && (
-        <p className="text-sm text-gray-400">No minted nft yet!</p>
+        <p className="my-2  text-lg text-gray-400">
+          <span className=""></span> No minted nft yet!
+        </p>
       )}
-
-      {error && <p className="text-sm text-red-500">{error.message}</p>}
 
       {nfts && nfts.length > 0 && (
         <table className="w-full table-auto">
@@ -49,12 +54,19 @@ export default function LazyMintedAsset(props: LazyMintedProps) {
           </thead>
           <tbody>
             {nfts.map((nft, i) => (
-              <tr key={i + '-' + nft.id}>
+              <tr
+                key={i + '-' + nft.id}
+                onClick={() => handleViewMore(nft)}
+                className="hover:cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-900"
+              >
                 <td className="border border-slate-700 px-4 py-1">
                   {nft.id.toLocaleString()}
                 </td>
                 <td className="border border-slate-700 px-4 py-1">
-                  <video src={nft.metadata.animation_url} width={120}></video>
+                  <video
+                    src={parseIpfsUri(nft.metadata.animation_url!!)}
+                    width={180}
+                  ></video>
                   {/* TODO: Revisit Player */}
                   {/* <Player.Root src={nft.metadata.animation_url} /> */}
                 </td>
@@ -67,11 +79,7 @@ export default function LazyMintedAsset(props: LazyMintedProps) {
                 <td className="border border-slate-700 px-4 py-1">
                   {nft.supply.toString()}
                 </td>
-                <td className="border border-slate-700 px-4 py-1">
-                  <button onClick={() => handleViewMore(nft)}>
-                    {'Configure'}
-                  </button>
-                </td>
+                <td className="border border-slate-700 px-4 py-1">{'->'}</td>
               </tr>
             ))}
           </tbody>
@@ -79,7 +87,12 @@ export default function LazyMintedAsset(props: LazyMintedProps) {
       )}
 
       {isModalOpen && (
-        <ConfigureMintedAsset nft={nft!!} toggleModal={toggleModal} />
+        <ConfigureMintedAsset
+          nft={nft!!}
+          toggleModal={toggleModal}
+          setAddClaimPhase={setAddClaimPhase}
+          addClaimPhase={addClaimPhase}
+        />
       )}
     </>
   );
