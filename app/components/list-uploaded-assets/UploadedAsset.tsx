@@ -1,7 +1,10 @@
 import * as helpers from '@app/lib/helpers';
+import { videoContract } from '@app/lib/sdk/thirdweb/get-contract';
 import { Asset } from '@app/lib/types';
 import Link from 'next/link';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { tokensLazyMintedEvent } from 'thirdweb/extensions/erc1155';
+import { useContractEvents } from 'thirdweb/react';
 import LazyMintModal from '../lazy-mint-modal/LazyMintModal';
 
 interface UploadAssetProps {
@@ -21,6 +24,20 @@ export default function UploadAsset(props: UploadAssetProps) {
     () => props.asset.storage.ipfs.nftMetadata.gatewayUrl || '',
     [props.asset.storage.ipfs.nftMetadata.gatewayUrl],
   );
+
+  const lazyMintedEvent = useContractEvents({
+    contract: videoContract,
+    events: [tokensLazyMintedEvent()],
+  });
+
+  useEffect(() => {
+    if (lazyMintedEvent.isSuccess) {
+      // console.log('lazyMintedEvent: ', lazyMintedEvent.data);
+      // toggleModal();
+    } else {
+      // console.error('lazyMintedEvent::error ', lazyMintedEvent.error?.message);
+    }
+  }, [lazyMintedEvent]);
 
   return (
     <tr key={props.asset.id}>
@@ -51,10 +68,12 @@ export default function UploadAsset(props: UploadAssetProps) {
 
         {props.asset.storage && props.asset.storage.ipfs.nftMetadata ? (
           <>
-            <button onClick={toggleModal} className='text-orange-600'>Mint Now</button>
+            <button onClick={toggleModal} className="text-orange-600">
+              Mint Now
+            </button>
           </>
         ) : (
-            <p className='text-green-500'>Minted</p>
+          <p className="text-green-500">Minted</p>
         )}
 
         {isModalOpen && (
