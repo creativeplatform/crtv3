@@ -11,19 +11,46 @@ import { CONTRACT_ADDRESS } from '../utils/context';
  * const date = parseDate('Tue Jan 16 2024 13:13:32')
  *  =>  16/01/2024 13:13
  */
-export function parseTimestampToDate(ts: number) {
-  if (ts <= 0) {
+// export function parseTimestampToDate(ts: bigint) {
+//   const timestampNumber = Number(ts);
+//   if (timestampNumber <= 0) {
+//     return 'Not available';
+//   }
+
+//   const d = new Date(timestampNumber * 1000);
+//   const longEnUSFormat = new Intl.DateTimeFormat('en-US', {
+//     year: 'numeric',
+//     month: 'long',
+//     day: 'numeric',
+//   });
+
+//   return longEnUSFormat.format(d);
+// }
+
+/**
+ * Function to parse timestamp to readable date
+ * @param ts The timestamp is bigint format
+ * @returns Locale Date
+ *
+ * @example
+ * const date = timestampToDateString(1734801000)
+ *  =>  12/22/2024, 09:59 AM
+ */
+export function timestampToDateString(ts: bigint) {
+  const timestampNumber = Number(ts);
+  if (timestampNumber <= 0) {
     return 'Not available';
   }
 
-  const d = new Date(ts);
-  const longEnUSFormat = new Intl.DateTimeFormat('en-US', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  });
+  const date = new Date(timestampNumber * 1000);
 
-  return longEnUSFormat.format(d);
+  return date.toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
 /**
@@ -80,7 +107,7 @@ export const claimConditionsOptions = {
   },
   currency: {
     // The tokens accepted for payment by the buyer
-    USDC: CONTRACT_ADDRESS.erc20.USDC.chain.polygon.mumbai,
+    USDC: CONTRACT_ADDRESS.erc20.USDC.chain.polygon.amoy,
     TESTR: CONTRACT_ADDRESS.erc20.TESTR.chain.polygon.mumbai,
   },
 };
@@ -89,7 +116,7 @@ function extractCID(ipfsUri: string) {
   return ipfsUri.split(/\/\//g)[1];
 }
 
-export async function parseMetadata(arr: NFT[]) {
+export async function parseMetadata2(arr: NFT[]) {
   const ast: NFT[] = [];
   const delimiter = 'ipfs/';
 
@@ -111,15 +138,39 @@ export async function parseMetadata(arr: NFT[]) {
         mtd.image = `https://ipfs.livepeer.studio/${delimiter}${extractCID(mtd.image!!)}`;
       }
 
-      arr[i].metadata = {
-        ...mtd,
-      };
+      // arr[i].metadata = {
+      //   ...mtd,
+      // };
     }
 
     ast.push(arr[i]);
   }
 
   return ast;
+}
+
+export function fetchMetadata(uri: string) {
+  console.log({ uri });
+
+  const delimiter = '/';
+  let mtd: Partial<NFTMetadata> = {};
+
+  let cid = uri.split(delimiter)[2];
+  console.log({ cid });
+
+  // if (cid != undefined) {
+  //   fetch(`https://ipfs.livepeer.studio/ipfs/${cid}`)
+  //     .then((res) => res)
+  //     .then(async (data) => {
+  //       const d = await data.json();
+  //       console.log(d);
+  //     })
+  //     .catch((err) => {
+  //       console.error(err);
+  //     });
+  // }
+
+  return 'ast';
 }
 
 export function parseIpfsUri(
