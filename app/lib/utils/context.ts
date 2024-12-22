@@ -6592,7 +6592,7 @@ export const CONTRACT_ADDRESS = {
     USDC: {
       chain: {
         polygon: {
-          mumbai: '0x9999f7fea5938fd3b1e26a12c3f2fb024e194f97',
+          amoy: '0x41E94Eb019C0762f9Bfcf9Fb1E58725BfB0e7582',
           mainnet: '',
         },
         ethereum: {
