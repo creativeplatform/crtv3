@@ -1,7 +1,13 @@
 import { NFTMetadata } from 'thirdweb/utils';
 
+type Properties = {
+  properties: {
+    price: bigint;
+    amount: bigint;
+  };
+};
 export type NFT = {
-  metadata: NFTMetadata;
+  metadata: NFTMetadata & Properties;
   owner: string | null;
   id: bigint;
   tokenURI: string;
