@@ -1,4 +1,3 @@
-import { parseIpfsUri } from '@app/lib/helpers';
 import { videoContract } from '@app/lib/sdk/thirdweb/get-contract';
 import { useCallback, useState } from 'react';
 import { sendTransaction } from 'thirdweb';
