@@ -12,14 +12,16 @@ import { useEffect, useState } from 'react';
 import { getClaimConditions } from 'thirdweb/extensions/erc1155';
 import { useReadContract } from 'thirdweb/react';
 import ListClaimConditions from '../ListClaimConditions/ListClaimConditions';
+import SetClaimConditions from '../SetClaimConditions/SetClaimConditions';
 
 type ConfigureMintedAssetProps = {
   nft: NFT;
   toggleModal: () => void;
+  setAddClaimPhase: (arg: boolean) => void;
+  addClaimPhase: boolean;
 };
 
 export default function ConfigureMintedAsset(props: ConfigureMintedAssetProps) {
-
   const tabList = ['Details', 'Claim Conditions', 'Claim'];
   const [tabIndex, setTabIndex] = useState(0);
   const [claimConditions, setClaimConditions] = useState<
@@ -72,11 +74,11 @@ export default function ConfigureMintedAsset(props: ConfigureMintedAssetProps) {
     };
 
     getClaimConditionsById(props.nft.id);
-  }, [props.nft.id, videoContract]);
+  }, [props.nft.id]);
 
   return (
-    <div className="fixed inset-0 h-screen overflow-y-auto bg-black bg-opacity-50 ">
-      <div className="relative top-96 mx-auto w-full max-w-md rounded-lg bg-white p-8 shadow dark:bg-slate-800">
+    <div className="fixed inset-0 h-screen overflow-y-auto bg-black bg-opacity-90">
+      <div className="relative top-44 mx-auto w-full max-w-2xl rounded-lg bg-white p-8 shadow dark:bg-slate-800">
         <button
           onClick={props.toggleModal}
           className="absolute right-4 top-2 text-gray-600 hover:text-gray-800 focus:outline-none dark:hover:text-gray-200"
@@ -113,7 +115,7 @@ export default function ConfigureMintedAsset(props: ConfigureMintedAssetProps) {
                 </Tab>
               ))}
           </TabList>
-          
+
           <TabPanels>
             <TabPanel>
               <div className="my-8 flex flex-col gap-2 font-medium text-slate-400">
@@ -144,8 +146,19 @@ export default function ConfigureMintedAsset(props: ConfigureMintedAssetProps) {
                   nftContract={videoContract}
                   nft={props.nft!}
                   claimConditions={claimConditions}
+                  addClaimPhase={props.addClaimPhase}
+                  setAddClaimPhase={props.setAddClaimPhase}
                 />
               </VStack>
+
+              {props.addClaimPhase && (
+                <SetClaimConditions
+                  numberOfClaimsConditonsAvailable={claimConditions.length}
+                  nft={props.nft}
+                  setAddClaimPhase={props.setAddClaimPhase}
+                  claimConditions={claimConditions}
+                />
+              )}
             </TabPanel>
 
             <TabPanel>{/* ClaimNFTForCreator */}</TabPanel>
