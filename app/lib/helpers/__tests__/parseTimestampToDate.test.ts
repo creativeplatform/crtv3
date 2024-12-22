@@ -1,4 +1,4 @@
-import { parseTimestampToDate } from '../index';
+import { parseTimestampToDate , } from '../helpers';
 
 describe('parseTimestampToDate', () => {
   it('should return "Not available" for 0 timestamp', () => {

@@ -1,5 +1,5 @@
 import useListLazyMinted from '@app/hooks/useLazyMinted';
-import { parseIpfsUri } from '@app/lib/helpers';
+import { parseIpfsUri } from '@app/lib/helpers/helpers';
 import { NFT } from '@app/types/nft';
 import { useCallback, useState } from 'react';
 import ConfigureMintedAsset from '../configure-minted-asset/ConfigureMintedAsset';

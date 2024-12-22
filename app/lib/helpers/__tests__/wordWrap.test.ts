@@ -1,4 +1,4 @@
-import { wordWrap } from '../index';
+import { wordWrap } from '../helpers';
 
 describe('parseTimestampToDate', () => {
   let txt = '';

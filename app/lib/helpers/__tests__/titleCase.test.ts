@@ -1,4 +1,4 @@
-import { titleCase } from '../index';
+import { titleCase } from '../helpers';
 
 describe('parseTimestampToDate', () => {
   it('should throw on empty string', () => {

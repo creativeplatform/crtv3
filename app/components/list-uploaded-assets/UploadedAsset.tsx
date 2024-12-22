@@ -1,4 +1,4 @@
-import * as helpers from '@app/lib/helpers';
+import * as helpers from '@app/lib/helpers/helpers';
 import { videoContract } from '@app/lib/sdk/thirdweb/get-contract';
 import { Asset } from '@app/lib/types';
 import Link from 'next/link';
