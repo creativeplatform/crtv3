@@ -8,12 +8,39 @@ import { erc20Contract } from '../sdk/thirdweb/get-contract';
 import { CONTRACT_ADDRESS } from '../utils/context';
 
 /**
- * Function to parse timestamp to readable date
+ * Function to parse `Date` string
  * @param dateString The date object to parse
  * @returns Form input date
  *
  * @example
  * const date = parseDate('Tue Jan 16 2024 13:13:32')
+ *  =>  // '2024-01-16T13:13'
+ */
+export function parseDate(timestamp: bigint) {
+  const d = new Date(Number(timestamp));
+
+  const hour = d.getHours()
+  const minutes = d.getMinutes()
+  const date = d.getDate()
+  const month = d.getMonth()
+  const year = d.getFullYear()
+
+  const dd = date > 10 ? date : `0${date}`
+  const mm = month > 10 ? month : `0${month + 1}`
+  const hh = hour > 10 ? hour : `0${hour}`
+  const min = minutes > 10 ? minutes : `0${minutes}`
+
+  // '2024-01-16T11:45'
+  return `${year}-${mm}-${dd}T${hh}:${min}`
+}
+
+/**
+ * Function to parse timestamp to readable date
+ * @param dateString The date object to parse
+ * @returns Form input date
+ *
+ * @example
+ * const date = parseTimestampToDate(1982736542)
  *  =>  16/01/2024 13:13
  */
 export function parseTimestampToDate(ts: number) {
@@ -48,13 +75,15 @@ export function timestampToDateString(ts: bigint) {
 
   const date = new Date(timestampNumber * 1000);
 
-  return date.toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const year = date.getFullYear();
+
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  const seconds = String(date.getSeconds()).padStart(2, '0');
+
+  return `${day}/${month}/${year}, ${hours}:${minutes}:${seconds}`;
 }
 
 /**
