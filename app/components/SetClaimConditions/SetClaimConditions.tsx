@@ -1,4 +1,4 @@
-import { claimConditionsOptions } from '@app/lib/helpers';
+import { claimConditionsOptions } from '@app/lib/helpers/helpers';
 import { videoContract } from '@app/lib/sdk/thirdweb/get-contract';
 import { NFT, ResolvedReturnType } from '@app/types/nft';
 import {
@@ -365,8 +365,7 @@ export default function SetClaimConditions(props: SetClaimConditionsProps) {
             color: 'gray.300',
             cursor: isSettingCC ? 'progress' : 'pointer',
           }}
-          className="{min-w-4 text-slate-100 p-3 my-6 bg-[--brand-red] hover:text-slate-500 hover:}"
-        
+          className="{min-w-4 hover:} my-6 bg-[--brand-red] p-3 text-slate-100 hover:text-slate-500"
           isLoading={isSettingCC}
           loadingText={isSettingCC ? 'Submitting...' : ''}
           mb={20}
