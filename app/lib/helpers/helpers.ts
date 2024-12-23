@@ -215,3 +215,15 @@ export function getERC20Metadata(
       });
   });
 }
+
+/**
+ * Function to parse currency decimals
+ * @param price The price of the nft 
+ * @param decimals The decimal point of the currency
+ * @returns price in decimal format
+ */
+export const parseCurrencyDecimals = (price: bigint, decimals: number) => {
+  if (decimals) {
+    return parseInt(price.toString()) / 10 ** decimals;
+  }
+};
