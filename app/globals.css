@@ -79,7 +79,7 @@
   }
 }
 
-:root{
-  --brand-red: #EC407A;
-  --brand-red-shade: #d8366c;
+:root {
+  --color-brand-red: #ec407a;
+  --color-brand-red-shade: #d8366c;
 }
