@@ -39,11 +39,21 @@ const preparedClaimConditionsUpdatedEvent = prepareEvent({
 });
 
 export default function ListClaimConditions(props: ListClaimConditionsProps) {
-  const [canEditClaim, setCanEditClaim] = useState(false);
   const [isLoadingERCMeta, setIsLoadingERCMeta] = useState(true);
   const [erc20Metadata, setERC20Metadata] = useState<{
     [key: string]: GetCurrencyMetadataResult | null;
   }>({});
+
+  const [editStates, setEditStates] = useState<{ [key: number]: boolean }>(
+    props.claimConditions.reduce((acc: { [key: number]: boolean }, _, i) => {
+      acc[i] = false;
+      return acc;
+    }, {}),
+  );
+
+  const toggleEditClaim = (idx: number) => {
+    setEditStates((prev) => ({ ...prev, [idx]: !prev[idx] }));
+  };
 
   const { data: ccEvents, error: ccErrorEvents } = useContractEvents({
     contract: videoContract,
@@ -125,15 +135,15 @@ export default function ListClaimConditions(props: ListClaimConditionsProps) {
                     colorScheme=""
                     variant="ghost"
                     leftIcon={
-                      canEditClaim ? (
+                      editStates[i] ? (
                         <CloseIcon boxSize={3} />
                       ) : (
                         <EditIcon boxSize={3} />
                       )
                     }
-                    onClick={() => setCanEditClaim(!canEditClaim)}
+                    onClick={() => toggleEditClaim(i)}
                   >
-                    {canEditClaim ? 'Cancel Edit' : 'Edit'}
+                    {editStates[i] ? 'Cancel Edit' : 'Edit'}
                   </Button>
                   <Button
                     className="text-sm"
@@ -145,13 +155,13 @@ export default function ListClaimConditions(props: ListClaimConditionsProps) {
                 </ButtonGroup>
               </div>
 
-              {canEditClaim ? (
+              {editStates[i] ? (
                 <EditClaimConditions
                   videoContract={videoContract}
                   nft={props.nft}
                   ccIndex={i}
                   claimConditions={props.claimConditions}
-                  setCanEditClaim={setCanEditClaim}
+                  setCanEditClaim={toggleEditClaim}
                 />
               ) : (
                 <div className="flex flex-row justify-between">
