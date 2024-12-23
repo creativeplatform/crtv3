@@ -96,170 +96,164 @@ export default function ListClaimConditions(props: ListClaimConditionsProps) {
         </p>
       </div>
 
-      <div className="flex flex-col rounded-md border border-solid border-slate-500 p-16">
-        {props.claimConditions && props.claimConditions.length > 0 ? (
-          <>
-            <div className="mb-4">
-              <p className="mb-1 text-lg">
-                Claims for token ID: #{props.nft.id.toString()}
-              </p>
-              <p className="text-sm text-slate-300">
-                Any wallet can claim this token
-              </p>
-            </div>
+      {props.claimConditions && props.claimConditions.length > 0 ? (
+        <>
+          <div className="mb-6">
+            <p className="mb-0 text-lg text-slate-400">
+              Claims for token ID: #{props.nft.id.toString()}
+            </p>
+            <p className="text-sm text-slate-300">
+              Any wallet can claim this token
+            </p>
+          </div>
 
-            {props.claimConditions.map((cc, i) => (
-              <div
-                key={i}
-                className="border-radius-4 mb-1 min-w-full border bg-slate-700 p-4"
-              >
-                <div className="mb-2 flex flex-row justify-between">
-                  {isActiveClaimPhase(cc.startTimestamp) && (
-                    <span className="rounded-sm bg-green-200 p-2 text-xs font-medium text-green-500">
-                      Active
-                    </span>
-                  )}
-
-                  <ButtonGroup variant="outline">
-                    <Button
-                      colorScheme=""
-                      variant="ghost"
-                      leftIcon={
-                        canEditClaim ? (
-                          <CloseIcon boxSize={3} />
-                        ) : (
-                          <EditIcon boxSize={3} />
-                        )
-                      }
-                      onClick={() => setCanEditClaim(!canEditClaim)}
-                    >
-                      {canEditClaim ? 'Cancel Edit' : 'Edit'}
-                    </Button>
-                    <Button
-                      colorScheme="red"
-                      variant="ghost"
-                      leftIcon={<DeleteIcon boxSize={3} />}
-                      onClick={() => deleteClaimById(props.nft.id.toString())}
-                    >
-                      Delete
-                    </Button>
-                  </ButtonGroup>
-                </div>
-
-                {canEditClaim ? (
-                  <EditClaimConditions
-                    videoContract={videoContract}
-                    nft={props.nft}
-                    ccIndex={i}
-                    claimConditions={props.claimConditions}
-                    setCanEditClaim={setCanEditClaim}
-                  />
-                ) : (
-                  // currency: "0x41E94Eb019C0762f9Bfcf9Fb1E58725BfB0e7582"
-                  // maxClaimableSupply:3n
-                  // merkleRoot:"0x0000000000000000000000000000000000000000000000000000000000000000"
-                  // metadata:"ipfs://QmPWXwfbuNCx8JLGRKVERE2FnQ9hJZ4m7Vvk6sfRccZjb2/0"
-                  // pricePerToken:3250000n
-                  // quantityLimitPerWallet:2n
-                  // startTimestamp:1734801000n
-                  // supplyClaimed:0n
-
-                  <div className="flex flex-row space-x-4">
-                    <div>
-                      <p style={{ fontWeight: 600, marginBottom: '12px' }}>
-                        Start time
-                      </p>
-                      <span>{timestampToDateString(cc.startTimestamp)}</span>
-                    </div>
-                    <div>
-                      <p style={{ fontWeight: 600 }}>Num to drop</p>
-                      <span>{cc.maxClaimableSupply.toString()}</span>
-                    </div>
-                    <div>
-                      <p style={{ fontWeight: 600 }}>Price</p>
-                      {erc20Metadata[cc.currency] ? (
-                        <>
-                          {parseCurrencyDecimals(
-                            cc.pricePerToken,
-                            Number(erc20Metadata[cc.currency]?.decimals),
-                          )}
-                          <span>
-                            {' '}
-                            {erc20Metadata[cc.currency]?.symbol ?? 'Loading'}
-                          </span>
-                        </>
-                      ) : (
-                        <span>Loading...</span>
-                      )}
-                    </div>
-                    <div>
-                      <p style={{ fontWeight: 600 }}>Limit per wallet</p>
-                      <span>{cc.quantityLimitPerWallet.toString()}</span>
-                    </div>
-                  </div>
+          {props.claimConditions.map((cc, i) => (
+            <div
+              key={i}
+              className="mx-auto mb-4 w-full max-w-screen-xl rounded-lg border bg-slate-700 p-6"
+            >
+              <div className="mb-4 flex flex-row justify-between">
+                {isActiveClaimPhase(cc.startTimestamp) && (
+                  <span className="rounded-sm bg-green-100 p-1 text-xs font-medium text-green-700">
+                    Active
+                  </span>
                 )}
+
+                <ButtonGroup variant="outline">
+                  <Button
+                    className="text-sm"
+                    colorScheme=""
+                    variant="ghost"
+                    leftIcon={
+                      canEditClaim ? (
+                        <CloseIcon boxSize={3} />
+                      ) : (
+                        <EditIcon boxSize={3} />
+                      )
+                    }
+                    onClick={() => setCanEditClaim(!canEditClaim)}
+                  >
+                    {canEditClaim ? 'Cancel Edit' : 'Edit'}
+                  </Button>
+                  <Button
+                    className="text-sm"
+                    leftIcon={<DeleteIcon boxSize={3} />}
+                    onClick={() => deleteClaimById(props.nft.id.toString())}
+                  >
+                    Delete
+                  </Button>
+                </ButtonGroup>
               </div>
-            ))}
-          </>
-        ) : (
-          <>
-            {/* {props.addClaimPhase && ( */}
-            <VStack spacing={8}>
-              <Alert
-                status="error"
-                variant="subtle"
-                flexDirection="column"
-                alignItems="center"
-                justifyContent="center"
-                textAlign="center"
-                height="200px"
-                borderRadius={4}
-              >
-                <AlertIcon
-                  boxSize="40px"
-                  className="mb-4 mr-0 rounded-full bg-red-500"
+
+              {canEditClaim ? (
+                <EditClaimConditions
+                  videoContract={videoContract}
+                  nft={props.nft}
+                  ccIndex={i}
+                  claimConditions={props.claimConditions}
+                  setCanEditClaim={setCanEditClaim}
                 />
-                <AlertTitle className="mb-1 text-base text-slate-100">
-                  Claim Conditions not set
-                </AlertTitle>
-                <AlertDescription className="text-sm text-slate-300">
-                  <em className="text-slate-300">
-                    You need to set at least one claim condition to enable
-                    persons to claim this nft.
-                  </em>
-                </AlertDescription>
-              </Alert>
+              ) : (
+                <div className="flex flex-row justify-between">
+                  <div>
+                    <p className="mb-1 text-sm font-medium text-slate-200">
+                      Start time
+                    </p>
+                    <span className="text-sm text-slate-300">
+                      {timestampToDateString(cc.startTimestamp)}
+                    </span>
+                  </div>
+                  <div>
+                    <p className="mb-1 text-sm font-medium text-slate-200">
+                      Num to drop
+                    </p>
+                    <span className="text-sm text-slate-300">
+                      {cc.maxClaimableSupply.toString()}
+                    </span>
+                  </div>
+                  <div>
+                    <p className="mb-1 text-sm font-medium text-slate-200">
+                      Price
+                    </p>
+                    {erc20Metadata[cc.currency] ? (
+                      <span className="text-sm text-slate-300">
+                        {parseCurrencyDecimals(
+                          cc.pricePerToken,
+                          Number(erc20Metadata[cc.currency]?.decimals),
+                        )}{' '}
+                        {erc20Metadata[cc.currency]?.symbol ?? 'Loading'}
+                      </span>
+                    ) : (
+                      <span className="text-sm text-slate-300">Loading...</span>
+                    )}
+                  </div>
+                  <div>
+                    <p className="mb-1 text-sm font-medium text-slate-200">
+                      Limit per wallet
+                    </p>
+                    <span className="text-sm text-slate-300">
+                      {cc.quantityLimitPerWallet.toString()}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+        </>
+      ) : (
+        <VStack spacing={8}>
+          <Alert
+            status="error"
+            variant="subtle"
+            flexDirection="column"
+            alignItems="center"
+            justifyContent="center"
+            textAlign="center"
+            height="200px"
+            borderRadius={4}
+          >
+            <AlertIcon
+              boxSize="40px"
+              className="mb-4 mr-0 rounded-full bg-red-500"
+            />
+            <AlertTitle className="mb-1 text-base text-slate-100">
+              Claim Conditions not set
+            </AlertTitle>
+            <AlertDescription className="text-sm text-slate-300">
+              <em className="text-slate-300">
+                You need to set at least one claim condition to enable persons
+                to claim this nft.
+              </em>
+            </AlertDescription>
+          </Alert>
 
-              <Button
-                variant="outline"
-                className="bottom-1 border border-slate-400 p-2 text-sm font-medium"
-                colorScheme={props.addClaimPhase ? 'red' : ''}
-                leftIcon={
-                  !props.addClaimPhase ? (
-                    <AddIcon fontSize={10} />
-                  ) : (
-                    <CloseIcon fontSize={10} />
-                  )
-                }
-                onClick={() => {
-                  props.setAddClaimPhase!(!props.addClaimPhase);
-                }}
-              >
-                {!props.addClaimPhase ? 'Add Claim Phase' : 'Cancel'}
-              </Button>
-            </VStack>
-            {/* )} */}
-          </>
-        )}
+          <Button
+            variant="outline"
+            className="bottom-1 border border-slate-400 p-2 text-sm font-medium"
+            colorScheme={props.addClaimPhase ? 'red' : ''}
+            leftIcon={
+              !props.addClaimPhase ? (
+                <AddIcon fontSize={10} />
+              ) : (
+                <CloseIcon fontSize={10} />
+              )
+            }
+            onClick={() => {
+              props.setAddClaimPhase!(!props.addClaimPhase);
+            }}
+          >
+            {!props.addClaimPhase ? 'Add Claim Phase' : 'Cancel'}
+          </Button>
+        </VStack>
+      )}
 
-        {props.claimConditions.length > 0 && (
-          <AddClaimPhaseButton
-            label={!props.addClaimPhase ? 'Add Claim Phase' : 'Cancel'}
-            addClaimPhase={props.addClaimPhase!}
-            setAddClaimPhase={props.setAddClaimPhase!}
-          />
-        )}
-      </div>
+      {props.claimConditions.length > 0 && (
+        <AddClaimPhaseButton
+          label={!props.addClaimPhase ? 'Add Claim Phase' : 'Cancel'}
+          addClaimPhase={props.addClaimPhase!}
+          setAddClaimPhase={props.setAddClaimPhase!}
+        />
+      )}
     </>
   );
 }
