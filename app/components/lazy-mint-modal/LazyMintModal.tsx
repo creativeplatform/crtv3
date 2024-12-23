@@ -103,7 +103,7 @@ export default function LazyMintModal(props: LazyMintProps) {
 
           <div className="mt-6 space-x-2 text-right">
             <button
-              className={`min-w-10 rounded bg-[--brand-red] px-4 py-2 text-white transition duration-300 hover:bg-[--brand-red-shade]
+              className={`min-w-10 rounded bg-[--color-brand-red] px-4 py-2 text-white transition duration-300 hover:bg-[--color-brand-red-shade]
                 ${isProcessing && `hover: cursor-progress`}
               `}
               onClick={handleLazyMinting}
@@ -119,7 +119,7 @@ export default function LazyMintModal(props: LazyMintProps) {
             </button>
           </div>
 
-          <div className="space-x-2 text-sm mt-6">
+          <div className="mt-6 space-x-2 text-sm">
             {lazyMintError && (
               <p className="text-rose-500">{lazyMintError.message}</p>
             )}

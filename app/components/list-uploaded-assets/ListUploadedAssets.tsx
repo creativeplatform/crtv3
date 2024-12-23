@@ -1,11 +1,8 @@
 'use client';
 import { fetchAllAssets } from '@app/api/livepeer/actions';
-import { videoContract } from '@app/lib/sdk/thirdweb/get-contract';
 import { Asset } from '@app/lib/types';
 import { Box } from '@chakra-ui/react';
 import { useEffect, useMemo, useState } from 'react';
-import { tokensLazyMintedEvent } from 'thirdweb/extensions/erc1155';
-import { useContractEvents } from 'thirdweb/react';
 import UploadAsset from './UploadedAsset';
 
 type ListUploadedAssetsProps = {
@@ -62,7 +59,7 @@ export default function ListUploadedAssets(props: ListUploadedAssetsProps) {
   return (
     <div className="mx-0 flex flex-col">
       {isLoading && filteredCreatorAssets.length === 0 && (
-        <p className="text-[--brand-red-shade]">Loading assets...</p>
+        <p className="text-[--color-brand-red-shade]">Loading assets...</p>
       )}
 
       {filteredCreatorAssets.length > 0 && (

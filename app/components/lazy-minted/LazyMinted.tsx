@@ -27,7 +27,7 @@ export default function LazyMintedAsset(props: LazyMintedProps) {
   return (
     <>
       {isProcessing && nfts.length === 0 && (
-        <p className="my-2 text-lg text-[--brand-red-shade]">
+        <p className="my-2 text-lg text-[--color-brand-red-shade]">
           Loading minted nft(s)...
         </p>
       )}

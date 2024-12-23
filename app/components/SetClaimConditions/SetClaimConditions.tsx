@@ -365,7 +365,7 @@ export default function SetClaimConditions(props: SetClaimConditionsProps) {
             color: 'gray.300',
             cursor: isSettingCC ? 'progress' : 'pointer',
           }}
-          className="{min-w-4 hover:} my-6 bg-[--brand-red] p-3 text-slate-100 hover:text-slate-500"
+          className="{min-w-4 hover:} my-6 bg-[--color-brand-red] p-3 text-slate-100 hover:text-slate-500"
           isLoading={isSettingCC}
           loadingText={isSettingCC ? 'Submitting...' : ''}
           mb={20}
