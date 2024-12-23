@@ -1,5 +1,10 @@
 import { NFT } from '@app/types/nft';
+import {
+  getCurrencyMetadata,
+  GetCurrencyMetadataResult,
+} from 'thirdweb/extensions/erc20';
 import { NFTMetadata } from 'thirdweb/utils';
+import { erc20Contract } from '../sdk/thirdweb/get-contract';
 import { CONTRACT_ADDRESS } from '../utils/context';
 
 /**
@@ -11,21 +16,20 @@ import { CONTRACT_ADDRESS } from '../utils/context';
  * const date = parseDate('Tue Jan 16 2024 13:13:32')
  *  =>  16/01/2024 13:13
  */
-// export function parseTimestampToDate(ts: bigint) {
-//   const timestampNumber = Number(ts);
-//   if (timestampNumber <= 0) {
-//     return 'Not available';
-//   }
+export function parseTimestampToDate(ts: number) {
+  if (ts <= 0) {
+    return 'Not available';
+  }
 
-//   const d = new Date(timestampNumber * 1000);
-//   const longEnUSFormat = new Intl.DateTimeFormat('en-US', {
-//     year: 'numeric',
-//     month: 'long',
-//     day: 'numeric',
-//   });
+  const d = new Date(ts * 1000);
+  const longEnUSFormat = new Intl.DateTimeFormat('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
 
-//   return longEnUSFormat.format(d);
-// }
+  return longEnUSFormat.format(d);
+}
 
 /**
  * Function to parse timestamp to readable date
@@ -182,4 +186,32 @@ export function parseIpfsUri(
   const itemUri = baseURIGateway + 'ipfs/' + cid;
 
   return itemUri;
+}
+
+/**
+ * Function to fetch ERC20 token metadata
+ * @param address contract address of the ERC20 token
+ * @returns Promise<GetCurrencyMetadataResult>
+ */
+export function getERC20Metadata(
+  address: string,
+): Promise<GetCurrencyMetadataResult> {
+  
+  return new Promise((resolve, reject) => {
+    let currencyMetadata: GetCurrencyMetadataResult | null = null;
+
+    const contract = erc20Contract(address);
+
+    getCurrencyMetadata({
+      contract,
+    })
+      .then((data: GetCurrencyMetadataResult) => {
+        currencyMetadata = data;
+        resolve(currencyMetadata);
+      })
+      .catch((err) => {
+        console.error(err);
+        reject(new Error('Error fetching currency metadata', err.message));
+      });
+  });
 }
