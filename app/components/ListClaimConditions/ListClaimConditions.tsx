@@ -109,7 +109,7 @@ export default function ListClaimConditions(props: ListClaimConditionsProps) {
       console.log({ ccEvents: claimConditions });
 
       updateERC20Metadata();
-    } else {
+    } else if (ccErrorEvents) {
       console.error({ ccErrorEvents });
     }
   }, [ccEvents]);
@@ -160,7 +160,7 @@ export default function ListClaimConditions(props: ListClaimConditionsProps) {
                     }
                     onClick={() => toggleEditClaim(i)}
                   >
-                    {editStates[i] ? 'Cancel Edit' : 'Edit'}
+                    {editStates[i] ? 'Cancel' : 'Edit'}
                   </Button>
                   <Button
                     className="text-sm"
