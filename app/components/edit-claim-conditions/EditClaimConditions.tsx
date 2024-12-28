@@ -1,6 +1,6 @@
 import {
   claimConditionsOptions,
-  timestampToDateString,
+  timestampToInputDateString,
 } from '@app/lib/helpers/helpers';
 import { NFT, ResolvedReturnType } from '@app/types/nft';
 import {
@@ -23,7 +23,7 @@ type EditClaimFormData = {
   phaseName: string;
   maxClaimablePerWallet: string;
   maxClaimableSupply?: string;
-  startTimestamp: number;
+  startTimestamp: string;
   // waitInSeconds: string;
 };
 
@@ -43,25 +43,6 @@ export default function EditClaimConditions(props: EditClaimConditionsProps) {
   const toast = useToast();
   const cc = props.claimConditions[props.ccIndex];
 
-  useEffect(() => {
-    // TODO: decide Form appearance on when the `Modal` gets closed
-    //////////////////////////
-    // listen to the events
-    // props.nftContract?.events.listenToAllEvents(async (e) => {
-    //   if (e.eventName == 'ClaimConditionsUpdated') {
-    //     /* TODO: Remember to clear form fields after successful tx */
-
-    //     setIsSubmitting(false)
-    //     // setIsExecuted(true)
-    //     props.setCanEditClaim(false)
-    //     console.log('EditClaimConditions::eventData ', e.data)
-    //   }
-    // })
-    return () => {
-      // props.nftContract?.events.removeAllListeners()
-    };
-  }, [props.videoContract]);
-
   const handleUpdateClaimCondition = async (
     tokenId: bigint,
     ccIndex: number,
@@ -70,24 +51,24 @@ export default function EditClaimConditions(props: EditClaimConditionsProps) {
     // update an existing claimCondition by its id
 
     try {
-      await props.nftContract?.erc1155.claimConditions.update(
-        tokenId,
-        ccIndex,
-        {
-          startTime: formData.startTimestamp, // When the phase starts (i.e. when users can start claiming tokens)
-          maxClaimableSupply: formData.maxClaimableSupply, // limit how many mints for this presale
-          currency: formData.currency, // The address of the currency you want users to pay in
-          maxClaimablePerWallet: formData.maxClaimablePerWallet, // The maximum number of tokens a wallet can claim
-          metadata: {
-            name: formData.phaseName, // Name of the sale's phase
-          },
-          // waitInSeconds: formData.waitInSeconds, // How long a buyer waits before another purchase is possible
-        },
-      );
+      // await props.nftContract?.erc1155.claimConditions.update(
+      //   tokenId,
+      //   ccIndex,
+      //   {
+      //     startTime: formData.startTimestamp, // When the phase starts (i.e. when users can start claiming tokens)
+      //     maxClaimableSupply: formData.maxClaimableSupply, // limit how many mints for this presale
+      //     currency: formData.currency, // The address of the currency you want users to pay in
+      //     maxClaimablePerWallet: formData.maxClaimablePerWallet, // The maximum number of tokens a wallet can claim
+      //     metadata: {
+      //       name: formData.phaseName, // Name of the sale's phase
+      //     },
+      //     // waitInSeconds: formData.waitInSeconds, // How long a buyer waits before another purchase is possible
+      //   },
+      // );
 
       return true;
     } catch (err) {
-      console.log({ err });
+      console.error({ err });
 
       toast({
         title: 'Set Claim Conditions',
@@ -101,6 +82,8 @@ export default function EditClaimConditions(props: EditClaimConditionsProps) {
 
   const sumbitUpdatedCC: SubmitHandler<EditClaimFormData> = async (data) => {
     const { errors } = formState;
+
+    console.log('form submitting...');
 
     const isRequiredFields =
       errors.maxClaimablePerWallet?.type === 'required' ||
@@ -191,15 +174,18 @@ export default function EditClaimConditions(props: EditClaimConditionsProps) {
                 control={ctrl}
                 rules={{ required: true }}
                 render={({ field }) => {
-                  const dateTime = timestampToDateString(cc.startTimestamp);
-                  console.log({ dateTime });
                   return (
                     <Input
-                      defaultValue={'date Time'}
-                      className=" dark:text-gray-500"
+                      {...field}
                       minW={200}
-                      {...register('startTimestamp')}
                       type="datetime-local"
+                      {...register('startTimestamp')}
+                      value={
+                        field.value ||
+                        timestampToInputDateString(cc.startTimestamp)
+                      }
+                      onChange={(e) => field.onChange(e.target.value)}
+                      className=" dark:text-gray-500"
                       size={'lg'}
                       mb={formState.errors.startTimestamp ? 0 : 4}
                       placeholder="Start time of Phase"
@@ -225,8 +211,6 @@ export default function EditClaimConditions(props: EditClaimConditionsProps) {
                 control={ctrl}
                 rules={{ required: true }}
                 render={({ field }) => {
-                  console.log(' field.value: ', field.value);
-                  console.log(' field.name: ', field.name);
                   return (
                     <Select
                       defaultValue={cc.currency}
@@ -266,8 +250,6 @@ export default function EditClaimConditions(props: EditClaimConditionsProps) {
                 </FormHelperText>
               )}
             </div>
-
-            {/* placeholder for waitInSecs */}
 
             <div className="flex flex-col gap-1">
               <FormLabel>Maximum purchase per Wallet </FormLabel>
