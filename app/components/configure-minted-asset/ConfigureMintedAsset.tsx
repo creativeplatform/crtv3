@@ -24,6 +24,8 @@ type ConfigureMintedAssetProps = {
 export default function ConfigureMintedAsset(props: ConfigureMintedAssetProps) {
   const tabList = ['Details', 'Claim Conditions', 'Claim'];
   const [tabIndex, setTabIndex] = useState(0);
+  const [activeTab, setActiveTab] = useState(tabList[0]);
+
   const [claimConditions, setClaimConditions] = useState<
     ResolvedReturnType<ReturnType<typeof getClaimConditions>>
   >([]);
@@ -34,16 +36,14 @@ export default function ConfigureMintedAsset(props: ConfigureMintedAssetProps) {
   const {
     data: activeClaimCondition,
     error: activeClaimError,
-    isLoading: isActiveClaimLoading,
-    isPending,
   } = useReadContract({
     contract: videoContract,
     method:
-      'function getActiveClaimConditionsId(uint256 _tokenId) view returns (uint256)',
-    params: [props.nft.id],
+      'function getActiveClaimConditionId(uint256 _tokenId) view returns (uint256)',
+    params: [props.nft.id /*1n*/], // TODO: take watch of this props.nft.id 
   });
 
-  console.log('activeClaimCondition: ', activeClaimCondition);
+  console.log({ activeClaimCondition });
 
   const handleTabsChange = (idx: number) => {
     setTabIndex(idx);
@@ -60,7 +60,6 @@ export default function ConfigureMintedAsset(props: ConfigureMintedAssetProps) {
           contract: videoContract,
           tokenId,
         });
-        console.log('claimConditions: ', cc);
 
         if (cc && cc?.length > 0) {
           setProcessingClaimConditions(false);
@@ -98,10 +97,12 @@ export default function ConfigureMintedAsset(props: ConfigureMintedAssetProps) {
                   style={{
                     padding: '2px 6px',
                     backgroundColor:
-                      label === tabList[tabList.length - 1] &&
-                      activeClaimCondition === undefined
-                        ? '#1e1e1e'
-                        : '',
+                      label === activeTab
+                        ? '#ffcc00'
+                        : label === tabList[tabList.length - 1] &&
+                            activeClaimCondition === undefined
+                          ? '#1e1e1e'
+                          : '',
                   }}
                   _hover={{
                     cursor:
@@ -109,6 +110,12 @@ export default function ConfigureMintedAsset(props: ConfigureMintedAssetProps) {
                       activeClaimCondition === undefined
                         ? 'not-allowed'
                         : 'pointer',
+                  }}
+                  onClick={() => {
+                    if (label != tabList[tabList.length - 1]) {
+                      setActiveTab(label);
+                    }
+                    return;
                   }}
                 >
                   {label}
@@ -161,7 +168,14 @@ export default function ConfigureMintedAsset(props: ConfigureMintedAssetProps) {
               )}
             </TabPanel>
 
-            <TabPanel>{/* ClaimNFTForCreator */}</TabPanel>
+            <TabPanel>
+              <h4 className="mb-1 text-lg text-slate-300">
+                ClaimNFT For Creator
+              </h4>
+              <p className="mb-2 text-sm text-slate-400">
+                This hold the claim component for the creator
+              </p>
+            </TabPanel>
           </TabPanels>
         </Tabs>
       </div>
