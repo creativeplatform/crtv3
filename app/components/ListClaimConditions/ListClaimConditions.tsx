@@ -16,7 +16,7 @@ import {
   VStack,
 } from '@chakra-ui/react';
 import { ethers } from 'ethers';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { prepareEvent } from 'thirdweb';
 import { getClaimConditions } from 'thirdweb/extensions/erc1155';
 import { GetCurrencyMetadataResult } from 'thirdweb/extensions/erc20';
@@ -60,8 +60,6 @@ export default function ListClaimConditions(props: ListClaimConditionsProps) {
     events: [preparedClaimConditionsUpdatedEvent],
   });
 
-  console.log({ cc: props.claimConditions });
-
   const deleteClaimById = async (tokenId: string) => {
     // TODO: stub to delete a claim by id
     console.log('deleteClaimById: ', tokenId);
@@ -83,7 +81,16 @@ export default function ListClaimConditions(props: ListClaimConditionsProps) {
     }
   };
 
-  useEffect(() => {
+  // TODO: try replacing this with useCallback
+  // const updateERC20Metadata =  async () => {
+  //   props.claimConditions.forEach((cc) => {
+  //     if (cc.currency && !erc20Metadata[cc.currency]) {
+  //       fetchERC20Metadata(cc.currency);
+  //     }
+  //   });
+  // };
+
+  const updateERC20Metadata = useCallback(async () => {
     props.claimConditions.forEach((cc) => {
       if (cc.currency && !erc20Metadata[cc.currency]) {
         fetchERC20Metadata(cc.currency);
@@ -92,8 +99,18 @@ export default function ListClaimConditions(props: ListClaimConditionsProps) {
   }, [props.claimConditions, erc20Metadata]);
 
   useEffect(() => {
-    if (ccEvents) {
-      console.log('ccEvents: ', ccEvents);
+    updateERC20Metadata();
+  }, [props.claimConditions, erc20Metadata]);
+
+  useEffect(() => {
+    
+    if (ccEvents && ccEvents.length > 0) {
+      const { claimConditions } = ccEvents[0].args;
+      console.log({ ccEvents: claimConditions });
+
+      updateERC20Metadata();
+    } else {
+      console.error({ ccErrorEvents });
     }
   }, [ccEvents]);
 
