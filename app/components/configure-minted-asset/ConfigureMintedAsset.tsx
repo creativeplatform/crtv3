@@ -98,7 +98,7 @@ export default function ConfigureMintedAsset(props: ConfigureMintedAssetProps) {
                     padding: '2px 6px',
                     backgroundColor:
                       label === activeTab
-                        ? '#ffcc00'
+                        ? '#666'
                         : label === tabList[tabList.length - 1] &&
                             activeClaimCondition === undefined
                           ? '#1e1e1e'
