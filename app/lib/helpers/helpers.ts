@@ -19,19 +19,19 @@ import { CONTRACT_ADDRESS } from '../utils/context';
 export function parseDate(timestamp: bigint) {
   const d = new Date(Number(timestamp));
 
-  const hour = d.getHours()
-  const minutes = d.getMinutes()
-  const date = d.getDate()
-  const month = d.getMonth()
-  const year = d.getFullYear()
+  const hour = d.getHours();
+  const minutes = d.getMinutes();
+  const date = d.getDate();
+  const month = d.getMonth();
+  const year = d.getFullYear();
 
-  const dd = date > 10 ? date : `0${date}`
-  const mm = month > 10 ? month : `0${month + 1}`
-  const hh = hour > 10 ? hour : `0${hour}`
-  const min = minutes > 10 ? minutes : `0${minutes}`
+  const dd = date > 10 ? date : `0${date}`;
+  const mm = month > 10 ? month : `0${month + 1}`;
+  const hh = hour > 10 ? hour : `0${hour}`;
+  const min = minutes > 10 ? minutes : `0${minutes}`;
 
   // '2024-01-16T11:45'
-  return `${year}-${mm}-${dd}T${hh}:${min}`
+  return `${year}-${mm}-${dd}T${hh}:${min}`;
 }
 
 /**
@@ -68,22 +68,53 @@ export function parseTimestampToDate(ts: number) {
  *  =>  12/22/2024, 09:59 AM
  */
 export function timestampToDateString(ts: bigint) {
-  const timestampNumber = Number(ts);
-  if (timestampNumber <= 0) {
-    return 'Not available';
+  const { day, hours, minutes, month, seconds, year } = dateObject(ts);
+
+  return `${day}/${month}/${year}, ${hours}:${minutes}:${seconds}`;
+}
+
+export function timestampToInputDateString(ts: bigint) {
+  const { day, hours, minutes, month, seconds, year } = dateObject(ts);
+
+  return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
+}
+
+type DateObjectType = {
+  day: string;
+  month: string;
+  year: number;
+  hours: string;
+  minutes: string;
+  seconds: string;
+};
+/**
+ * Function to return the elements of a Date object
+ * @param ts timestamp to be converted
+ * @returns date object
+ */
+function dateObject(ts: bigint): DateObjectType {
+  const tsNumber = Number(ts);
+  if (tsNumber <= 0) {
+    return {
+      day: '00',
+      month: '00',
+      year: 0,
+      hours: '00',
+      minutes: '00',
+      seconds: '00',
+    };
   }
 
-  const date = new Date(timestampNumber * 1000);
+  const date = new Date(tsNumber * 1000);
 
   const day = String(date.getDate()).padStart(2, '0');
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const year = date.getFullYear();
-
   const hours = String(date.getHours()).padStart(2, '0');
   const minutes = String(date.getMinutes()).padStart(2, '0');
   const seconds = String(date.getSeconds()).padStart(2, '0');
 
-  return `${day}/${month}/${year}, ${hours}:${minutes}:${seconds}`;
+  return { day, month, year, hours, minutes, seconds };
 }
 
 /**
@@ -225,7 +256,6 @@ export function parseIpfsUri(
 export function getERC20Metadata(
   address: string,
 ): Promise<GetCurrencyMetadataResult> {
-  
   return new Promise((resolve, reject) => {
     let currencyMetadata: GetCurrencyMetadataResult | null = null;
 
@@ -247,7 +277,7 @@ export function getERC20Metadata(
 
 /**
  * Function to parse currency decimals
- * @param price The price of the nft 
+ * @param price The price of the nft
  * @param decimals The decimal point of the currency
  * @returns price in decimal format
  */
