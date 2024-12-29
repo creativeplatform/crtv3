@@ -7,6 +7,7 @@ import {
 } from '@app/components/ui/tabs';
 import { client } from '@app/lib/sdk/thirdweb/client';
 import { CREATIVE_ADDRESS } from '@app/lib/utils/context';
+import Unlock from '@app/lib/utils/Unlock.json';
 import { NextPage } from 'next';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
@@ -15,12 +16,12 @@ import { toast } from 'sonner';
 import { getContract, prepareContractCall } from 'thirdweb';
 import { base } from 'thirdweb/chains';
 import { getNFT, getOwnedTokenIds } from 'thirdweb/extensions/erc721';
-import Unlock from '@app/lib/utils/Unlock.json';
 import {
   TransactionButton,
   useActiveAccount,
   useReadContract,
 } from 'thirdweb/react';
+import LazyMintedAsset from '../lazy-minted/LazyMinted';
 import ListUploadedAssets from '../list-uploaded-assets/ListUploadedAssets';
 import CreateMetoken from '../MeToken/createMetoken';
 import {
@@ -31,9 +32,7 @@ import {
   CardHeader,
   CardTitle,
 } from '../ui/card';
-import AssetDetails from './AssetDetails';
 import MemberCard from './MemberCard';
-import LazyMintedAsset from '../lazy-minted/LazyMinted';
 
 const ProfilePage: NextPage = () => {
   const { user } = useParams();
@@ -178,9 +177,7 @@ const ProfilePage: NextPage = () => {
                 </Link>
               </div>
             </CardContent>
-            <CardFooter className="space-x-2">
-              <ListUploadedAssets activeAccount={activeAccount} />
-            </CardFooter>
+            <CardFooter className="space-x-2"></CardFooter>
           </Card>
         </TabsContent>
         <TabsContent value="Minted">
@@ -194,8 +191,7 @@ const ProfilePage: NextPage = () => {
             <CardContent className="space-y-2">
               <LazyMintedAsset activeAccount={activeAccount} />
             </CardContent>
-            <CardFooter className="space-x-2">
-            </CardFooter>
+            <CardFooter className="space-x-2"></CardFooter>
           </Card>
         </TabsContent>
         <TabsContent value="MeToken">
@@ -218,7 +214,8 @@ const ProfilePage: NextPage = () => {
               <CardDescription>Uploaded videos will show here.</CardDescription>
             </CardHeader>
             <CardContent>
-              <AssetDetails />
+              {/* <AssetDetails /> */}
+              <ListUploadedAssets activeAccount={activeAccount} />
             </CardContent>
           </Card>
         </TabsContent>
