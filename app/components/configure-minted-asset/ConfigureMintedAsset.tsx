@@ -13,6 +13,7 @@ import { getClaimConditions } from 'thirdweb/extensions/erc1155';
 import { useReadContract } from 'thirdweb/react';
 import ListClaimConditions from '../ListClaimConditions/ListClaimConditions';
 import SetClaimConditions from '../SetClaimConditions/SetClaimConditions';
+import ClaimVideoNFT from '../claim-vidoe-nft/ClaimVideoNFT';
 
 type ConfigureMintedAssetProps = {
   nft: NFT;
@@ -33,15 +34,13 @@ export default function ConfigureMintedAsset(props: ConfigureMintedAssetProps) {
   const [processingClaimConditions, setProcessingClaimConditions] =
     useState(false);
 
-  const {
-    data: activeClaimCondition,
-    error: activeClaimError,
-  } = useReadContract({
-    contract: videoContract,
-    method:
-      'function getActiveClaimConditionId(uint256 _tokenId) view returns (uint256)',
-    params: [props.nft.id /*1n*/], // TODO: take watch of this props.nft.id 
-  });
+  const { data: activeClaimCondition, error: activeClaimError } =
+    useReadContract({
+      contract: videoContract,
+      method:
+        'function getActiveClaimConditionId(uint256 _tokenId) view returns (uint256)',
+      params: [props.nft.id /*1n*/], // TODO: take watch of this props.nft.id
+    });
 
   console.log({ activeClaimCondition });
 
@@ -169,12 +168,7 @@ export default function ConfigureMintedAsset(props: ConfigureMintedAssetProps) {
             </TabPanel>
 
             <TabPanel>
-              <h4 className="mb-1 text-lg text-slate-300">
-                ClaimNFT For Creator
-              </h4>
-              <p className="mb-2 text-sm text-slate-400">
-                This hold the claim component for the creator
-              </p>
+              <ClaimVideoNFT videoContract={undefined} />
             </TabPanel>
           </TabPanels>
         </Tabs>
