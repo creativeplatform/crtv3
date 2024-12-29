@@ -27,7 +27,7 @@ import EditClaimConditions from '../edit-claim-conditions/EditClaimConditions';
 type ListClaimConditionsProps = {
   nft: NFT;
   claimConditions: ResolvedReturnType<ReturnType<typeof getClaimConditions>>;
-  nftContract: ethers.BaseContract | undefined | any;
+  nftContract: ethers.BaseContract;
   addClaimPhase?: boolean;
   setAddClaimPhase?: (arg: boolean) => void;
   processingClaimConditions: boolean;
