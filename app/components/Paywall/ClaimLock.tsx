@@ -1,17 +1,18 @@
 'use client';
+
+import { UserMenu } from '@app/components/Layout/userMenu';
+import { client } from '@app/lib/sdk/thirdweb/client';
+import Unlock from '@app/lib/utils/Unlock.json';
+import { CREATIVE_ADDRESS } from '@app/lib/utils/context';
 import { useEffect, useState } from 'react';
+import { toast } from 'sonner';
+import { getContract, prepareContractCall, toWei } from 'thirdweb';
+import { base } from 'thirdweb/chains';
 import {
   TransactionButton,
   useActiveAccount,
   useReadContract,
 } from 'thirdweb/react';
-import { getContract, prepareContractCall, toTokens, toWei } from 'thirdweb';
-import { client } from '@app/lib/sdk/thirdweb/client';
-import { base } from 'thirdweb/chains';
-import { toast } from 'sonner';
-import Unlock from '@app/lib/utils/Unlock.json';
-import { CREATIVE_ADDRESS } from '@app/lib/utils/context';
-import { UserMenu } from '@app/components/Layout/userMenu';
 
 interface UserMenuProps {
   closeMenu: () => void;
@@ -25,6 +26,7 @@ function ClaimLockButton({ closeMenu }: { closeMenu: () => void }) {
     client: client,
     chain: base,
     address: '0xf7c4cd399395d80f9d61fde833849106775269c6',
+    // address: CONTRACT_ADDRESS.gateway.base.erc721,
     abi: unlockAbi as any,
   });
 
@@ -64,7 +66,7 @@ function ClaimLockButton({ closeMenu }: { closeMenu: () => void }) {
                   'https://bafybeiemndtnhajevhwep7mrzx62slcp6nklpw4zwq3dcqvqugj7tqem44.ipfs.w3s.link/Creator%20Membership%20Pass_both.gif',
               },
               buyWithCrypto: {
-                testMode: false
+                testMode: false,
               },
               buyWithFiat: {
                 prefillSource: {
