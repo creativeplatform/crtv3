@@ -6,20 +6,23 @@ import {
   TabsTrigger,
 } from '@app/components/ui/tabs';
 import { client } from '@app/lib/sdk/thirdweb/client';
-import { CREATIVE_ADDRESS, ROLES, ROLES_ABI } from '@app/lib/utils/context';
+import { CREATIVE_ADDRESS } from '@app/lib/utils/context';
 import { NextPage } from 'next';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { getContract, prepareContractCall } from 'thirdweb';
-import { polygon } from 'thirdweb/chains';
 import { getNFT, getOwnedTokenIds } from 'thirdweb/extensions/erc721';
+
+import Unlock from '@app/lib/utils/Unlock.json';
+import { base } from 'thirdweb/chains';
 import {
   TransactionButton,
   useActiveAccount,
   useReadContract,
 } from 'thirdweb/react';
+import CreateMetoken from '../MeToken/createMetoken';
 import {
   Card,
   CardContent,
@@ -28,28 +31,8 @@ import {
   CardHeader,
   CardTitle,
 } from '../ui/card';
-import { ROLES, ROLES_ABI } from '@app/lib/utils/context';
-import { shortenAddress } from 'thirdweb/utils';
-import { getContract, prepareContractCall } from 'thirdweb';
-import { CopyIcon } from 'lucide-react';
-import { client } from '@app/lib/sdk/thirdweb/client';
-import { base } from 'thirdweb/chains';
-import {
-  useActiveAccount,
-  useReadContract,
-  TransactionButton,
-} from 'thirdweb/react';
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from '@app/components/ui/tabs';
-import { Label } from '../ui/label';
-import MemberCard from './MemberCard';
-import CreateMetoken from '../MeToken/createMetoken';
-import Unlock from '@app/lib/utils/Unlock.json';
 import AssetDetails from './AssetDetails';
+import MemberCard from './MemberCard';
 
 const ProfilePage: NextPage = () => {
   const { user } = useParams();
