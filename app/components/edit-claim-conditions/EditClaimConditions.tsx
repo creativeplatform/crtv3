@@ -14,7 +14,7 @@ import {
   useToast,
 } from '@chakra-ui/react';
 import { CONTRACT_ADDRESS } from '@app/lib/utils/context';
-import { useContract } from '@thirdweb-dev/react';
+// import { useContract } from '@thirdweb-dev/react';
 import { useState } from 'react';
 import { Controller, SubmitHandler, useForm } from 'react-hook-form';
 import { ContractOptions } from 'thirdweb';
@@ -41,9 +41,10 @@ export default function EditClaimConditions(props: EditClaimConditionsProps) {
   const [isErrorFree, setIsErrorFree] = useState(false);
 
   // TODO: Revisit to remove old skd usage
-  const { contract: nftContract } = useContract(
-    CONTRACT_ADDRESS.editionDrop.erc1155.amoy,
-  );
+
+  // const { contract: nftContract } = useContract(
+  //   CONTRACT_ADDRESS.editionDrop.erc1155.amoy,
+  // );
   const toast = useToast();
   const cc = props.claimConditions[props.ccIndex];
 
@@ -56,15 +57,16 @@ export default function EditClaimConditions(props: EditClaimConditionsProps) {
     console.log({ ccIndex, tokenId, formData });
 
     try {
-      await nftContract?.erc1155.claimConditions.update(tokenId, ccIndex, {
-        startTime: Number(formData.startTimestamp), // When the phase starts (i.e. when users can start claiming tokens)
-        maxClaimableSupply: formData.maxClaimableSupply, // limit how many mints for this presale
-        currencyAddress: formData.currency, // The address of the currency you want users to pay in
-        maxClaimablePerWallet: formData.maxClaimablePerWallet, // The maximum number of tokens a wallet can claim
-        metadata: {
-          name: formData.phaseName, // Name of the sale's phase
-        },
-      });
+      // TODO: Revisit on how to use the new sdk for this
+      // await nftContract?.erc1155.claimConditions.update(tokenId, ccIndex, {
+      //   startTime: Number(formData.startTimestamp), // When the phase starts (i.e. when users can start claiming tokens)
+      //   maxClaimableSupply: formData.maxClaimableSupply, // limit how many mints for this presale
+      //   currencyAddress: formData.currency, // The address of the currency you want users to pay in
+      //   maxClaimablePerWallet: formData.maxClaimablePerWallet, // The maximum number of tokens a wallet can claim
+      //   metadata: {
+      //     name: formData.phaseName, // Name of the sale's phase
+      //   },
+      // });
 
       return true;
     } catch (err) {
@@ -104,7 +106,7 @@ export default function EditClaimConditions(props: EditClaimConditionsProps) {
         maxClaimablePerWallet: data.maxClaimablePerWallet,
         startTimestamp: dateObj.getTime() as unknown as string,
       });
-    } catch (err: any) {
+    } catch (err: unknown) {
       setIsSubmitting(false);
       console.error(err);
 
