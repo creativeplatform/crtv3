@@ -4,6 +4,12 @@ import { sendTransaction } from 'thirdweb';
 import { lazyMint } from 'thirdweb/extensions/erc1155';
 import { useActiveAccount } from 'thirdweb/react';
 
+interface LazyMintArgs {
+  amount: string;
+  price: string;
+  baseURIForTokens: string;
+}
+
 function useLazyMint() {
   const activeAccount = useActiveAccount();
   const [txnHash, setTxnHash] = useState('');
@@ -11,27 +17,21 @@ function useLazyMint() {
   const [isProcessing, setIsProcessing] = useState(false);
 
   const handleLazyMint = useCallback(
-    async (amount: string, price: string, baseURIForTokens: string) => {
-      const args: Record<string, any | string> = {
-        amount,
-        price,
-        baseURIForTokens,
-      };
-
+    async (args: LazyMintArgs) => {
       // TODO: get this validated
-      for (let key in args) {
+      (Object.keys(args) as (keyof LazyMintArgs)[]).forEach((key) => {
         if (!args[key]) {
           // throw new Error(`${key} is required`);
         }
-      }
+      });
 
-      const res = await fetch(baseURIForTokens);
+      const res = await fetch(args.baseURIForTokens);
       const data = await res.json();
       const tknMetadata = Object.assign(data, {
         properties: {
-          amount,
-          price,
-          creatorAddress: activeAccount?.address!,
+          amount: args.amount,
+          price: args.price,
+          creatorAddress: activeAccount?.address || '',
         },
       });
 
@@ -49,9 +49,9 @@ function useLazyMint() {
 
         setTxnHash(transactionHash);
         setIsProcessing(false);
-      } catch (err: any) {
+      } catch (err) {
         console.error(err);
-        setError(err);
+        setError(err as Error);
         setIsProcessing(false);
       }
     },
