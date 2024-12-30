@@ -1,11 +1,29 @@
 'use client';
-import { useState, useEffect } from 'react';
-import { useParams } from 'next/navigation';
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from '@app/components/ui/tabs';
+import { client } from '@app/lib/sdk/thirdweb/client';
+import { CREATIVE_ADDRESS } from '@app/lib/utils/context';
+import Unlock from '@app/lib/utils/Unlock.json';
 import { NextPage } from 'next';
-import { Button } from '../ui/button';
-import { toast } from 'sonner';
 import Link from 'next/link';
-import { Input } from '../ui/input';
+import { useParams } from 'next/navigation';
+import { useEffect, useState } from 'react';
+import { toast } from 'sonner';
+import { getContract, prepareContractCall } from 'thirdweb';
+import { base } from 'thirdweb/chains';
+import { getNFT, getOwnedTokenIds } from 'thirdweb/extensions/erc721';
+import {
+  TransactionButton,
+  useActiveAccount,
+  useReadContract,
+} from 'thirdweb/react';
+import LazyMintedAsset from '../lazy-minted/LazyMinted';
+import ListUploadedAssets from '../list-uploaded-assets/ListUploadedAssets';
+import CreateMetoken from '../MeToken/createMetoken';
 import {
   Card,
   CardContent,
@@ -14,30 +32,8 @@ import {
   CardHeader,
   CardTitle,
 } from '../ui/card';
-import { ROLES, ROLES_ABI } from '@app/lib/utils/context';
-import { shortenAddress } from 'thirdweb/utils';
-import { getContract, prepareContractCall } from 'thirdweb';
-import { CopyIcon } from 'lucide-react';
-import { client } from '@app/lib/sdk/thirdweb/client';
-import { base } from 'thirdweb/chains';
-import {
-  useActiveAccount,
-  useReadContract,
-  TransactionButton,
-} from 'thirdweb/react';
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from '@app/components/ui/tabs';
-import { Label } from '../ui/label';
 import MemberCard from './MemberCard';
-import { getNFT, getOwnedTokenIds } from 'thirdweb/extensions/erc721';
-import { CREATIVE_ADDRESS } from '@app/lib/utils/context';
-import CreateMetoken from '../MeToken/createMetoken';
-import Unlock from '@app/lib/utils/Unlock.json';
-import AssetDetails from './AssetDetails';
+import { Account } from 'thirdweb/wallets';
 
 const ProfilePage: NextPage = () => {
   const { user } = useParams();
@@ -74,25 +70,37 @@ const ProfilePage: NextPage = () => {
           contract: unlockContract,
           owner: activeAccount.address,
         });
+
         setOwnedIds(ownedTokenIds);
-
-        // Fetch NFT metadata
-        if (ownedTokenIds.length > 0) {
-          const metadata = await getNFT({
-            contract: unlockContract,
-            tokenId: ownedIds[0], // Use first token ID instead of the whole array
-          });
-          setNftData(metadata);
-        }
-
-        // Set member data and balance (you can customize this based on your logic)
-        setMemberData(activeAccount); // Example: setting active account as member data
-        setBalance('0'); // Example: set balance to 0 or fetch actual balance
       }
     };
 
     fetchData();
-  }, [activeAccount, ownedIds, unlockContract]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeAccount]);
+
+  useEffect(() => {
+    const fetchNFTData = async () => {
+      const metadata = await getNFT({
+        contract: unlockContract,
+        tokenId: ownedIds[0],
+      });
+
+      setNftData(metadata);
+    };
+
+    if (ownedIds.length > 0) {
+      fetchNFTData();
+    }
+
+  }, [unlockContract, ownedIds]);
+
+  useEffect(() => {
+    if (activeAccount) {
+      setMemberData(activeAccount);
+      setBalance('0');
+    }
+  }, [activeAccount]);
 
   return (
     <div className="container mx-auto my-5 px-4">
@@ -101,6 +109,7 @@ const ProfilePage: NextPage = () => {
           <TabsTrigger value="Membership">Membership</TabsTrigger>
           <TabsTrigger value="MeToken">MeToken</TabsTrigger>
           <TabsTrigger value="Uploads">Uploads</TabsTrigger>
+          <TabsTrigger value="Minted">Minted</TabsTrigger>
           <TabsTrigger value="Revenue">Revenue</TabsTrigger>
         </TabsList>
         <TabsContent value="Membership">
@@ -156,6 +165,36 @@ const ProfilePage: NextPage = () => {
             </CardFooter>
           </Card>
         </TabsContent>
+        <TabsContent value="Uploads">
+          <Card className="w-full">
+            <CardHeader>
+              <CardTitle>Upload</CardTitle>
+              <CardDescription>Pick a video to be uploaded.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <div className="space-y-1">
+                <Link href={`/profile/${activeAccount?.address}/upload`}>
+                  Go to upload
+                </Link>
+              </div>
+            </CardContent>
+            <CardFooter className="space-x-2"></CardFooter>
+          </Card>
+        </TabsContent>
+        <TabsContent value="Minted">
+          <Card className="w-full">
+            <CardHeader>
+              <CardTitle>Lazy minted nfts</CardTitle>
+              <CardDescription>
+                Here is the list of your lazy minted nfts
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <LazyMintedAsset activeAccount={activeAccount} />
+            </CardContent>
+            <CardFooter className="space-x-2"></CardFooter>
+          </Card>
+        </TabsContent>
         <TabsContent value="MeToken">
           <Card className="w-full">
             <CardHeader>
@@ -176,7 +215,10 @@ const ProfilePage: NextPage = () => {
               <CardDescription>Uploaded videos will show here.</CardDescription>
             </CardHeader>
             <CardContent>
-              <AssetDetails />
+              {/* <AssetDetails /> */}
+              <ListUploadedAssets
+                activeAccount={activeAccount as Account}
+              />
             </CardContent>
           </Card>
         </TabsContent>

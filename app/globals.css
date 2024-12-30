@@ -78,3 +78,8 @@
     @apply bg-background text-foreground;
   }
 }
+
+:root {
+  --color-brand-red: #ec407a;
+  --color-brand-red-shade: #d8366c;
+}

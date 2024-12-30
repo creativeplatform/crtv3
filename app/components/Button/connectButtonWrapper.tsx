@@ -1,23 +1,30 @@
 'use client';
-import { defineChain, base } from 'thirdweb/chains';
-import { createWallet, inAppWallet } from 'thirdweb/wallets';
 import {
-  generatePayload,
   authedOnly,
+  generatePayload,
   login,
   logout,
 } from '@app/api/auth/thirdweb/authentication';
-import { OrbisConnectResult } from '@useorbis/db-sdk';
-import { client } from '@app/lib/sdk/thirdweb/client';
 import { useOrbisContext } from '@app/lib/sdk/orbisDB/context';
+import { client } from '@app/lib/sdk/thirdweb/client';
 import { ConnectButton } from '@app/lib/sdk/thirdweb/components';
 import {
   GenerateLoginPayloadParams,
-  LoginPayload,
   VerifyLoginPayloadParams,
 } from 'thirdweb/auth';
-import { ACCOUNT_FACTORY_ADDRESS } from '@app/lib/utils/context';
+import {
+  base,
+  baseSepolia,
+  defineChain,
+  optimism,
+  polygon,
+  polygonAmoy,
+  zora,
+  zoraSepolia,
+} from 'thirdweb/chains';
 import { useActiveWallet } from 'thirdweb/react';
+
+import { createWallet, inAppWallet } from 'thirdweb/wallets';
 
 export default function ConnectButtonWrapper() {
   const { isConnected, orbisLogin } = useOrbisContext();
@@ -85,7 +92,16 @@ export default function ConnectButtonWrapper() {
   return (
     <ConnectButton
       client={client}
-      chains={[base]}
+      chains={[
+        polygon,
+        polygonAmoy,
+        base,
+        baseSepolia,
+        optimism,
+        storyTestnet,
+        zora,
+        zoraSepolia,
+      ]}
       connectButton={{
         label: 'Get Started',
         className: 'my-custom-class',
@@ -95,11 +111,12 @@ export default function ConnectButtonWrapper() {
           borderRadius: '10px',
         },
       }}
+      // TODO: uncomment when done
       // accountAbstraction={{
       //   chain: defineChain(base),
       //   client: client,
-      //   sponsorGas: true,
-      //   factoryAddress: `${ACCOUNT_FACTORY_ADDRESS.base}`,
+      //   sponsorGas: false,
+      //   factoryAddress: ACCOUNT_FACTORY_ADDRESS.polygon,
       // }}
       wallets={wallets}
       appMetadata={{
