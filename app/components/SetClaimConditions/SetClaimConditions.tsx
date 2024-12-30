@@ -36,7 +36,7 @@ type SetClaimConditionsProps = {
   contractMetadata?: string;
   numberOfClaimsConditonsAvailable: number;
   setAddClaimPhase: (arg: boolean) => void;
-  claimConditions?: ResolvedReturnType<ReturnType<typeof getClaimConditions>>; // needed to be included with the new claimCondition
+  claimConditions: ResolvedReturnType<ReturnType<typeof getClaimConditions>>; // needed to be included with the new claimCondition
   getClaimConditionsById?: (tokenId: string) => void;
 };
 
@@ -62,19 +62,14 @@ export default function SetClaimConditions(props: SetClaimConditionsProps) {
   ): Promise<ethers.TransactionReceipt | `0x${string}` | void> => {
     //
     const previousCCs =
-      props.claimConditions!!.length > 0
+      props.claimConditions.length > 0
         ? props.claimConditions?.map((cc) => {
             return {
               ...cc,
-              //price: cc.price.toString(), // Parse `price` field from `BigNumber` to string
               price: cc.pricePerToken.toString(),
-              // startTime: new Date(cc.startTimestamp)
             };
           })
         : [];
-
-    console.log('parsed previousCCs', previousCCs);
-    console.log('formData.startTime', formData.startTime);
 
     const claimConditionsInput = {
       currencyAddress: formData.currencyAddress,
@@ -87,7 +82,7 @@ export default function SetClaimConditions(props: SetClaimConditionsProps) {
       },
     };
 
-    console.log('claimConditionsInput', claimConditionsInput);
+    console.log({ claimConditionsInput });
 
     try {
       setIsSettingCC(true);
@@ -96,7 +91,7 @@ export default function SetClaimConditions(props: SetClaimConditionsProps) {
         contract: videoContract,
         tokenId,
         phases: [
-          // At the moment; to add new claimCondition, you must batch the
+          // TODO: At the moment; to add new claimCondition, you must batch the
           // previous claimConditions with the new claimCondition
           // ...previousCCs!,
           {
@@ -106,17 +101,13 @@ export default function SetClaimConditions(props: SetClaimConditionsProps) {
         resetClaimEligibility: false,
       });
 
-      console.log({ transaction });
-
       const { transactionHash } = await sendTransaction({
         transaction,
         account: activeAccount!!,
       });
 
-      console.log({ transactionHash });
-
       return transactionHash;
-    } catch (err: any) {
+    } catch (err) {
       setIsSettingCC(false);
       console.error(err);
       throw err;
