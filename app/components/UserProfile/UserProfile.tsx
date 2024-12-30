@@ -91,8 +91,8 @@ const ProfilePage: NextPage = () => {
     if (ownedIds.length > 0) {
       fetchNFTData();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ownedIds]);
+
+  }, [unlockContract, ownedIds]);
 
   useEffect(() => {
     if (activeAccount) {
