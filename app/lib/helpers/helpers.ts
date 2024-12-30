@@ -140,7 +140,7 @@ export const wordWrap = (txt: string, wrapAfter: number) => {
 };
 
 export const titleCase = (txt: string) => {
-  if (typeof txt != 'string') {
+  if (typeof txt !== 'string') {
     throw new Error(`The argument ${txt} is not a string`);
   }
   if (txt === '') throw new Error('Can not parse empty string');
