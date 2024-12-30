@@ -33,6 +33,7 @@ import {
   CardTitle,
 } from '../ui/card';
 import MemberCard from './MemberCard';
+import { Account } from 'thirdweb/wallets';
 
 const ProfilePage: NextPage = () => {
   const { user } = useParams();
@@ -215,7 +216,9 @@ const ProfilePage: NextPage = () => {
             </CardHeader>
             <CardContent>
               {/* <AssetDetails /> */}
-              <ListUploadedAssets activeAccount={activeAccount} />
+              <ListUploadedAssets
+                activeAccount={activeAccount as Account}
+              />
             </CardContent>
           </Card>
         </TabsContent>
