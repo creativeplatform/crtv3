@@ -3,10 +3,11 @@ import { parseIpfsUri } from '@app/lib/helpers/helpers';
 import { NFT } from '@app/types/nft';
 import { useCallback, useState } from 'react';
 import ConfigureMintedAsset from '../configure-minted-asset/ConfigureMintedAsset';
+import { Account } from 'thirdweb/wallets';
 
 type LazyMintedProps = {
   [index: string]: any;
-  activeAccount: any;
+  activeAccount: Account;
 };
 
 export default function LazyMintedAsset(props: LazyMintedProps) {
@@ -86,9 +87,9 @@ export default function LazyMintedAsset(props: LazyMintedProps) {
         </table>
       )}
 
-      {isModalOpen && (
+      {isModalOpen && nft &&  (
         <ConfigureMintedAsset
-          nft={nft!!}
+          nft={nft}
           toggleModal={toggleModal}
           setAddClaimPhase={setAddClaimPhase}
           addClaimPhase={addClaimPhase}
