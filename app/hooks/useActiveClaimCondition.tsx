@@ -11,7 +11,7 @@ type ActiveClaimCondition = {
 
 export function useActiveClaimCondition(props: ActiveClaimCondition) {
   const [activeClaimCondition, setActiveClaimCondition] = useState<
-    ActiveClaimCondition | {}
+    ActiveClaimCondition | Record<string,unknown>
   >();
   const [error, setError] = useState<Error>();
   const [isLoading, setIsLoading] = useState(false);
@@ -26,8 +26,8 @@ export function useActiveClaimCondition(props: ActiveClaimCondition) {
         });
 
         setActiveClaimCondition(res);
-      } catch (err: any) {
-        setError(err);
+      } catch (err) {
+        setError(err as Error);
       } finally {
         setIsLoading(false);
       }
@@ -42,4 +42,3 @@ export function useActiveClaimCondition(props: ActiveClaimCondition) {
     isLoading,
   };
 }
-
