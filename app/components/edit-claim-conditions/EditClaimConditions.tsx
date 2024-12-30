@@ -82,7 +82,7 @@ export default function EditClaimConditions(props: EditClaimConditionsProps) {
     }
   };
 
-  const sumbitUpdatedCC: SubmitHandler<EditClaimFormData> = async (data) => {
+  const submitUpdatedCC: SubmitHandler<EditClaimFormData> = async (data) => {
     const { errors } = formState;
 
     const isRequiredFields =
@@ -104,9 +104,9 @@ export default function EditClaimConditions(props: EditClaimConditionsProps) {
       await handleUpdateClaimCondition(props.nft.id, props.ccIndex, {
         ...data,
         maxClaimablePerWallet: data.maxClaimablePerWallet,
-        startTimestamp: dateObj.getTime() as unknown as string,
+        startTimestamp: dateObj.getTime().toString(),
       });
-    } catch (err: unknown) {
+    } catch (err) {
       setIsSubmitting(false);
       console.error(err);
 
@@ -129,7 +129,7 @@ export default function EditClaimConditions(props: EditClaimConditionsProps) {
 
   return (
     <Box my={8}>
-      <form onSubmit={handleSubmit(sumbitUpdatedCC)} id="updateClaimCondtion">
+      <form onSubmit={handleSubmit(submitUpdatedCC)} id="updateClaimCondtion">
         <FormControl
           mb={8}
           isDisabled={isErrorFree && isSubmitting}
@@ -225,7 +225,7 @@ export default function EditClaimConditions(props: EditClaimConditionsProps) {
                         (key, i) => {
                           return (
                             <option
-                              key={i}
+                              key={key}
                               value={
                                 Object.values(claimConditionsOptions.currency)[
                                   i
