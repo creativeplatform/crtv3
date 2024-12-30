@@ -10,31 +10,27 @@ type ListUploadedAssetsProps = {
   activeAccount: Account;
 };
 
-let fetchUploadedAssets: () => void;
-
 export default function ListUploadedAssets(props: ListUploadedAssetsProps) {
   const [assets, setAssets] = useState<Asset[] | {}>();
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState(false);
+  const [error, setError] = useState<Error>();
 
   useEffect(() => {
-    fetchUploadedAssets = async () => {
+    const fetchUploadedAssets = async () => {
       try {
         setIsLoading(true);
 
         const ast = await fetchAllAssets();
         setAssets(ast);
-
-        setIsLoading(false);
-      } catch (err: any) {
-        setError(err.message);
+      } catch (err) {
+        setError(err as Error);
       } finally {
         setIsLoading(false);
       }
     };
 
     fetchUploadedAssets();
-  }, [props]);
+  }, []);
 
   const filteredCreatorAssets: Asset[] = useMemo(() => {
     return Array.isArray(assets)
