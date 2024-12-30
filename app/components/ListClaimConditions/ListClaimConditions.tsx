@@ -91,11 +91,11 @@ export default function ListClaimConditions(props: ListClaimConditionsProps) {
   };
 
   const updateERC20Metadata = useCallback(async () => {
-    for (const cc of claimConditions) {
-      if (cc.currency && !erc20Metadata[cc.currency]) {
-        await fetchERC20Metadata(cc.currency);
-      }
-    }
+    const currencies = claimConditions
+      .map((cc) => cc.currency)
+      .filter((c) => Boolean(c) && !erc20Metadata[c]);
+
+    await Promise.all(currencies.map((c) => fetchERC20Metadata(c)));
   }, [claimConditions, erc20Metadata]);
 
   useEffect(() => {
