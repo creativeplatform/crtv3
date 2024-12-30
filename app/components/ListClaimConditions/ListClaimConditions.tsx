@@ -38,13 +38,20 @@ const preparedClaimConditionsUpdatedEvent = prepareEvent({
 });
 
 export default function ListClaimConditions(props: ListClaimConditionsProps) {
+  const [claimConditions, setClaimConditions] = useState<
+    ResolvedReturnType<ReturnType<typeof getClaimConditions>>
+  >([]);
   const [isLoadingERCMeta, setIsLoadingERCMeta] = useState(true);
   const [erc20Metadata, setERC20Metadata] = useState<{
     [key: string]: GetCurrencyMetadataResult | null;
   }>({});
 
+  useEffect(() => {
+    setClaimConditions(props.claimConditions);
+  }, [props.claimConditions]);
+
   const [editStates, setEditStates] = useState<{ [key: number]: boolean }>(
-    props.claimConditions.reduce((acc: { [key: number]: boolean }, _, i) => {
+    claimConditions.reduce((acc: { [key: number]: boolean }, _, i) => {
       acc[i] = false;
       return acc;
     }, {}),
@@ -73,44 +80,38 @@ export default function ListClaimConditions(props: ListClaimConditionsProps) {
     try {
       const data = await getERC20Metadata(currencyAddress);
       setERC20Metadata((prvmtd) => ({ ...prvmtd, [currencyAddress]: data }));
-    } catch (err: any) {
-      throw new Error('Error fetching currency metadata');
+    } catch (err) {
+      // TODO: find how an error state might be useful
+      throw new Error(
+        `Error fetching currency metadata: ${err instanceof Error ? err.message : 'Unknown error'}`,
+      );
     } finally {
       setIsLoadingERCMeta(false);
     }
   };
 
-  // TODO: try replacing this with useCallback
-  // const updateERC20Metadata =  async () => {
-  //   props.claimConditions.forEach((cc) => {
-  //     if (cc.currency && !erc20Metadata[cc.currency]) {
-  //       fetchERC20Metadata(cc.currency);
-  //     }
-  //   });
-  // };
-
   const updateERC20Metadata = useCallback(async () => {
-    props.claimConditions.forEach((cc) => {
+    for (const cc of claimConditions) {
       if (cc.currency && !erc20Metadata[cc.currency]) {
-        fetchERC20Metadata(cc.currency);
+        await fetchERC20Metadata(cc.currency);
       }
-    });
-  }, [props.claimConditions, erc20Metadata]);
+    }
+  }, [claimConditions, erc20Metadata]);
 
   useEffect(() => {
     updateERC20Metadata();
-  }, [props.claimConditions, erc20Metadata]);
+  }, [erc20Metadata, updateERC20Metadata]);
 
   useEffect(() => {
     if (ccEvents && ccEvents.length > 0) {
       const { claimConditions } = ccEvents[0].args;
-      console.log({ ccEvents: claimConditions });
 
+      setClaimConditions([...claimConditions]);
       updateERC20Metadata();
     } else if (ccErrorEvents) {
       console.error({ ccErrorEvents });
     }
-  }, [ccEvents]);
+  }, [ccEvents, updateERC20Metadata, ccErrorEvents]);
 
   return (
     <>
@@ -121,7 +122,7 @@ export default function ListClaimConditions(props: ListClaimConditionsProps) {
         </p>
       </div>
 
-      {props.claimConditions && props.claimConditions.length > 0 ? (
+      {claimConditions.length > 0 ? (
         <>
           <div className="mb-6">
             <p className="mb-0 text-lg text-slate-400">
@@ -132,7 +133,7 @@ export default function ListClaimConditions(props: ListClaimConditionsProps) {
             </p>
           </div>
 
-          {props.claimConditions.map((cc, i) => (
+          {claimConditions.map((cc, i) => (
             <div
               key={i + '-' + cc.startTimestamp.toString()}
               className="mx-auto mb-4 w-full max-w-screen-xl rounded-lg border bg-slate-700 p-6"
@@ -175,7 +176,7 @@ export default function ListClaimConditions(props: ListClaimConditionsProps) {
                   videoContract={videoContract}
                   nft={props.nft}
                   ccIndex={i}
-                  claimConditions={props.claimConditions}
+                  claimConditions={claimConditions}
                   setCanEditClaim={toggleEditClaim}
                 />
               ) : (
@@ -273,9 +274,9 @@ export default function ListClaimConditions(props: ListClaimConditionsProps) {
         </VStack>
       )}
 
-      {props.claimConditions.length > 0 && (
+      {claimConditions.length > 0 && (
         <AddClaimPhaseButton
-          label={props.addClaimPhase ? 'Add Claim Phase' : 'Cancel'}
+          label={!props.addClaimPhase ? 'Add Claim Phase' : 'Cancel'}
           addClaimPhase={props.addClaimPhase}
           setAddClaimPhase={props.setAddClaimPhase}
         />
