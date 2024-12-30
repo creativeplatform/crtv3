@@ -135,7 +135,7 @@ export default function ListClaimConditions(props: ListClaimConditionsProps) {
 
           {claimConditions.map((cc, i) => (
             <div
-              key={i + '-' + cc.startTimestamp.toString()}
+              key={cc.maxClaimableSupply.toString() + '-' + cc.startTimestamp.toString()}
               className="mx-auto mb-4 w-full max-w-screen-xl rounded-lg border bg-slate-700 p-6"
             >
               <div className="mb-4 flex flex-row justify-between">
