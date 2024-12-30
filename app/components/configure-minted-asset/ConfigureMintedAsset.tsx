@@ -65,7 +65,7 @@ export default function ConfigureMintedAsset(props: ConfigureMintedAssetProps) {
 
           setClaimConditions([...cc]);
         }
-      } catch (err: any) {
+      } catch (err) {
         setProcessingClaimConditions(false);
         console.error(err);
       }
