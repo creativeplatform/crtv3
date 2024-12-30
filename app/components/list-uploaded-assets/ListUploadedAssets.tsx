@@ -3,11 +3,11 @@ import { fetchAllAssets } from '@app/api/livepeer/actions';
 import { Asset } from '@app/lib/types';
 import { Box } from '@chakra-ui/react';
 import { useEffect, useMemo, useState } from 'react';
+import { Account } from 'thirdweb/wallets';
 import UploadAsset from './UploadedAsset';
 
 type ListUploadedAssetsProps = {
-  [index: string]: any;
-  activeAccount: any;
+  activeAccount: Account;
 };
 
 let fetchUploadedAssets: () => void;
@@ -41,7 +41,7 @@ export default function ListUploadedAssets(props: ListUploadedAssetsProps) {
       ? assets.filter(
           (ast: Asset) =>
             ast.creatorId &&
-            ast.creatorId.value.toLowerCase() ==
+            ast.creatorId.value.toLowerCase() ===
               props.activeAccount.address.toLowerCase(),
         )
       : [];
@@ -79,7 +79,7 @@ export default function ListUploadedAssets(props: ListUploadedAssetsProps) {
                 activeAccount={props.activeAccount}
                 asset={video}
                 idx={i}
-                key={i + video.id}
+                key={i + '-' + video.id}
               />
             ))}
           </tbody>
