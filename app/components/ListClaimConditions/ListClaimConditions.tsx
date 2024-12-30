@@ -15,9 +15,8 @@ import {
   ButtonGroup,
   VStack,
 } from '@chakra-ui/react';
-import { ethers } from 'ethers';
 import { useCallback, useEffect, useState } from 'react';
-import { prepareEvent } from 'thirdweb';
+import { ContractOptions, prepareEvent } from 'thirdweb';
 import { getClaimConditions } from 'thirdweb/extensions/erc1155';
 import { GetCurrencyMetadataResult } from 'thirdweb/extensions/erc20';
 import { useContractEvents } from 'thirdweb/react';
@@ -27,9 +26,9 @@ import EditClaimConditions from '../edit-claim-conditions/EditClaimConditions';
 type ListClaimConditionsProps = {
   nft: NFT;
   claimConditions: ResolvedReturnType<ReturnType<typeof getClaimConditions>>;
-  nftContract: ethers.BaseContract;
-  addClaimPhase?: boolean;
-  setAddClaimPhase?: (arg: boolean) => void;
+  nftContract: Readonly<ContractOptions<[]>>;
+  addClaimPhase: boolean;
+  setAddClaimPhase: (arg: boolean) => void;
   processingClaimConditions: boolean;
 };
 
@@ -103,7 +102,6 @@ export default function ListClaimConditions(props: ListClaimConditionsProps) {
   }, [props.claimConditions, erc20Metadata]);
 
   useEffect(() => {
-    
     if (ccEvents && ccEvents.length > 0) {
       const { claimConditions } = ccEvents[0].args;
       console.log({ ccEvents: claimConditions });
@@ -136,7 +134,7 @@ export default function ListClaimConditions(props: ListClaimConditionsProps) {
 
           {props.claimConditions.map((cc, i) => (
             <div
-              key={i}
+              key={i + '-' + cc.startTimestamp.toString()}
               className="mx-auto mb-4 w-full max-w-screen-xl rounded-lg border bg-slate-700 p-6"
             >
               <div className="mb-4 flex flex-row justify-between">
@@ -266,19 +264,20 @@ export default function ListClaimConditions(props: ListClaimConditionsProps) {
               )
             }
             onClick={() => {
-              props.setAddClaimPhase!(!props.addClaimPhase);
+              props.setAddClaimPhase &&
+                props.setAddClaimPhase(props.addClaimPhase);
             }}
           >
-            {!props.addClaimPhase ? 'Add Claim Phase' : 'Cancel'}
+            {props.addClaimPhase ? 'Add Claim Phase' : 'Cancel'}
           </Button>
         </VStack>
       )}
 
       {props.claimConditions.length > 0 && (
         <AddClaimPhaseButton
-          label={!props.addClaimPhase ? 'Add Claim Phase' : 'Cancel'}
-          addClaimPhase={props.addClaimPhase!}
-          setAddClaimPhase={props.setAddClaimPhase!}
+          label={props.addClaimPhase ? 'Add Claim Phase' : 'Cancel'}
+          addClaimPhase={props.addClaimPhase}
+          setAddClaimPhase={props.setAddClaimPhase}
         />
       )}
     </>
