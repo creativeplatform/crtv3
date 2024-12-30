@@ -6,10 +6,11 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { tokensLazyMintedEvent } from 'thirdweb/extensions/erc1155';
 import { useContractEvents } from 'thirdweb/react';
 import LazyMintModal from '../lazy-mint-modal/LazyMintModal';
+import { Account } from 'thirdweb/wallets';
 
 interface UploadAssetProps {
   idx: number;
-  activeAccount: any;
+  activeAccount: Account;
   asset: Asset;
 }
 
@@ -32,6 +33,7 @@ export default function UploadAsset(props: UploadAssetProps) {
 
   useEffect(() => {
     if (lazyMintedEvent.isSuccess) {
+      // TODO: fix with what should be done
       // console.log('lazyMintedEvent: ', lazyMintedEvent.data);
       // toggleModal();
     } else {
@@ -44,7 +46,7 @@ export default function UploadAsset(props: UploadAssetProps) {
       <td className="border border-slate-700 px-4 py-1">{props.idx + 1}</td>
       <td className="border border-slate-700 px-4 py-1">
         <Link
-          href={`${props.activeAccount.addresss}/${props.asset.id}?video=${JSON.stringify(props.asset)}`}
+          href={`${props.activeAccount.address}/${props.asset.id}?video=${JSON.stringify(props.asset)}`}
         >
           {helpers.titleCase(
             props.asset.name.length > 12
