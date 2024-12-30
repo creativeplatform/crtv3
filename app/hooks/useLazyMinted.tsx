@@ -9,7 +9,7 @@ export default function useLazyMinted() {
 
   const [nfts, setNFTs] = useState<NFT[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [error, setError] = useState<any>({});
+  const [error, setError] = useState<Error>();
 
   const fetchLazyMintedNFTs = useCallback(async () => {
     if (!activeAccount) return;
@@ -27,7 +27,7 @@ export default function useLazyMinted() {
     } catch (err) {
       setIsProcessing(false);
       console.error(err);
-      setError(err);
+      setError(err as Error);
     }
   }, [activeAccount]);
 
