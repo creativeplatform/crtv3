@@ -11,12 +11,14 @@ type ActiveClaimCondition = {
 
 export function useActiveClaimCondition(props: ActiveClaimCondition) {
   const [activeClaimCondition, setActiveClaimCondition] = useState<
-    ActiveClaimCondition | Record<string,unknown>
+    ActiveClaimCondition | Record<string, unknown>
   >();
   const [error, setError] = useState<Error>();
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
+    let mounted = true;
+
     const getActiveCC = async () => {
       try {
         setIsLoading(true);
@@ -25,15 +27,25 @@ export function useActiveClaimCondition(props: ActiveClaimCondition) {
           tokenId: props.tokenId,
         });
 
-        setActiveClaimCondition(res);
+        if (mounted) {
+          setActiveClaimCondition(res);
+        }
       } catch (err) {
-        setError(err as Error);
+        if (mounted) {
+          setError(err instanceof Error ? err : new Error('Unknown error'));
+        }
       } finally {
-        setIsLoading(false);
+        if (mounted) {
+          setIsLoading(false);
+        }
       }
     };
 
     getActiveCC();
+
+    return () => {
+      mounted = false;
+    };
   }, [props.contract, props.tokenId]);
 
   return {
