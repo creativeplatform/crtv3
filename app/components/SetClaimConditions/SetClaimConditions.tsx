@@ -101,9 +101,13 @@ export default function SetClaimConditions(props: SetClaimConditionsProps) {
         resetClaimEligibility: false,
       });
 
+      if (!activeAccount) {
+        throw new Error('No active account found!');
+      }
+      
       const { transactionHash } = await sendTransaction({
         transaction,
-        account: activeAccount!!,
+        account: activeAccount,
       });
 
       return transactionHash;
