@@ -185,9 +185,9 @@ export async function parseMetadata2(arr: NFT[]) {
   const delimiter = 'ipfs/';
 
   for (let i = 0; i < arr.length; i++) {
-    let cid = arr[i].metadata.uri.split(delimiter)[1].substring(0, 59);
+    const cid = arr[i].metadata.uri.split(delimiter)[1].substring(0, 59);
 
-    if (cid != undefined) {
+    if (cid !== undefined) {
       const res = await fetch(
         `https://ipfs.livepeer.studio/${delimiter}${cid}`,
       );
@@ -195,11 +195,11 @@ export async function parseMetadata2(arr: NFT[]) {
       const mtd: NFTMetadata = await res.json();
 
       if (mtd.animation_url != undefined || mtd.animation_url !== '') {
-        mtd.animation_url = `https://ipfs.livepeer.studio/${delimiter}${extractCID(mtd.animation_url!!)}`;
+        mtd.animation_url = `https://ipfs.livepeer.studio/${delimiter}${extractCID(mtd.animation_url ?? '')}`;
       }
 
       if (mtd.image != undefined || mtd.image !== '') {
-        mtd.image = `https://ipfs.livepeer.studio/${delimiter}${extractCID(mtd.image!!)}`;
+        mtd.image = `https://ipfs.livepeer.studio/${delimiter}${extractCID(mtd.image ?? '')}`;
       }
 
       // arr[i].metadata = {
