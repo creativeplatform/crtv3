@@ -51,38 +51,10 @@ export function TopChart() {
           return;
         }
 
-        // Resolve names for all addresses concurrently
-        const dataWithNames = await Promise.all(
-          leaderboard.leaderboard.map(async (item, i) => {
-            let name: string | undefined;
-
-            try {
-              name =
-                (await resolveName({
-                  client,
-                  address: item.address,
-                })) ?? undefined; // Updated line
-            } catch (nameError) {
-              console.warn(
-                `Failed to resolve name for address ${item.address}:`,
-                nameError,
-              );
-              name = shortenAddress(item.address); // Fallback if name resolution fails
-            }
-
-            return {
-              uniqueId: i + 1, // Ensure unique IDs start at 1
-              address: item.address,
-              points: item.points,
-              identities: item.identities || [],
-              bannerUrl: leaderboard.metadata.bannerUrl,
-              name: name || shortenAddress(item.address), // Fallback to shortened address if name is not found
-              description: leaderboard.metadata.description,
-            };
-          }),
+        // Set leaderboard data directly without mapping
+        setData(
+          Array.isArray(leaderboard.leaderboard) ? leaderboard.leaderboard : [],
         );
-
-        setData(dataWithNames);
       } catch (error: any) {
         console.error('Error fetching leaderboard data:', error);
         setErrorMessage('Failed to load leaderboard. Please try again later.');
@@ -138,14 +110,16 @@ export function TopChart() {
                 colIndex === 3 ? 'hidden lg:block' : ''
               } ${colIndex === 2 ? 'hidden md:block' : ''} `}
             >
-              {column.map(({ uniqueId, address, points }) => (
+              {column.map(({ uniqueId, address, points }, index) => (
                 <AccountProvider
                   key={uniqueId}
                   address={address}
                   client={client}
                 >
                   <div className="flex items-center space-x-2">
-                    <span>{uniqueId}.</span>
+                    <span className="min-w-[24px] text-right font-medium">
+                      {colIndex * Math.ceil(data.length / 4) + index + 1}.
+                    </span>
                     <AccountAvatar
                       className="h-10 w-10 rounded-full"
                       loadingComponent={
