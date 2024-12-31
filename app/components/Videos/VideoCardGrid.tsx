@@ -23,8 +23,10 @@ const VideoCardGrid: React.FC = () => {
         const response = await fetchAllAssets();
         if (response && Array.isArray(response)) {
           // Only process assets that are ready for playback
-          const readyAssets = response.filter(asset => asset.status?.phase === 'ready');
-          
+          const readyAssets = response.filter(
+            (asset) => asset.status?.phase === 'ready',
+          );
+
           // Fetch detailed playback sources for each ready asset
           const detailedPlaybackSources = await Promise.all(
             readyAssets.map(async (asset: Asset) => {

@@ -10,7 +10,12 @@ import {
 import Link from 'next/link';
 import Image from 'next/image';
 import { useState } from 'react';
-import { SITE_LOGO } from '@app/lib/utils/context';
+import {
+  SITE_LOGO,
+  SITE_NAME,
+  SITE_ORG,
+  SITE_PRODUCT,
+} from '@app/lib/utils/context';
 import { Button } from '@app/components/ui/button';
 import { useActiveAccount } from 'thirdweb/react';
 import ClaimLockButton from '@app/components/Paywall/ClaimLock';
@@ -50,7 +55,7 @@ export function Navbar() {
               <Image
                 style={{
                   width: '80px',
-                  height: 'auto'
+                  height: 'auto',
                 }}
                 src={SITE_LOGO}
                 alt="Creative Logo"
@@ -106,10 +111,10 @@ export function Navbar() {
           </div>
         </SheetContent>
       </Sheet>
-      <Link href="/" className="mr-6 hidden lg:flex" prefetch={false} passHref>
+      <Link href="/" className="mr-6 hidden lg:flex" passHref>
         <Image
           src={SITE_LOGO}
-          alt="Creative Logo"
+          alt={SITE_NAME}
           width={80}
           height={80}
           priority
@@ -119,12 +124,12 @@ export function Navbar() {
             className="text-lg"
             style={{ fontFamily: 'ConthraxSb-Regular , sans-serif' }}
           >
-            CREATIVE
+            {SITE_ORG}
             <span
               className="ml-1 text-xl font-bold text-red-500"
               style={{ fontFamily: 'sans-serif' }}
             >
-              TV
+              {SITE_PRODUCT}
             </span>
           </h1>
         </span>

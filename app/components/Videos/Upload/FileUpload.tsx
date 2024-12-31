@@ -16,6 +16,7 @@ import JsGoogleTranslateFree from '@kreisler/js-google-translate-free';
 import { getLivepeerAudioToText } from '@app/api/livepeer/audioToText';
 import { upload } from 'thirdweb/storage';
 import { client } from '@app/lib/sdk/thirdweb/client';
+import Link from 'next/link';
 
 const truncateUri = (uri: string): string => {
   if (uri.length <= 30) return uri;
@@ -320,14 +321,13 @@ const FileUpload: React.FC<FileUploadProps> = ({
             <div className="mt-6 rounded-lg border border-green-200 bg-green-50 p-4">
               <p className="text-green-700">
                 File uploaded successfully! IPFS URI:{' '}
-                <a
+                <Link
                   href={uploadedUri}
                   target="_blank"
-                  rel="noopener noreferrer"
                   className="overflow-hidden text-ellipsis whitespace-nowrap text-green-500 underline"
                 >
                   {truncateUri(uploadedUri)}
-                </a>
+                </Link>
                 <button
                   onClick={() => copyToClipboard(uploadedUri)}
                   className="ml-2 text-sm text-green-600 hover:text-green-800"

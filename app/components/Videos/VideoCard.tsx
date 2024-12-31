@@ -8,10 +8,17 @@ import {
   CardHeader,
   CardTitle,
 } from '../ui/card';
-import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
+import { Avatar, AvatarImage } from '../ui/avatar';
+import {
+  AccountProvider,
+  AccountAvatar,
+  AccountName,
+  AccountAddress,
+} from 'thirdweb/react';
+import { client } from '@app/lib/sdk/thirdweb/client';
 import { Badge } from '../ui/badge';
 import { cn } from '../../lib/utils';
-import { shortenHex } from 'thirdweb/utils';
+import { shortenAddress } from 'thirdweb/utils';
 import { PlayerComponent } from '../Player/Player';
 import { Asset } from 'livepeer/models/components';
 import Link from 'next/link';
@@ -31,22 +38,60 @@ const VideoCard: React.FC<VideoCardProps> = ({ asset, playbackSources }) => {
     return null;
   }
 
+  const address = asset?.creatorId?.value as string;
+
   return (
     <div className="mx-auto">
       <Card key={asset?.id} className={cn('w-[360px]')}>
         <div className="mx-auto flex-1 flex-wrap">
           <CardHeader>
-            <Avatar>
-              <AvatarImage src={makeBlockie(`${asset?.creatorId?.value}`)} />
-              <AvatarFallback>CRTV</AvatarFallback>
-            </Avatar>
-            <CardTitle>Creator</CardTitle>
-            <CardDescription>
-              {shortenHex(`${asset.creatorId?.value}`)}
-            </CardDescription>
+            <AccountProvider address={address} client={client}>
+              <div className="flex items-center space-x-2">
+                <AccountAvatar
+                  className="h-10 w-10 rounded-full"
+                  loadingComponent={
+                    <Avatar>
+                      <AvatarImage
+                        src={makeBlockie(address)}
+                        className="h-10 w-10 rounded-full"
+                      />
+                    </Avatar>
+                  }
+                  fallbackComponent={
+                    <Avatar>
+                      <AvatarImage
+                        src={makeBlockie(address)}
+                        className="h-10 w-10 rounded-full"
+                      />
+                    </Avatar>
+                  }
+                />
+                <div className="flex flex-col">
+                  <AccountName
+                    className="text-left"
+                    loadingComponent={
+                      <AccountAddress
+                        formatFn={shortenAddress}
+                        className="text-left"
+                      />
+                    }
+                    fallbackComponent={
+                      <AccountAddress
+                        formatFn={shortenAddress}
+                        className="text-left"
+                      />
+                    }
+                  />
+                </div>
+              </div>
+            </AccountProvider>
           </CardHeader>
         </div>
-        <PlayerComponent src={playbackSources} assetId={asset?.id} title={asset?.name} />
+        <PlayerComponent
+          src={playbackSources}
+          assetId={asset?.id}
+          title={asset?.name}
+        />
         <CardContent>
           <div className="my-2 flex items-center justify-between">
             <Badge

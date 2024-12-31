@@ -1,4 +1,4 @@
-import { ContractOptions } from "thirdweb";
+import { ContractOptions } from 'thirdweb';
 import { Abi } from 'viem';
 
 export const SITE_LOGO = '/grant-logo.png';
@@ -6,6 +6,8 @@ export const CREATIVE_LOGO_BLK = '/Blog-Logo_blk.png';
 export const CREATIVE_LOGO_WHT = '/Blog-Logo_wht.png';
 export const CREATIVE_ICON = '/creative_logo_only.png';
 export const SITE_NAME = 'CREATIVE TV';
+export const SITE_ORG = 'CREATIVE';
+export const SITE_PRODUCT = 'TV';
 
 export const STEPPER_FORM_KEYS = {
   1: ['title', 'description', 'location', 'category'],
