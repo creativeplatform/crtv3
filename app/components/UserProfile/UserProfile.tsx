@@ -38,6 +38,7 @@ import { CREATIVE_ADDRESS } from '@app/lib/utils/context';
 import CreateMetoken from '../MeToken/createMetoken';
 import Unlock from '@app/lib/utils/Unlock.json';
 import AssetDetails from './AssetDetails';
+import { stack } from '@app/lib/sdk/stack/client';
 
 const ProfilePage: NextPage = () => {
   const { user } = useParams();
@@ -49,6 +50,7 @@ const ProfilePage: NextPage = () => {
   const [memberData, setMemberData] = useState<any>(null);
   const [nftData, setNftData] = useState<any>(null);
   const [balance, setBalance] = useState<string>('');
+  const [points, setPoints] = useState<number>(0);
 
   const unlockAbi = Unlock.abi as any;
 
@@ -66,33 +68,67 @@ const ProfilePage: NextPage = () => {
     params: [activeAccount?.address],
   });
 
+  // Separate effect for fetching points
+  useEffect(() => {
+    const fetchPoints = async () => {
+      if (activeAccount) {
+        try {
+          console.log('Fetching points for address:', activeAccount.address);
+          const userPoints = await stack.getPoints(activeAccount.address);
+          console.log('Received points response:', userPoints);
+
+          // Handle both possible return types
+          if (Array.isArray(userPoints)) {
+            // If it's an array, sum up all the amounts
+            const total = userPoints.reduce(
+              (sum, point) => sum + point.amount,
+              0,
+            );
+            setPoints(total);
+          } else {
+            // If it's a number, use it directly
+            setPoints(userPoints);
+          }
+        } catch (error) {
+          console.error('Error fetching points:', error);
+          setPoints(0);
+        }
+      }
+    };
+
+    fetchPoints();
+  }, [activeAccount]);
+
   useEffect(() => {
     const fetchData = async () => {
       if (activeAccount) {
-        // Fetch owned token IDs
-        const ownedTokenIds = await getOwnedTokenIds({
-          contract: unlockContract,
-          owner: activeAccount.address,
-        });
-        setOwnedIds(ownedTokenIds);
-
-        // Fetch NFT metadata
-        if (ownedTokenIds.length > 0) {
-          const metadata = await getNFT({
+        try {
+          // Fetch owned token IDs
+          const ownedTokenIds = await getOwnedTokenIds({
             contract: unlockContract,
-            tokenId: ownedIds[0], // Use first token ID instead of the whole array
+            owner: activeAccount.address,
           });
-          setNftData(metadata);
-        }
+          setOwnedIds(ownedTokenIds);
 
-        // Set member data and balance (you can customize this based on your logic)
-        setMemberData(activeAccount); // Example: setting active account as member data
-        setBalance('0'); // Example: set balance to 0 or fetch actual balance
+          // Fetch NFT metadata if there are owned tokens
+          if (ownedTokenIds.length > 0) {
+            const metadata = await getNFT({
+              contract: unlockContract,
+              tokenId: ownedTokenIds[0],
+            });
+            setNftData(metadata);
+          }
+
+          setMemberData(activeAccount);
+          setBalance('0');
+        } catch (error) {
+          console.error('Error fetching NFT data:', error);
+        }
       }
     };
 
     fetchData();
-  }, [activeAccount, ownedIds, unlockContract]);
+  }, [activeAccount, unlockContract]);
 
   return (
     <div className="container mx-auto my-5 px-4">
@@ -117,6 +153,7 @@ const ProfilePage: NextPage = () => {
                   member={memberData}
                   nft={nftData}
                   balance={balance}
+                  points={points}
                 />
               </div>
             </CardContent>

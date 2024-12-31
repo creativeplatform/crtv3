@@ -27,6 +27,7 @@ import {
   AssetMetadata,
   createAssetMetadata,
 } from '@app/lib/sdk/orbisDB/models/AssetMetadata';
+import { stack } from '@app/lib/sdk/stack/client';
 
 const HookMultiStepForm = () => {
   const [activeStep, setActiveStep] = useState(1);
@@ -96,7 +97,7 @@ const HookMultiStepForm = () => {
   const handleCreateInfoSubmit = (data: TVideoMetaForm) => {
     setMetadata(data);
     setActiveStep((prevActiveStep) => prevActiveStep + 1);
-  }
+  };
 
   return (
     <>
@@ -109,9 +110,7 @@ const HookMultiStepForm = () => {
         </Alert>
       )}
       <div className={activeStep === 1 ? 'block' : 'hidden'}>
-        <CreateInfo
-          onPressNext={handleCreateInfoSubmit}
-        />
+        <CreateInfo onPressNext={handleCreateInfoSubmit} />
       </div>
       <div className={activeStep === 2 ? 'block' : 'hidden'}>
         <FileUpload
@@ -137,24 +136,46 @@ const HookMultiStepForm = () => {
           thumbnailUri={thumbnailUri}
           onComplete={async (data) => {
             setThumbnailUri(data.thumbnailUri);
-            
+
             if (!livepeerAsset || !metadata) {
               throw new Error(
                 'Error saving assetMetadata: Missing asset metadata',
               );
             }
-            
+
             const assetMetadata: AssetMetadata = createAssetMetadata(
               livepeerAsset,
               metadata,
               data.thumbnailUri,
               subtitlesUri,
             );
-            
+
             await insert(
               process.env.NEXT_PUBLIC_ORBIS_ASSET_METADATA_MODEL_ID as string,
               assetMetadata,
             );
+
+            // Award points for uploading a video
+            try {
+              await stack.track('video_upload', {
+                account: activeAccount?.address as string,
+                points: 10,
+              });
+              // Get updated points balance
+              const points = await stack.getPoints(
+                activeAccount?.address as string,
+              );
+              toast.success('Video uploaded successfully!', {
+                description: `You earned 10 points! Your total balance is now ${points} points.`,
+              });
+            } catch (error) {
+              console.error('Failed to award points:', error);
+              toast.error('Failed to award points', {
+                description:
+                  "Your video was uploaded but we couldn't award points at this time.",
+              });
+              // Continue with navigation even if points failed
+            }
             router.push('/discover');
           }}
         />

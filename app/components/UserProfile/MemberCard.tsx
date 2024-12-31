@@ -6,9 +6,10 @@ export type MemberCardProps = {
   member: any;
   nft: any;
   balance: string;
+  points: number;
 };
 
-const MemberCard = ({ member, nft, balance }: MemberCardProps) => {
+const MemberCard = ({ member, nft, balance, points }: MemberCardProps) => {
   if (!nft) {
     return <div className="p-4 text-center">No membership NFT found</div>;
   }
@@ -30,6 +31,10 @@ const MemberCard = ({ member, nft, balance }: MemberCardProps) => {
       )}
       <div className="flex w-full flex-col space-y-4 text-center md:text-left">
         <h1 className="text-xl font-bold md:text-2xl">{nft.metadata?.name}</h1>
+        <div className="flex flex-col space-y-2">
+          <p className="text-md font-semibold">Points Balance</p>
+          <p className="text-2xl font-bold text-primary">{points} points</p>
+        </div>
         {/* Uncomment when ready to use
         <p className="text-md">Member Id: {nft.metadata?.id}</p>
         <p>
