@@ -25,7 +25,7 @@ export default function MoreOptions() {
   const snapshot = searchParams.get('snapshot');
   const creator = searchParams.get('creator');
   const score = searchParams.get('score');
-  const scores = searchParams.get('scores') || '{}';
+  const scores = JSON.parse(searchParams.get('scores') || '{}');
   const identifier = searchParams.get('identifier');
 
   /**

@@ -5,14 +5,15 @@ import { Textarea } from '@app/components/ui/textarea';
 import { Button } from '@app/components/ui/button';
 import { Loader2 } from 'lucide-react';
 import snapshot from '@snapshot-labs/snapshot.js';
-import { useActiveAccount } from 'thirdweb/react';
+import { useActiveAccount, useBlockNumber } from 'thirdweb/react';
 import { FaWindowClose } from 'react-icons/fa';
 import { useRouter } from 'next/navigation';
-import { polygon } from 'thirdweb/chains';
-//import { SNAPSHOT_SUBGRAPH_URL } from '@snapshot-labs/snapshot.js/dist/utils';
+import { Web3Provider } from '@ethersproject/providers';
+import { client } from '@app/lib/sdk/thirdweb/client';
+import { base } from 'thirdweb/chains';
 
 const hub = 'https://hub.snapshot.org';
-const client = new snapshot.Client(hub);
+const hub_client = new snapshot.Client712(hub);
 
 /**
  * Renders the Create component.
@@ -23,15 +24,15 @@ export default function Create() {
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [startDate, setStartDate] = useState(0);
-  const [startTime, setStartTime] = useState(new Date());
+  const [startTime, setStartTime] = useState(new Date().toLocaleTimeString());
   const [endDate, setEndDate] = useState(0);
-  const [endTime, setEndTime] = useState(new Date());
+  const [endTime, setEndTime] = useState(new Date().toLocaleTimeString());
   const [choices, setChoices] = useState(['yes', 'no']);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const inputRef = useRef();
   const router = useRouter();
   const activeAccount = useActiveAccount();
-  const chain = polygon;
+  const blockNumber = useBlockNumber({ client, chain: base });
 
   /**
    * Handles the change event for a choice input field.
@@ -74,28 +75,51 @@ export default function Create() {
     if (activeAccount) {
       try {
         setIsSubmitting(true);
-        // get current block of Polygon network
-        const provider = await snapshot.utils.getProvider(chain.id.toString());
+
+        // Validate required fields
+        if (
+          !title ||
+          !content ||
+          !startDate ||
+          !startTime ||
+          !endDate ||
+          !endTime ||
+          choices.length < 2
+        ) {
+          alert(
+            'Please fill in all required fields and provide at least two choices.',
+          );
+          setIsSubmitting(false);
+          return;
+        }
+
+        // Initialize Web3 provider
+        const web3 = new Web3Provider(window.ethereum);
+        const [account] = await web3.listAccounts();
+
+        // Get current block of Polygon network
+        const provider = snapshot.utils.getProvider('137'); // Polygon network ID
         const block = await snapshot.utils.getBlockNumber(provider);
-        const space = 'thecreative.eth';
-        const receipt = (await client.proposal(
-          provider,
+
+        const receipt = await hub_client.proposal(
+          client,
           activeAccount?.address,
           {
-            space: space,
-            type: 'weighted',
+            space: 'thecreative.eth',
+            type: 'single-choice',
             title: title,
             body: content,
             choices: choices,
-            start: startDate,
-            end: endDate,
-            snapshot: block,
-            discussion: 'max',
+            start: new Date(`${startDate}T${startTime}`).getTime() / 1000,
+            end: new Date(`${endDate}T${endTime}`).getTime() / 1000,
+            snapshot: blockNumber,
             plugins: JSON.stringify({
               poap: {},
             }),
+            app: 'creative-tv',
           },
-        )) as any;
+        );
+
         console.log(`created proposal ${receipt.id}`);
         router.push('/vote');
       } catch (error) {
