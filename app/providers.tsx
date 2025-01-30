@@ -5,6 +5,8 @@ import { createContext, useContext, useState, useEffect } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { OrbisProvider } from '@app/lib/sdk/orbisDB/context';
 import { SubtitlesProvider } from './components/Player/Subtitles';
+import { createConfig, http, WagmiProvider } from 'wagmi';
+import { base } from 'viem/chains';
 
 interface ThemeContextType {
   theme: string;
@@ -12,6 +14,13 @@ interface ThemeContextType {
 }
 
 const queryClient = new QueryClient();
+
+const config = createConfig({
+  chains: [base],
+  transports: {
+    [base.id]: http()
+  }
+});
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
@@ -42,11 +51,13 @@ export const Providers: React.FC<{ children: React.ReactNode }> = ({
       <SubtitlesProvider>
         <ApolloWrapper>
           <ThirdwebProvider>
-            <QueryClientProvider client={queryClient}>
-              <OrbisProvider>
-                {children}
-              </OrbisProvider>
-            </QueryClientProvider>
+            <WagmiProvider config={config}>
+              <QueryClientProvider client={queryClient}>
+                <OrbisProvider>
+                  {children}
+                </OrbisProvider>
+              </QueryClientProvider>
+            </WagmiProvider>
           </ThirdwebProvider>
         </ApolloWrapper>
       </SubtitlesProvider>

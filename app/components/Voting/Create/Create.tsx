@@ -1,250 +1,280 @@
 'use client';
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Input } from '@app/components/ui/input';
 import { Textarea } from '@app/components/ui/textarea';
 import { Button } from '@app/components/ui/button';
 import { Loader2 } from 'lucide-react';
-import snapshot from '@snapshot-labs/snapshot.js';
-import { useActiveAccount } from 'thirdweb/react';
 import { FaWindowClose } from 'react-icons/fa';
 import { useRouter } from 'next/navigation';
-import { polygon } from 'thirdweb/chains';
-//import { SNAPSHOT_SUBGRAPH_URL } from '@snapshot-labs/snapshot.js/dist/utils';
+import { base } from 'thirdweb/chains';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@app/components/ui/select';
+import { toast } from 'sonner';
+import { useSnapshot } from '@app/hooks/useSnapshot';
+import { useActiveAccount } from 'thirdweb/react';
+import { useCurrentBlockNumber } from '@app/hooks/useCurrentBlockNumber';
 
-const hub = 'https://hub.snapshot.org';
-const client = new snapshot.Client(hub);
+const VOTING_TYPES = {
+  'single-choice': 'Single Choice',
+  weighted: 'Weighted',
+} as const;
 
-/**
- * Renders the Create component.
- *
- * @returns The JSX element representing the Create component.
- */
+const VOTING_STRATEGIES = [
+  {
+    name: 'erc20-balance-of',
+    params: {
+      address: process.env.NEXT_PUBLIC_TOKEN_ADDRESS,
+      symbol: 'CRTV',
+      decimals: 18,
+    },
+  },
+  {
+    name: 'erc20-balance-of',
+    params: {
+      address: process.env.NEXT_PUBLIC_TOKEN_ADDRESS,
+      symbol: 'CRTV',
+      decimals: 18,
+    },
+  },
+];
+
+type VotingType = keyof typeof VOTING_TYPES;
+
 export default function Create() {
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [startDate, setStartDate] = useState(0);
-  const [startTime, setStartTime] = useState(new Date());
   const [endDate, setEndDate] = useState(0);
-  const [endTime, setEndTime] = useState(new Date());
   const [choices, setChoices] = useState(['yes', 'no']);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const inputRef = useRef();
+  const [votingType, setVotingType] = useState<VotingType>('single-choice');
+  const [votingPower, setVotingPower] = useState<bigint>(0n);
+  const [minScore, setMinScore] = useState<number>(100); // Minimum score required to create proposal
   const router = useRouter();
+  const { createProposal, getVotingPower, isConnected } = useSnapshot();
   const activeAccount = useActiveAccount();
-  const chain = polygon;
+  const blockNumber = useCurrentBlockNumber();
 
-  /**
-   * Handles the change event for a choice input field.
-   *
-   * @param i - The index of the choice in the array.
-   * @param event - The change event object.
-   */
-  function handleChange(i: any, event: any) {
+  useEffect(() => {
+    const checkVotingPower = async () => {
+      if (!isConnected || !activeAccount?.address || !blockNumber) return; // Exit if no block number
+
+      try {
+        const vp = await getVotingPower({
+          address: activeAccount.address,
+          strategies: VOTING_STRATEGIES,
+          space: 'thecreative.eth',
+          snapshot: Number(blockNumber), // Use available block number
+          network: base.id.toString(),
+        });
+
+        setVotingPower(vp.vp ? BigInt(vp.vp) : 0n);
+      } catch (error) {
+        console.error('Error checking voting power:', error);
+        toast.error('Failed to check voting power');
+      }
+    };
+
+    checkVotingPower();
+  }, [isConnected, getVotingPower, activeAccount, blockNumber]);
+
+  function handleChange(i: number, event: React.ChangeEvent<HTMLInputElement>) {
     const values = [...choices];
     values[i] = event.target.value;
     setChoices(values);
   }
 
-  /**
-   * Adds an empty choice to the list of choices.
-   */
   function handleAdd() {
     const values = [...choices];
     values.push('');
     setChoices(values);
   }
 
-  /**
-   * Removes a choice from the list of choices.
-   *
-   * @param i - The index of the choice to remove.
-   */
-  function handleRemove(i: any) {
+  function handleRemove(i: number) {
     const values = [...choices];
     values.splice(i, 1);
     setChoices(values);
   }
 
-  /**
-   * Submits a vote proposal.
-   *
-   * @returns {Promise<void>} A promise that resolves when the proposal is created.
-   */
-  const submit = async () => {
-    if (activeAccount) {
-      try {
-        setIsSubmitting(true);
-        // get current block of Polygon network
-        const provider = await snapshot.utils.getProvider(chain.id.toString());
-        const block = await snapshot.utils.getBlockNumber(provider);
-        const space = 'thecreative.eth';
-        const receipt = (await client.proposal(
-          provider,
-          activeAccount?.address,
-          {
-            space: space,
-            type: 'weighted',
-            title: title,
-            body: content,
-            choices: choices,
-            start: startDate,
-            end: endDate,
-            snapshot: block,
-            discussion: 'max',
-            plugins: JSON.stringify({
-              poap: {},
-            }),
-          },
-        )) as any;
-        console.log(`created proposal ${receipt.id}`);
-        router.push('/vote');
-      } catch (error) {
-        console.log(error);
-        setIsSubmitting(false);
-      }
-    } else {
-      console.log('Please connect your wallet to create a proposal.');
+  const validateProposal = () => {
+    if (!title.trim()) {
+      toast.error('Title is required');
+      return false;
     }
+    if (!content.trim()) {
+      toast.error('Content is required');
+      return false;
+    }
+    if (choices.some((choice) => !choice.trim())) {
+      toast.error('All choices must have content');
+      return false;
+    }
+    if (startDate >= endDate) {
+      toast.error('End date must be after start date');
+      return false;
+    }
+    if (votingPower < BigInt(minScore)) {
+      toast.error(
+        `You need at least ${minScore} voting power to create a proposal`,
+      );
+      return false;
+    }
+    return true;
   };
 
-  const changeInput = (event: any, type: string) => {
-    if (type === 'title') {
-      setTitle(event.target.value);
-    } else if (type === 'content') {
-      setContent(event.target.value);
-    } else if (type === 'start date') {
-      setStartDate(event.target.value);
-    } else if (type === 'start time') {
-      setStartTime(event.target.value);
-    } else if (type === 'end time') {
-      setEndTime(event.target.value);
-    } else if (type === 'end date') {
-      setEndDate(event.target.value);
+  const submit = async () => {
+    if (!blockNumber) {
+      toast.error('Waiting for block number...');
+      return;
     }
+
+    if (!validateProposal()) {
+      return;
+    }
+
+    await createProposal({
+      space: 'thecreative.eth',
+      type: votingType,
+      title: title,
+      body: content,
+      choices: choices,
+      start: Math.floor(startDate / 1000), // Convert to UNIX timestamp
+      end: Math.floor(endDate / 1000), // Convert to UNIX timestamp
+      snapshot: Number(blockNumber),
+    });
+    toast.success('Proposal created successfully!');
   };
 
   return (
-    <div className="flex flex-wrap items-start justify-center p-2">
-      <div className="w-full p-5 md:w-2/5">
-        <div className="mb-4 cursor-pointer">
-          <div className="rounded-t-3xl bg-gradient-to-l from-yellow-300 via-red-600 to-pink-400 p-4">
-            <h2 className="text-md font-bold text-white">Title</h2>
-          </div>
-          <div className="bg-brand-100 rounded-b-3xl border border-pink-400 p-4">
-            <Input
-              className="w-full font-bold"
-              placeholder="[#BrandName] Campaign Voting"
-              onChange={(event) => {
-                changeInput(event, 'title');
-              }}
-            />
-          </div>
-        </div>
-        <div className="mb-4 cursor-pointer">
-          <div className="rounded-t-3xl bg-gradient-to-l from-yellow-300 via-red-600 to-pink-400 p-4">
-            <h2 className="text-md font-bold text-white">Content</h2>
-          </div>
-          <div className="bg-brand-100 rounded-b-3xl border border-pink-400 p-4">
-            <Textarea
-              className="w-full"
-              placeholder="Here is a sample placeholder"
-              onChange={(event) => {
-                changeInput(event, 'content');
-              }}
-            />
-          </div>
-        </div>
-        <div className="mb-4 cursor-pointer">
-          <div className='className="p-4 to-pink-400" rounded-t-3xl bg-gradient-to-l from-yellow-300 via-red-600'>
-            <h2 className="text-md font-bold text-white">Choices</h2>
-          </div>
-          <div className="bg-brand-100 rounded-b-3xl border border-pink-400 p-4">
-            <div className="space-y-4">
-              <form>
-                {choices.map((field, index) => {
-                  return (
-                    <div className="relative mb-5" key={index}>
-                      <Input
-                        className="choices w-full"
-                        placeholder="Enter Choice"
-                        value={field || ''}
-                        onChange={(e) => handleChange(index, e)}
-                      />
-                      <div
-                        className="absolute right-0 top-0 cursor-pointer p-2"
-                        onClick={() => handleRemove(index)}
-                      >
-                        <FaWindowClose />
-                      </div>
-                    </div>
-                  );
-                })}
-              </form>
-            </div>
+    <div className="mx-auto max-w-2xl space-y-8 p-4">
+      <div className="space-y-4">
+        <h1 className="text-2xl font-bold">Create Proposal</h1>
 
-            <Button
-              className="mt-4 w-full rounded bg-pink-400 p-2 text-white hover:bg-pink-600 focus:bg-pink-600"
-              onClick={() => handleAdd()}
-            >
-              <h2 className="text-sm font-bold text-white">Add</h2>
-            </Button>
+        <div className="rounded-lg bg-blue-50 p-4 text-blue-700">
+          You need at least 100 CRTV tokens to create a proposal
+        </div>
+
+        {votingPower > 0n && (
+          <div className="rounded-lg bg-green-50 p-4 text-green-700">
+            Your voting power: {votingPower.toString()}
+            {votingPower < BigInt(minScore) && (
+              <div className="mt-2 text-red-600">
+                You need {(BigInt(minScore) - votingPower).toString()} more CRTV
+                tokens to create proposals
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className="space-y-2">
+          <label className="text-sm font-medium">Voting Type</label>
+          <Select
+            value={votingType}
+            onValueChange={(value: VotingType) => setVotingType(value)}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select voting type" />
+            </SelectTrigger>
+            <SelectContent>
+              {Object.entries(VOTING_TYPES).map(([key, label]) => (
+                <SelectItem key={key} value={key}>
+                  {label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-2">
+          <label className="text-sm font-medium">Title</label>
+          <Input
+            type="text"
+            placeholder="Enter proposal title"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <label className="text-sm font-medium">Content</label>
+          <Textarea
+            placeholder="Enter proposal content"
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+            rows={5}
+          />
+        </div>
+
+        <div className="space-y-4">
+          <label className="text-sm font-medium">Choices</label>
+          {choices.map((choice, index) => (
+            <div key={index} className="flex items-center gap-2">
+              <Input
+                type="text"
+                placeholder={`Choice ${index + 1}`}
+                value={choice}
+                onChange={(e) => handleChange(index, e)}
+              />
+              {choices.length > 2 && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => handleRemove(index)}
+                >
+                  <FaWindowClose className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
+          ))}
+          <Button variant="outline" onClick={handleAdd}>
+            Add Choice
+          </Button>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Start Date</label>
+            <Input
+              type="datetime-local"
+              onChange={(e) =>
+                setStartDate(
+                  Math.floor(new Date(e.target.value).getTime() / 1000),
+                )
+              }
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">End Date</label>
+            <Input
+              type="datetime-local"
+              onChange={(e) =>
+                setEndDate(
+                  Math.floor(new Date(e.target.value).getTime() / 1000),
+                )
+              }
+            />
           </div>
         </div>
-      </div>
-      <div className="mt-10 w-full p-5 md:w-2/5">
-        <div className="cursor-pointer rounded-t-3xl bg-gradient-to-l from-yellow-300 via-red-600 to-pink-400 p-4">
-          <h2 className="text-md font-bold text-white">Actions</h2>
-        </div>
-        <div className="bg-brand-100 rounded-b-3xl border border-pink-400 p-4">
-          <h3 className="text-sm font-bold text-white">Start Date</h3>
-          <Input
-            type="date"
-            className="mt-2 w-full"
-            onChange={(event) => {
-              changeInput(event, 'start date');
-            }}
-          />
-          <h3 className="text-sm font-bold text-white">Start time</h3>
-          <Input
-            type="time"
-            className="mt-2 w-full"
-            onChange={(event) => {
-              changeInput(event, 'start time');
-            }}
-          />
-          <h3 className="mt-4 text-sm font-bold text-white">End date</h3>
-          <Input
-            type="date"
-            className="mt-2 w-full"
-            onChange={(event) => {
-              changeInput(event, 'end date');
-            }}
-          />
-          <h3 className="mt-4 text-sm font-bold text-white">End time</h3>
-          <Input
-            type="time"
-            className="mt-2 w-full"
-            onChange={(event) => {
-              changeInput(event, 'end time');
-            }}
-          />
+
+        <Button
+          className="w-full"
+          onClick={submit}
+          disabled={isSubmitting || votingPower < BigInt(minScore)}
+        >
           {isSubmitting ? (
-            <Button
-              disabled
-              className="mt-4 w-full rounded bg-pink-400 p-2 text-white hover:bg-pink-600 focus:bg-pink-600"
-            >
+            <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Submitting...
-            </Button>
+              Creating Proposal...
+            </>
           ) : (
-            <Button
-              className="mt-4 w-full rounded bg-pink-400 p-2 text-white hover:bg-pink-600 focus:bg-pink-600"
-              onClick={() => submit()}
-            >
-              Submit
-            </Button>
+            'Create Proposal'
           )}
-        </div>
+        </Button>
       </div>
     </div>
   );
