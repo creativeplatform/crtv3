@@ -1,17 +1,21 @@
-// crtv3/app/layout.tsx (1-38)
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
 import { Providers } from './providers'; // Ensure this component accepts children
 import Layout from './components/Layout/Layout'; // Ensure this component accepts children
 import { VideoProvider } from './context/VideoContext'; // Ensure this component accepts children
+import MissingCredentialsAlert from './components/Alerts/Front-End/MissingCredentialsAlert'; // Ensure this component accepts children
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 
 const inter = Inter({
   subsets: ['latin'],
   display: 'swap',
   preload: true,
   adjustFontFallback: true,
-  variable: '--font-inter'
+  variable: '--font-inter',
 });
 
 export const metadata: Metadata = {
@@ -27,6 +31,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={inter.className}>
+        <MissingCredentialsAlert />
         <Providers>
           <VideoProvider>
             <Layout>{children}</Layout>

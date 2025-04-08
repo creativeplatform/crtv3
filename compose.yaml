@@ -1,0 +1,22 @@
+services:
+  app:
+    build:
+      context: ./
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+    init: true
+    depends_on:
+      - server
+    networks:
+      - app_network
+  server:
+    build:
+      context: ./server
+    restart: unless-stopped
+    init: true
+    networks:
+      - app_network
+networks:
+  app_network:
+    driver: bridge

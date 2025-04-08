@@ -1,0 +1,60 @@
+# .dockerignore file for optimal Docker builds
+
+# Node.js specific
+node_modules/
+npm-debug.log
+yarn-debug.log
+
+# Python specific
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.coverage
+
+# General development artifacts
+.idea/
+.vscode/
+*.swp
+*.swo
+dist/
+build/
+out/
+
+# Version control
+.git/
+.gitignore
+
+# Environment and secrets
+.env*
+*.pem
+*.key
+*.crt
+
+# Project-specific
+*.md
+README*
+Dockerfile*
+docker-compose*
+tmp/
+temp/
+*.tmp
+
+# Exclude public assets
+!public/
+public/fonts/
+
+# Exclude compiled files
+*.tsbuildinfo
+
+# Exclude test files
+test/
+tests/
+*_test.go
+
+# Exclude documentation
+docs/
+
+# Exclude temporary files
+.local/
+local/

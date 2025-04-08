@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" elementFormDefault="qualified" attributeFormDefault="unqualified">
+  <xs:element name="sitemap">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="url" maxOccurs="unbounded">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="loc" type="xs:string"/>
+              <xs:element name="lastmod" type="xs:string" minOccurs="0"/>
+              <xs:element name="changefreq" type="xs:string" minOccurs="0"/>
+              <xs:element name="priority" type="xs:string" minOccurs="0"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="urlset" type="xs:string" minOccurs="0"/>
+  <xs:element name="url" type="xs:string" minOccurs="0"/>
+  <xs:element name="loc" type="xs:string" minOccurs="0"/>
+  <xs:element name="lastmod" type="xs:string" minOccurs="0"/>
+  <xs:element name="changefreq" type="xs:string" minOccurs="0"/>                
+
+    <xs:element name="priority" type="xs:string" minOccurs="0"/>
+    <xs:element name="sitemapindex" type="xs:string" minOccurs="0"/>
+
+        

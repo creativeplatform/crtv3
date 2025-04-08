@@ -1,85 +1,40 @@
-# Creative TV
+# Running the Project with Docker
 
-## Project Overview
-Creative TV is a web application for The Creative platform.  It's built with React, TypeScript, and utilizes the thirdweb SDK.
+## Docker Setup
 
-## Contribution Guidelines
+This project includes Docker configurations to simplify the setup and deployment process. Follow the steps below to build and run the application using Docker.
 
-We welcome contributions! To get started:
+### Prerequisites
 
-* Check out our open issues on the **Issues** tab.
-* Follow our coding conventions (enforced by ESLint and Prettier).
-* Read up on our development process in CONTRIBUTING.md
+- Ensure Docker and Docker Compose are installed on your system.
+- Verify the required versions:
+  - Node.js: 22.13.1 (as specified in the Dockerfile)
+  - Python: 3.9 (as specified in the server Dockerfile)
 
-## Setup client id
+### Environment Variables
 
-Before you start, you need to replace the placeholder `clientId` with your client ID to use thirdweb SDK.
+- Create a `.env` file in the root directory with the necessary environment variables. Refer to `.env.sample` for the required variables.
 
-Refer to [Creating a client](https://portal.thirdweb.com/typescript/v5/client) guide to see how you can get a client id.
+### Build and Run
 
-Go to `src/client.ts` file and replace the placeholder `clientId` with your client ID.
+1. Build the Docker images and start the services:
 
-```ts
-const clientId = '......';
-```
+   ```bash
+   docker-compose up --build
+   ```
 
-## Usage
+2. Access the application:
 
-### Install dependencies
+   - Frontend: [http://localhost:3000](http://localhost:3000)
 
-```bash
-npm
-```
+### Exposed Ports
 
-### Start development server
+- `app` service: 3000
+- `server` service: (no port exposed)
 
-```bash
-npm run dev
-```
+### Notes
 
-### Create a production build
+- The `app` service depends on the `server` service and will start after the server is ready.
+- The `app` service uses a bridge network for inter-service communication.
 
-```bash
-npm run build
-```
-
-### Preview the production build
-
-```bash
-npm run start
-```
-
-## Code Formatting with Prettier
-
-This project uses Prettier for consistent code formatting.
-
-```bash
-npm run prettier
-```
-
-## Check for formatting issues:
-```bash
-npm run prettier:check
-```
-
-## Testing
-
-We use Jest for unit testing.  Run tests with:
-
-```bash 
-npm run test
-```
-
-## Resources
-
-- [thirdweb SDK documentation](https://portal.thirdweb.com/typescript/v5)
-- [React components and hooks](https://portal.thirdweb.com/typescript/v5/react)
-- [thirdweb Dashboard](https://thirdweb.com/dashboard)
-
-## License
-
-This project is licensed under the MIT License.
-
-## Join our Discord!
-
-For any questions or suggestions, join our discord at [Creative](https://discord.gg/2JagPsCp3n).
+For further details, refer to the Dockerfiles and the `docker-compose.yml` file included in the project.
