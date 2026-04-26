@@ -4,6 +4,7 @@ import { LocalAccountSigner } from "@aa-sdk/core";
 import { alchemy, base } from "@account-kit/infra";
 import { createSmartWalletClient } from "@account-kit/wallet-client";
 import { serverLogger } from "@/lib/utils/logger";
+import { appendBuilderCode } from "@/lib/utils/builder-code";
 
 export const config = {
   policyId: process.env.NEXT_PUBLIC_ALCHEMY_PAYMASTER_POLICY_ID!,
@@ -224,7 +225,7 @@ export async function executeSwap(params: {
         const operation = await swapClient.sendUserOperation({
           uo: {
             target: call.to as Address,
-            data: call.data as Hex,
+            data: appendBuilderCode(call.data as Hex),
             value: BigInt(call.value || '0x0'),
           },
         });
@@ -264,7 +265,7 @@ export async function executeSwap(params: {
       const operation = await swapClient.sendUserOperation({
         uo: {
           target,
-          data: callData,
+          data: appendBuilderCode(callData),
           value,
         },
       });

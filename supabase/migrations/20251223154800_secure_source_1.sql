@@ -14,6 +14,7 @@ REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON public.source_1 FROM anon, authentica
 
 -- Create Policy 1: Allow public read access
 -- "true" means any row is visible to anyone with SELECT permissions
+DROP POLICY IF EXISTS "Enable read access for all users" ON public.source_1;
 CREATE POLICY "Enable read access for all users" ON public.source_1
     FOR SELECT
     USING (true);

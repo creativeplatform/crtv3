@@ -1,16 +1,17 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, type ReactNode } from "react";
 import { useParams } from "next/navigation";
+import { useInterval } from "@/lib/hooks/useInterval";
 import { Player } from "@/components/Player/Player";
 import { getDetailPlaybackSource } from "@/lib/hooks/livepeer/useDetailPlaybackSources";
 import { getStreamByPlaybackId } from "@/services/streams";
 import { LiveChat } from "@/components/Live/LiveChat";
 import { ClipCreator } from "@/components/Live/ClipCreator";
+import { DigitalTwinOverlay } from "@/components/Live/DigitalTwinOverlay";
 import { Src } from "@livepeer/react";
 import { useUser } from "@account-kit/react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle } from "lucide-react";
 import Link from "next/link";
 import {
@@ -24,8 +25,6 @@ import {
 import { Slash } from "lucide-react";
 import { logger } from '@/lib/utils/logger';
 
-
-import { LivestreamThumbnail } from "@/components/Live/LivestreamThumbnail";
 
 import { MeTokenShareButton } from "@/components/Market/MeTokenShareButton";
 import { TokenMarketData } from "@/lib/services/market";
@@ -42,6 +41,26 @@ interface WatchClientProps {
   storyIpRegistered?: boolean;
 }
 
+type StreamStatus =
+  | { kind: "loading" }
+  | { kind: "live"; sources: Src[] }
+  | { kind: "offline-temporary"; attempts: number }
+  | { kind: "offline-permanent" }
+  | { kind: "not-found" }
+  | { kind: "error"; userMessage: string };
+
+const MAX_OFFLINE_POLL_ATTEMPTS = 20; // 20 × 15s ≈ 5 minutes
+
+function sanitizeStreamError(err: unknown): string {
+  if (err instanceof Error) {
+    const msg = err.message.toLowerCase();
+    if (msg.includes("abort")) {
+      return "Request cancelled.";
+    }
+  }
+  return "We couldn't load this stream. Please try again in a moment.";
+}
+
 const STORY_SCAN_IP_BASE = process.env.NEXT_PUBLIC_STORY_NETWORK === "mainnet"
   ? "https://www.storyscan.io"
   : "https://aeneid.storyscan.io";
@@ -53,59 +72,49 @@ export default function WatchClient({ initialMarketData, tokenInfo, videoTitle, 
     : params.playbackId;
 
   const user = useUser();
-  const [playbackSources, setPlaybackSources] = useState<Src[] | null>(null);
+  const [status, setStatus] = useState<StreamStatus>({ kind: "loading" });
   const [streamData, setStreamData] = useState<import("@/services/streams").Stream | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isOffline, setIsOffline] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [jwt, setJwt] = useState<string | undefined>(undefined);
+  const [isChecking, setIsChecking] = useState(false);
 
-  useEffect(() => {
-    async function fetchPlaybackSources() {
-      if (!playbackId) {
-        setError("No playback ID provided");
-        setIsLoading(false);
-        return;
+  const fetchPlaybackSources = useCallback(async (isInitial = false) => {
+    if (!playbackId) {
+      setStatus({ kind: "error", userMessage: "No playback ID provided." });
+      return;
+    }
+
+    try {
+      if (isInitial) setStatus({ kind: "loading" });
+      setIsChecking(true);
+
+      // Parallel fetch: Livepeer sources + our persistent stream metadata.
+      // Using allSettled so a DB blip doesn't tank the whole classification.
+      const [sourcesResult, streamRecordResult] = await Promise.allSettled([
+        getDetailPlaybackSource(playbackId),
+        getStreamByPlaybackId(playbackId),
+      ]);
+
+      const sources = sourcesResult.status === "fulfilled" ? sourcesResult.value : null;
+      const streamRecord = streamRecordResult.status === "fulfilled"
+        ? streamRecordResult.value
+        : null;
+
+      if (sourcesResult.status === "rejected") {
+        logger.error("Playback source fetch failed:", sourcesResult.reason);
+      }
+      if (streamRecordResult.status === "rejected") {
+        logger.error("Stream DB fetch failed:", streamRecordResult.reason);
       }
 
-      try {
-        setIsLoading(true);
-        setError(null);
-        setIsOffline(false);
+      if (streamRecord) {
+        setStreamData(streamRecord as import("@/services/streams").Stream);
+      }
 
-        // Parallel fetch: Livepeer sources + Our persistent stream metadata
-        const [sources, streamRecord] = await Promise.all([
-          getDetailPlaybackSource(playbackId),
-          getStreamByPlaybackId(playbackId)
-        ]);
+      // Happy path — stream is live.
+      if (sources && sources.length > 0) {
+        setStatus({ kind: "live", sources });
 
-        if (streamRecord) {
-          setStreamData(streamRecord as import("@/services/streams").Stream);
-        }
-
-        if (!sources || sources.length === 0) {
-          // If we have a stream record, it just means it's offline, not necessarily an error
-          if (streamRecord) {
-            setIsOffline(true);
-            setPlaybackSources(null);
-          } else {
-            setError("No playback sources found for this stream");
-          }
-          return;
-        }
-
-        setIsOffline(false);
-        setPlaybackSources(sources);
-
-        // Fetch JWT for playback
         try {
-          // If no user logic is handled in the effect dependency, but here we can check explicitly
-          if (!user?.address) {
-            // We can either error here, or let the API return 401. 
-            // Let's rely on API for consistency or simple check.
-            // Actually, the API call happens below.
-          }
-
           const jwtRes = await fetch("/api/livepeer/sign-jwt", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -118,44 +127,54 @@ export default function WatchClient({ initialMarketData, tokenInfo, videoTitle, 
           if (jwtRes.ok) {
             const { token } = await jwtRes.json();
             setJwt(token);
-            // Clear any previous access errors
-            if (error && error.includes("required")) {
-              setError(null);
-            }
-            const errData = await jwtRes.json();
+          } else {
+            const errData = await jwtRes.json().catch(() => ({}));
             logger.warn("Failed to sign JWT for stream:", errData);
-
-            if (jwtRes.status === 401) {
-              setError("Authentication required: Please connect your wallet");
-            }
           }
         } catch (jwtErr) {
           logger.error("Error signing JWT:", jwtErr);
         }
-
-        // If we have a custom thumbnail, we could potentially pass it to the Player
-        // as a poster. The current Player component might need updating to accept 'poster'.
-        // For now, we mainly ensure we're confirming the stream exists.
-
-      } catch (err) {
-        logger.error("Error fetching playback sources:", err);
-        setError(err instanceof Error ? err.message : "Failed to load stream");
-      } finally {
-        setIsLoading(false);
+        return;
       }
+
+      // No sources — classify.
+      if (!streamRecord && !videoTitle) {
+        setStatus({ kind: "not-found" });
+        return;
+      }
+
+      // Stream known to us but currently not live — temporary, escalate after cap.
+      setStatus((prev) => {
+        const nextAttempts = prev.kind === "offline-temporary" ? prev.attempts + 1 : 1;
+        if (nextAttempts >= MAX_OFFLINE_POLL_ATTEMPTS) {
+          return { kind: "offline-permanent" };
+        }
+        return { kind: "offline-temporary", attempts: nextAttempts };
+      });
+    } catch (err) {
+      logger.error("Error fetching playback sources:", err);
+      setStatus({ kind: "error", userMessage: sanitizeStreamError(err) });
+    } finally {
+      setIsChecking(false);
     }
+  }, [playbackId, user?.address, videoTitle]);
 
-    fetchPlaybackSources();
-  }, [playbackId, user?.address]);
+  // Initial fetch
+  useEffect(() => {
+    fetchPlaybackSources(true);
+  }, [fetchPlaybackSources]);
 
-  // Generate a consistent sessionId based on playbackId
-  // This ensures all viewers of the same stream are in the same chat session
+  // Auto-poll every 15 seconds only while the stream is temporarily offline.
+  useInterval(
+    useCallback(() => fetchPlaybackSources(false), [fetchPlaybackSources]),
+    status.kind === "offline-temporary" ? 15000 : null
+  );
+
+  // Generate a consistent sessionId based on playbackId so viewers share the same chat session.
   const sessionId = playbackId ? `session-${playbackId}` : "";
-
-  // Use playbackId as streamId for LiveChat
-  // Note: This means viewers and creators need to use the same identifier
-  // If creators use their address, we may need to adjust this later
   const streamId = playbackId || "";
+
+  const showThumbnail = !!streamData?.thumbnail_url && status.kind !== "not-found";
 
   return (
     <div className="min-h-screen p-6">
@@ -220,56 +239,114 @@ export default function WatchClient({ initialMarketData, tokenInfo, videoTitle, 
         )}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Video Player Section */}
-          <div className="lg:col-span-2">
-            {isLoading ? (
+          <div className="lg:col-span-2 relative">
+            {streamData?.creator_id && (
+              <DigitalTwinOverlay creatorAddress={streamData.creator_id} />
+            )}
+            {status.kind === "loading" && (
               <div className="aspect-video bg-black rounded-lg flex items-center justify-center">
                 <div className="flex flex-col items-center space-y-4">
                   <Skeleton className="h-12 w-12 rounded-full" />
                   <Skeleton className="h-4 w-32" />
                 </div>
               </div>
-            ) : error ? (
-              <Alert variant="destructive" className="aspect-video flex items-center justify-center">
-                <AlertCircle className="h-4 w-4" />
-                <AlertTitle>Error</AlertTitle>
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
-            ) : isOffline ? (
-              <div className="aspect-video bg-gray-900 rounded-lg overflow-hidden flex flex-col items-center justify-center relative group">
-                {/* Thumbnail Background */}
-                {streamData?.thumbnail_url && (
-                  <div className="absolute inset-0 z-0 opacity-50">
-                    <img
-                      src={streamData.thumbnail_url}
-                      alt="Stream Offline"
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                )}
+            )}
 
-                <div className="z-10 flex flex-col items-center gap-4 p-6 bg-black/60 rounded-xl backdrop-blur-sm">
-                  <div className="flex flex-col items-center gap-2 text-center">
-                    <AlertCircle className="h-10 w-10 text-gray-400" />
-                    <h3 className="text-xl font-bold text-white">Stream is Offline</h3>
-                    <p className="text-gray-300">The broadcaster is not currently live.</p>
-                  </div>
-                  <button
-                    onClick={() => window.location.reload()} // Simple reload for now, or re-trigger fetch
-                    className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-md transition-colors font-medium border border-white/20"
-                  >
-                    Check Again
-                  </button>
-                </div>
-              </div>
-            ) : playbackSources ? (
+            {status.kind === "live" && (
               <div className="aspect-video bg-black rounded-lg overflow-hidden">
                 <Player
-                  src={playbackSources}
+                  src={status.sources}
                   title={videoTitle || streamData?.name || "Live Stream"}
                   jwt={jwt}
                 />
               </div>
-            ) : null}
+            )}
+
+            {status.kind === "offline-temporary" && (
+              <FallbackShell showThumbnail={showThumbnail} thumbnailUrl={streamData?.thumbnail_url}>
+                <AlertCircle className="h-10 w-10 text-gray-400" />
+                <h3 className="text-xl font-bold text-white">Stream is Offline</h3>
+                <p className="text-gray-300">The broadcaster will be back soon.</p>
+                <p className="text-xs text-gray-500 mt-1">Auto-checking every 15 seconds...</p>
+                <div className="flex flex-wrap items-center justify-center gap-2 mt-2">
+                  <button
+                    onClick={() => fetchPlaybackSources(false)}
+                    disabled={isChecking}
+                    className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-md transition-colors font-medium border border-white/20 disabled:opacity-50"
+                  >
+                    {isChecking ? "Checking..." : "Check Now"}
+                  </button>
+                  <Link
+                    href="/discover"
+                    className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-md transition-colors font-medium border border-white/20"
+                  >
+                    Browse Live Streams
+                  </Link>
+                </div>
+              </FallbackShell>
+            )}
+
+            {status.kind === "offline-permanent" && (
+              <FallbackShell showThumbnail={showThumbnail} thumbnailUrl={streamData?.thumbnail_url}>
+                <AlertCircle className="h-10 w-10 text-gray-400" />
+                <h3 className="text-xl font-bold text-white">Stream has ended</h3>
+                <p className="text-gray-300">This broadcast is no longer live.</p>
+                <p className="text-xs text-gray-500 mt-1">Catch the next one on Discover.</p>
+                <div className="flex flex-wrap items-center justify-center gap-2 mt-2">
+                  <Link
+                    href="/discover"
+                    className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-md transition-colors font-medium border border-white/20"
+                  >
+                    Browse Live Streams
+                  </Link>
+                </div>
+              </FallbackShell>
+            )}
+
+            {status.kind === "not-found" && (
+              <FallbackShell showThumbnail={false}>
+                <AlertCircle className="h-10 w-10 text-gray-400" />
+                <h3 className="text-xl font-bold text-white">Stream not found</h3>
+                <p className="text-gray-300">This link may be incorrect or the stream was removed.</p>
+                <div className="flex flex-wrap items-center justify-center gap-2 mt-2">
+                  <Link
+                    href="/"
+                    className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-md transition-colors font-medium border border-white/20"
+                  >
+                    Back to Home
+                  </Link>
+                  <Link
+                    href="/discover"
+                    className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-md transition-colors font-medium border border-white/20"
+                  >
+                    Browse Live Streams
+                  </Link>
+                </div>
+              </FallbackShell>
+            )}
+
+            {status.kind === "error" && (
+              <FallbackShell showThumbnail={showThumbnail} thumbnailUrl={streamData?.thumbnail_url}>
+                <AlertCircle className="h-10 w-10 text-red-400" />
+                <h3 className="text-xl font-bold text-white">Unable to load stream</h3>
+                <p className="text-gray-300">{status.userMessage}</p>
+                <div className="flex flex-wrap items-center justify-center gap-2 mt-2">
+                  <button
+                    onClick={() => fetchPlaybackSources(true)}
+                    disabled={isChecking}
+                    className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-md transition-colors font-medium border border-white/20 disabled:opacity-50"
+                  >
+                    {isChecking ? "Trying..." : "Try again"}
+                  </button>
+                  <Link
+                    href="/discover"
+                    className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-md transition-colors font-medium border border-white/20"
+                  >
+                    Browse Live Streams
+                  </Link>
+                </div>
+              </FallbackShell>
+            )}
           </div>
 
           {/* Live Chat Section */}
@@ -278,16 +355,11 @@ export default function WatchClient({ initialMarketData, tokenInfo, videoTitle, 
               <LiveChat
                 streamId={streamId}
                 sessionId={sessionId}
-                creatorAddress={null} // We can enhance this later to fetch creator address from stream data
+                creatorAddress={null}
               />
             ) : (
-              <div className="border rounded-lg p-4">
-                <Alert>
-                  <AlertCircle className="h-4 w-4" />
-                  <AlertDescription>
-                    Loading chat...
-                  </AlertDescription>
-                </Alert>
+              <div className="border rounded-lg p-4 text-sm text-muted-foreground">
+                Loading chat...
               </div>
             )}
           </div>
@@ -299,6 +371,9 @@ export default function WatchClient({ initialMarketData, tokenInfo, videoTitle, 
             <ClipCreator
               playbackId={playbackId}
               sessionId={sessionId}
+              allowClipping={streamData?.allow_clipping ?? true}
+              parentStoryIpId={streamData?.story_ip_id ?? storyIpId ?? null}
+              parentCommercialRevShare={streamData?.story_commercial_rev_share ?? null}
             />
           </div>
         )}
@@ -307,3 +382,29 @@ export default function WatchClient({ initialMarketData, tokenInfo, videoTitle, 
   );
 }
 
+function FallbackShell({
+  children,
+  showThumbnail,
+  thumbnailUrl,
+}: {
+  children: ReactNode;
+  showThumbnail: boolean;
+  thumbnailUrl?: string | null;
+}) {
+  return (
+    <div className="aspect-video bg-gray-900 rounded-lg overflow-hidden flex flex-col items-center justify-center relative">
+      {showThumbnail && thumbnailUrl && (
+        <div className="absolute inset-0 z-0 opacity-50">
+          <img
+            src={thumbnailUrl}
+            alt=""
+            className="w-full h-full object-cover"
+          />
+        </div>
+      )}
+      <div className="z-10 flex flex-col items-center gap-2 p-6 bg-black/60 rounded-xl backdrop-blur-sm text-center max-w-md">
+        {children}
+      </div>
+    </div>
+  );
+}

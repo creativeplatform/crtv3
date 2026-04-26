@@ -14,6 +14,7 @@ import { useGasSponsorship } from '@/lib/hooks/wallet/useGasSponsorship';
 import { AlchemySwapWidget } from '@/components/wallet/swap/AlchemySwapWidget';
 import { Dialog, DialogContent, DialogTrigger, DialogTitle } from '@/components/ui/dialog';
 import { logger } from '@/lib/utils/logger';
+import { appendBuilderCode } from "@/lib/utils/builder-code";
 
 
 export function CreativeBankTab() {
@@ -89,7 +90,7 @@ export function CreativeBankTab() {
 
             const uoCallData = {
                 target: BASE_TOKENS.USDC as Address,
-                data: data,
+                data: appendBuilderCode(data),
                 value: 0n,
             };
 

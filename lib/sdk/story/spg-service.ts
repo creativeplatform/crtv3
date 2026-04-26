@@ -316,8 +316,91 @@ export async function mintAndRegisterIp(
 }
 
 /**
+ * Parameters for minting and registering a derivative IP Asset
+ */
+export interface MintAndRegisterDerivativeParams {
+  collectionAddress: Address; // SPG NFT collection address for the derivative (clip)
+  recipient: Address;         // Address to receive the minted derivative NFT
+  parentIpIds: Address[];     // Parent IP Asset IDs (the source stream)
+  licenseTermsIds: string[];  // License terms on the parent that permit derivatives
+  metadataURI?: string;
+  metadataHash?: string;
+  allowDuplicates?: boolean;
+}
+
+export interface MintAndRegisterDerivativeResult extends MintAndRegisterResult {
+  parentIpIds: Address[];
+}
+
+/**
+ * Mint an NFT, register it as a derivative IP Asset of one or more parents,
+ * inheriting their PIL terms (e.g. commercial revenue share flows back to the parent).
+ */
+export async function mintAndRegisterDerivative(
+  client: StoryClient,
+  params: MintAndRegisterDerivativeParams
+): Promise<MintAndRegisterDerivativeResult> {
+  if (!params.parentIpIds.length) {
+    throw new Error("mintAndRegisterDerivative requires at least one parent IP ID");
+  }
+  if (!params.licenseTermsIds.length) {
+    throw new Error("mintAndRegisterDerivative requires at least one license terms ID");
+  }
+
+  try {
+    const result = await client.ipAsset.mintAndRegisterIpAndMakeDerivative({
+      spgNftContract: params.collectionAddress,
+      recipient: params.recipient,
+      derivData: {
+        parentIpIds: params.parentIpIds,
+        licenseTermsIds: params.licenseTermsIds.map((id) => BigInt(id)),
+      },
+      ipMetadata: params.metadataURI
+        ? {
+            ipMetadataURI: params.metadataURI,
+            ...(params.metadataHash
+              ? { ipMetadataHash: params.metadataHash as `0x${string}` }
+              : {}),
+          }
+        : undefined,
+      allowDuplicates: params.allowDuplicates ?? true,
+    });
+
+    if (!result.txHash) {
+      throw new Error("Derivative mint transaction hash not returned");
+    }
+
+    const tokenId = result.tokenId?.toString();
+    const ipId = result.ipId;
+
+    if (!tokenId) {
+      throw new Error(
+        "Token ID not returned from derivative mint operation. Transaction hash: " + result.txHash
+      );
+    }
+    if (!ipId) {
+      throw new Error(
+        "IP ID not returned from derivative mint operation. Transaction hash: " + result.txHash
+      );
+    }
+
+    return {
+      tokenId,
+      ipId,
+      txHash: result.txHash,
+      parentIpIds: params.parentIpIds,
+    };
+  } catch (error) {
+    serverLogger.error("Failed to mint and register derivative IP Asset:", error);
+    throw new Error(
+      `Derivative mint failed: ${error instanceof Error ? error.message : "Unknown error"}`
+    );
+  }
+}
+
+/**
  * Mint an NFT, register it as an IP Asset, and attach PIL terms in one transaction
- * 
+ *
  * @param client - Story Protocol client instance
  * @param params - Mint, register, and license parameters
  * @returns Token ID, IP ID, license terms IDs, and transaction hash

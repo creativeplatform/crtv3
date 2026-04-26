@@ -22,6 +22,16 @@ interface ShareDialogProps {
   videoTitle: string;
   videoId: string;
   playbackId?: string;
+  /** Override the share URL (skips video lookup). Useful for live streams. */
+  shareUrlOverride?: string;
+  /** Override the title (skips video lookup). */
+  titleOverride?: string;
+  /** Override the thumbnail (skips video lookup). */
+  thumbnailUrlOverride?: string;
+  /** Custom dialog title (defaults to "Share Video"). */
+  dialogTitle?: string;
+  /** Verb in the share text (defaults to "video"). */
+  shareNoun?: string;
 }
 
 export function ShareDialog({
@@ -30,21 +40,37 @@ export function ShareDialog({
   videoTitle,
   videoId,
   playbackId,
+  shareUrlOverride,
+  titleOverride,
+  thumbnailUrlOverride,
+  dialogTitle = "Share Video",
+  shareNoun = "video",
 }: ShareDialogProps) {
   const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null);
   const [isLoadingThumbnail, setIsLoadingThumbnail] = useState(true);
   const [shareUrl, setShareUrl] = useState<string>("");
 
+  const effectiveTitle = titleOverride ?? videoTitle;
   // Remove .mp4 extension from title if present
-  const cleanTitle = videoTitle.endsWith('.mp4') ? videoTitle.slice(0, -4) : videoTitle;
+  const cleanTitle = effectiveTitle.endsWith('.mp4') ? effectiveTitle.slice(0, -4) : effectiveTitle;
 
   useEffect(() => {
     if (!open) return;
 
     // Get the full URL for sharing
     const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
-    const videoUrl = `${baseUrl}/discover/${videoId}`;
-    setShareUrl(videoUrl);
+    if (shareUrlOverride) {
+      // Allow callers to pass either an absolute URL or a path; resolve a path
+      // against the current origin so social intent links always work.
+      setShareUrl(
+        shareUrlOverride.startsWith("http")
+          ? shareUrlOverride
+          : `${baseUrl}${shareUrlOverride}`
+      );
+    } else {
+      const videoUrl = `${baseUrl}/discover/${videoId}`;
+      setShareUrl(videoUrl);
+    }
 
     // Fetch thumbnail URL
     async function fetchThumbnail() {
@@ -52,14 +78,16 @@ export function ShareDialog({
       try {
         let thumbnail: string | null = null;
 
-        // First, try to get thumbnail from database
-        if (playbackId) {
+        // Caller-provided thumbnail wins.
+        if (thumbnailUrlOverride && thumbnailUrlOverride.trim() !== "") {
+          thumbnail = convertFailingGateway(thumbnailUrlOverride);
+        } else if (!shareUrlOverride && playbackId) {
+          // Standard video flow: try DB then Livepeer VTT.
           const dbAsset = await fetchVideoAssetByPlaybackId(playbackId);
           if (dbAsset && (dbAsset as any).thumbnail_url && (dbAsset as any).thumbnail_url.trim() !== "") {
             thumbnail = convertFailingGateway((dbAsset as any).thumbnail_url);
           }
 
-          // If no database thumbnail, try Livepeer VTT thumbnails
           if (!thumbnail) {
             const url = await getThumbnailUrl(playbackId);
             thumbnail = url ? convertFailingGateway(url) : null;
@@ -81,7 +109,7 @@ export function ShareDialog({
     }
 
     fetchThumbnail();
-  }, [open, videoId, playbackId]);
+  }, [open, videoId, playbackId, shareUrlOverride, thumbnailUrlOverride]);
 
   const handleShare = async (platform: "x" | "farcaster" | "bluesky") => {
     const fullThumbnailUrl = thumbnailUrl
@@ -90,7 +118,7 @@ export function ShareDialog({
         : `${typeof window !== "undefined" ? window.location.origin : ""}${thumbnailUrl}`
       : `${typeof window !== "undefined" ? window.location.origin : ""}/Creative_TV.png`;
 
-    const text = `Check out this video: ${cleanTitle}`;
+    const text = `Check out this ${shareNoun}: ${cleanTitle}`;
 
     switch (platform) {
       case "x": {
@@ -134,7 +162,7 @@ export function ShareDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
-          <DialogTitle>Share Video</DialogTitle>
+          <DialogTitle>{dialogTitle}</DialogTitle>
           <DialogDescription>
             Share "{cleanTitle}" on your favorite platform
           </DialogDescription>

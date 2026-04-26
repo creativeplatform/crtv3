@@ -1,6 +1,9 @@
 -- Add full-text search capabilities to video_assets table
 -- This migration adds tsvector columns and indexes for fast text search
 
+-- Required before gin_trgm_ops indexes (Supabase: enable in Dashboard or here)
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+
 -- Add tsvector column for full-text search
 ALTER TABLE video_assets 
 ADD COLUMN IF NOT EXISTS search_vector tsvector 
@@ -20,9 +23,6 @@ ON video_assets USING gin (title gin_trgm_ops);
 
 CREATE INDEX IF NOT EXISTS idx_video_assets_description_search 
 ON video_assets USING gin (description gin_trgm_ops);
-
--- Enable the pg_trgm extension if not already enabled (for trigram similarity search)
-CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
 -- Create a helper function for text search
 CREATE OR REPLACE FUNCTION search_video_assets(

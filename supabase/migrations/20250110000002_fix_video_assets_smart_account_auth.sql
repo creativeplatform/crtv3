@@ -11,6 +11,9 @@
 -- Drop the existing restrictive INSERT policy
 DROP POLICY IF EXISTS "Creators can insert their own video assets" ON video_assets;
 
+-- Idempotent: remote may already have these policies from a prior apply
+DROP POLICY IF EXISTS "Service role can insert video assets" ON video_assets;
+
 -- Create a new policy that allows service role to insert
 -- (Service role operations bypass RLS anyway, but this documents intent)
 CREATE POLICY "Service role can insert video assets" ON video_assets
@@ -33,6 +36,7 @@ CREATE POLICY "Anonymous read access for published video assets" ON video_assets
 
 -- Update the UPDATE policy to allow service role
 DROP POLICY IF EXISTS "Creators can update their own video assets" ON video_assets;
+DROP POLICY IF EXISTS "Service role can update video assets" ON video_assets;
 CREATE POLICY "Service role can update video assets" ON video_assets
   FOR UPDATE 
   TO service_role
@@ -41,6 +45,7 @@ CREATE POLICY "Service role can update video assets" ON video_assets
 
 -- Keep the DELETE policy restrictive (only service role)
 DROP POLICY IF EXISTS "Creators can delete their own video assets" ON video_assets;
+DROP POLICY IF EXISTS "Service role can delete video assets" ON video_assets;
 CREATE POLICY "Service role can delete video assets" ON video_assets
   FOR DELETE 
   TO service_role

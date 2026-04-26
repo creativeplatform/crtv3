@@ -14,6 +14,7 @@ import { getHubVaultAddress } from '@/lib/utils/metokenSubscriptionUtils';
 import { DaiFundingOptions } from '@/components/wallet/funding/DaiFundingOptions';
 import { parseBundlerError, shouldRetryError } from '@/lib/utils/bundlerErrorParser';
 import { logger } from '@/lib/utils/logger';
+import { appendBuilderCode } from "@/lib/utils/builder-code";
 
 interface MeTokenSubscriptionProps {
   meToken: MeTokenData;
@@ -192,7 +193,7 @@ export function MeTokenSubscription({ meToken, onSubscriptionSuccess }: MeTokenS
       const approvePromise = client.sendUserOperation({
         uo: {
           target: daiAddress,
-          data: approveData,
+          data: appendBuilderCode(approveData),
           value: BigInt(0),
         },
       });
@@ -492,7 +493,7 @@ export function MeTokenSubscription({ meToken, onSubscriptionSuccess }: MeTokenS
           const approvePromise = client.sendUserOperation({
             uo: {
               target: daiAddress,
-              data: approveData,
+              data: appendBuilderCode(approveData),
               value: BigInt(0),
             },
           });
@@ -655,7 +656,7 @@ export function MeTokenSubscription({ meToken, onSubscriptionSuccess }: MeTokenS
           const mintOperation = await client.sendUserOperation({
             uo: {
               target: diamondAddress,
-              data: mintCalldata,
+              data: appendBuilderCode(mintCalldata),
               value: BigInt(0),
             },
           });
@@ -741,7 +742,7 @@ export function MeTokenSubscription({ meToken, onSubscriptionSuccess }: MeTokenS
               const freshApproveOperation = await client.sendUserOperation({
                 uo: {
                   target: daiAddress,
-                  data: approveData,
+                  data: appendBuilderCode(approveData),
                   value: BigInt(0),
                 },
               });

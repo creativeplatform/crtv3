@@ -46,6 +46,7 @@ CREATE INDEX IF NOT EXISTS idx_video_collaborators_collaborator_address
 ALTER TABLE video_collaborators ENABLE ROW LEVEL SECURITY;
 
 -- Policy: Users can view collaborators for videos they own
+DROP POLICY IF EXISTS "Users can view collaborators for their videos" ON video_collaborators;
 CREATE POLICY "Users can view collaborators for their videos"
   ON video_collaborators
   FOR SELECT
@@ -58,6 +59,7 @@ CREATE POLICY "Users can view collaborators for their videos"
   );
 
 -- Policy: Users can insert collaborators for their videos
+DROP POLICY IF EXISTS "Users can insert collaborators for their videos" ON video_collaborators;
 CREATE POLICY "Users can insert collaborators for their videos"
   ON video_collaborators
   FOR INSERT
@@ -70,6 +72,7 @@ CREATE POLICY "Users can insert collaborators for their videos"
   );
 
 -- Policy: Users can update collaborators for their videos
+DROP POLICY IF EXISTS "Users can update collaborators for their videos" ON video_collaborators;
 CREATE POLICY "Users can update collaborators for their videos"
   ON video_collaborators
   FOR UPDATE
@@ -82,6 +85,7 @@ CREATE POLICY "Users can update collaborators for their videos"
   );
 
 -- Policy: Users can delete collaborators for their videos
+DROP POLICY IF EXISTS "Users can delete collaborators for their videos" ON video_collaborators;
 CREATE POLICY "Users can delete collaborators for their videos"
   ON video_collaborators
   FOR DELETE

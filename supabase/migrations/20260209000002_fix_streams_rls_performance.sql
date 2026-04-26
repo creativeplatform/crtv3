@@ -44,18 +44,21 @@ WHERE creator_id <> lower(creator_id);
 
 -- Recreate policies: TO authenticated only; no IS NULL (service_role bypasses RLS for server ops).
 -- Scalar subqueries: (SELECT auth.jwt()) evaluated once per statement; index on creator_id used.
+DROP POLICY IF EXISTS "Creators can view their own stream key" ON public.streams;
 CREATE POLICY "Creators can view their own stream key"
   ON public.streams
   FOR SELECT
   TO authenticated
   USING (creator_id = lower((SELECT auth.jwt()) ->> 'sub'));
 
+DROP POLICY IF EXISTS "Creators can insert their own stream" ON public.streams;
 CREATE POLICY "Creators can insert their own stream"
   ON public.streams
   FOR INSERT
   TO authenticated
   WITH CHECK (creator_id = lower((SELECT auth.jwt()) ->> 'sub'));
 
+DROP POLICY IF EXISTS "Creators can update their own stream" ON public.streams;
 CREATE POLICY "Creators can update their own stream"
   ON public.streams
   FOR UPDATE
@@ -63,6 +66,7 @@ CREATE POLICY "Creators can update their own stream"
   USING (creator_id = lower((SELECT auth.jwt()) ->> 'sub'))
   WITH CHECK (creator_id = lower((SELECT auth.jwt()) ->> 'sub'));
 
+DROP POLICY IF EXISTS "Creators can delete their own stream" ON public.streams;
 CREATE POLICY "Creators can delete their own stream"
   ON public.streams
   FOR DELETE

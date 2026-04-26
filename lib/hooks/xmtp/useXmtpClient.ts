@@ -33,6 +33,13 @@ const MAX_RETRIES = 3;
 const INITIAL_RETRY_DELAY_MS = 2000; // 2 seconds
 const MAX_RETRY_DELAY_MS = 10000; // 10 seconds
 
+// Must match XMTP_ENV used by scripts/xmtp-moderation-worker.ts.
+// Browser SDK defaults to 'dev' if omitted, which silently isolates users
+// from the production network and from the moderation bot's inbox.
+type XmtpEnv = 'local' | 'dev' | 'production';
+const XMTP_ENV: XmtpEnv =
+  (process.env.NEXT_PUBLIC_XMTP_ENV as XmtpEnv | undefined) ?? 'production';
+
 /**
  * Hook to initialize and manage XMTP client
  * 
@@ -149,6 +156,7 @@ export function useXmtpClient(): UseXmtpClientReturn {
         hasWalletAddress: !!walletAddress,
         hasSignMessage: !!signMessage,
         hasAccountClient: !!accountClient,
+        xmtpEnv: XMTP_ENV,
         attempt,
         retryCount: attempt,
       });
@@ -204,10 +212,10 @@ export function useXmtpClient(): UseXmtpClientReturn {
         });
       });
       
-      // Create XMTP client with timeout and abort signal
+      // Create XMTP client with timeout and abort signal.
+      // dbEncryptionKey is a no-op in the browser SDK (OPFS storage is not encrypted).
       const initPromise = Client.create(signer, {
-        // Note: dbEncryptionKey is not used for encryption in browser environments
-        // but can be provided for additional security
+        env: XMTP_ENV,
       });
       
       // Check if already aborted
@@ -248,10 +256,11 @@ export function useXmtpClient(): UseXmtpClientReturn {
                          errorMessage.includes('wasm') ||
                          errorMessage.includes('WASM');
 
-      // Only log errors in development or if they're critical
-      if (isDev || errorMessage.includes('wasm') || errorMessage.includes('WASM')) {
-        logger.error(`Error initializing XMTP client (attempt ${attempt + 1}):`, err);
-      }
+      // Always log init errors so production outages are diagnosable from real-user logs.
+      logger.error(`Error initializing XMTP client (attempt ${attempt + 1}):`, {
+        error: err,
+        xmtpEnv: XMTP_ENV,
+      });
 
       // Retry logic for retryable errors
       if (isRetryable && attempt < MAX_RETRIES) {

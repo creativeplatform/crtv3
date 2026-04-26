@@ -12,6 +12,7 @@ import { useSmartAccountClient, useChain } from '@account-kit/react';
 import { useToast } from '@/components/ui/use-toast';
 import { DaiFundingOptions } from '@/components/wallet/funding/DaiFundingOptions';
 import { logger } from '@/lib/utils/logger';
+import { appendBuilderCode } from "@/lib/utils/builder-code";
 
 // Contract addresses and ABIs
 const METOKEN_CONTRACTS = {
@@ -164,11 +165,11 @@ export function AlchemyMeTokenCreator({ onMeTokenCreated }: AlchemyMeTokenCreato
       const approveOperation = await client.sendUserOperation({
         uo: {
           target: METOKEN_CONTRACTS.DAI,
-          data: encodeFunctionData({
+          data: appendBuilderCode(encodeFunctionData({
             abi: ERC20_ABI,
             functionName: 'approve',
             args: [METOKEN_CONTRACTS.DIAMOND, depositAmount],
-          }),
+          })),
           value: BigInt(0),
         },
       });
@@ -192,11 +193,11 @@ export function AlchemyMeTokenCreator({ onMeTokenCreated }: AlchemyMeTokenCreato
       const createOperation = await client.sendUserOperation({
         uo: {
           target: METOKEN_CONTRACTS.DIAMOND,
-          data: encodeFunctionData({
+          data: appendBuilderCode(encodeFunctionData({
             abi: DIAMOND_ABI,
             functionName: 'subscribe',
             args: [name, symbol, BigInt(hubId), depositAmount],
-          }),
+          })),
           value: BigInt(0),
         },
       });

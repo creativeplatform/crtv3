@@ -99,6 +99,7 @@ import {
 } from "@account-kit/smart-contracts/experimental";
 import { parseEther, type Address, type Hex, encodeFunctionData, parseAbi, parseUnits, formatUnits, erc20Abi } from "viem";
 import { logger } from "@/lib/utils/logger";
+import { appendBuilderCode } from "@/lib/utils/builder-code";
 import { useToast } from "@/components/ui/use-toast";
 import { ToastAction } from "@/components/ui/toast";
 import { USDC_TOKEN_ADDRESSES, USDC_TOKEN_DECIMALS } from "@/lib/contracts/USDCToken";
@@ -590,7 +591,7 @@ export function AccountDropdown() {
         operation = await client!.sendUserOperation({
           uo: {
             target: selectedNFT.lockAddress as Address,
-            data: transferCalldata as Hex,
+            data: appendBuilderCode(transferCalldata as Hex),
             value: BigInt(0), // No native value for NFT transfers
           },
         });
@@ -624,7 +625,7 @@ export function AccountDropdown() {
           operation = await client!.sendUserOperation({
             uo: {
               target: recipientAddress as `0x${string}`,
-              data: "0x" as Hex,
+              data: appendBuilderCode("0x" as Hex),
               value: valueInWei,
             },
           });
@@ -660,7 +661,7 @@ export function AccountDropdown() {
           operation = await client!.sendUserOperation({
             uo: {
               target: tokenInfo.address as Address,
-              data: transferCalldata as Hex,
+              data: appendBuilderCode(transferCalldata as Hex),
               value: BigInt(0), // No native value for ERC-20 transfers
             },
           });

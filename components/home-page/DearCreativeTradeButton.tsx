@@ -21,6 +21,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils/utils";
 import Image from "next/image";
 import { logger } from '@/lib/utils/logger';
+import { appendBuilderCode } from "@/lib/utils/builder-code";
 
 
 const DEARCRTV_ADDRESS = "0x81ced3c6e7058c1fe8d9b6c5a2435a65a4593292";
@@ -134,7 +135,7 @@ export function DearCreativeTradeButton() {
             const result = await client.sendUserOperation({
                 uo: {
                     target: UNIVERSAL_ROUTER_ADDRESS,
-                    data: data,
+                    data: appendBuilderCode(data),
                     value: txValue,
                 }
             });

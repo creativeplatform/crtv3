@@ -1,6 +1,13 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { createMultistreamTarget } from "@/services/video-assets";
 import type { MultistreamTarget } from "@/services/video-assets";
 import { z } from "zod";
@@ -22,7 +29,6 @@ const PLATFORMS = [
     value: "twitter",
     rtmp: "rtmp://media.rtmp.twitter.com:1935/rtmp/",
   },
-  // Add more as needed
 ];
 
 const multistreamTargetSchema = z.object({
@@ -43,10 +49,28 @@ function MultistreamTargetsForm({
   streamId,
 }: MultistreamTargetsFormProps) {
   const [form, setForm] = useState({ name: "", ingestUrl: "", streamKey: "" });
+  const [selectedPlatform, setSelectedPlatform] = useState<string>("");
   const [errors, setErrors] = useState<{ [k: string]: string }>({});
   const [isLoading, setIsLoading] = useState(false);
   const [success, setSuccess] = useState("");
   const [apiError, setApiError] = useState("");
+
+  function handlePlatformChange(value: string) {
+    setSelectedPlatform(value);
+    if (value === "custom") {
+      setForm(prev => ({ ...prev, name: "", ingestUrl: "" }));
+    } else {
+      const platform = PLATFORMS.find(p => p.value === value);
+      if (platform) {
+        setForm(prev => ({
+          ...prev,
+          name: platform.label,
+          ingestUrl: platform.rtmp,
+        }));
+      }
+    }
+    setErrors({});
+  }
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
@@ -77,10 +101,13 @@ function MultistreamTargetsForm({
       onTargetAdded({ ...apiResult.target, url });
       setSuccess("Target added successfully.");
       setForm({ name: "", ingestUrl: "", streamKey: "" });
+      setSelectedPlatform("");
     } else {
       setApiError("Failed to add target. Please try again.");
     }
   }
+
+  const isCustom = selectedPlatform === "custom" || selectedPlatform === "";
 
   return (
     <form className="flex flex-col gap-2" onSubmit={handleAddTarget}>
@@ -89,19 +116,34 @@ function MultistreamTargetsForm({
           Changes to multistream targets will apply to the next session.
         </div>
       )}
-      <Input
-        name="name"
-        placeholder="Target Name (optional)"
-        value={form.name}
-        onChange={handleChange}
-        className=""
-      />
+      <Select value={selectedPlatform} onValueChange={handlePlatformChange}>
+        <SelectTrigger className="w-full">
+          <SelectValue placeholder="Select a platform or enter custom URL" />
+        </SelectTrigger>
+        <SelectContent>
+          {PLATFORMS.map(p => (
+            <SelectItem key={p.value} value={p.value}>
+              {p.label}
+            </SelectItem>
+          ))}
+          <SelectItem value="custom">Custom RTMP URL</SelectItem>
+        </SelectContent>
+      </Select>
+      {isCustom && (
+        <Input
+          name="name"
+          placeholder="Target Name (optional)"
+          value={form.name}
+          onChange={handleChange}
+        />
+      )}
       <Input
         name="ingestUrl"
         placeholder="Ingest URL (e.g. rtmp://...)"
         value={form.ingestUrl}
         onChange={handleChange}
         className={errors.ingestUrl ? "border-red-500" : ""}
+        readOnly={!isCustom}
       />
       {errors.ingestUrl && (
         <div className="text-xs text-red-500">{errors.ingestUrl}</div>

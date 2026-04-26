@@ -7,28 +7,34 @@ ALTER TABLE video_assets ENABLE ROW LEVEL SECURITY;
 -- Create RLS policies for video_assets table
 
 -- Policy 1: Anyone can view published video assets
+DROP POLICY IF EXISTS "Public read access for published video assets" ON video_assets;
 CREATE POLICY "Public read access for published video assets" ON video_assets
   FOR SELECT USING (status = 'published');
 
 -- Policy 2: Creators can view their own video assets (all statuses)
+DROP POLICY IF EXISTS "Creators can view their own video assets" ON video_assets;
 CREATE POLICY "Creators can view their own video assets" ON video_assets
   FOR SELECT USING (auth.jwt() ->> 'sub' = creator_id);
 
 -- Policy 3: Creators can insert their own video assets
+DROP POLICY IF EXISTS "Creators can insert their own video assets" ON video_assets;
 CREATE POLICY "Creators can insert their own video assets" ON video_assets
   FOR INSERT WITH CHECK (auth.jwt() ->> 'sub' = creator_id);
 
 -- Policy 4: Creators can update their own video assets
+DROP POLICY IF EXISTS "Creators can update their own video assets" ON video_assets;
 CREATE POLICY "Creators can update their own video assets" ON video_assets
   FOR UPDATE USING (auth.jwt() ->> 'sub' = creator_id);
 
 -- Policy 5: Creators can delete their own video assets
+DROP POLICY IF EXISTS "Creators can delete their own video assets" ON video_assets;
 CREATE POLICY "Creators can delete their own video assets" ON video_assets
   FOR DELETE USING (auth.jwt() ->> 'sub' = creator_id);
 
 -- Add trigger for updated_at timestamp on video_assets
-CREATE TRIGGER update_video_assets_updated_at 
-  BEFORE UPDATE ON video_assets 
+DROP TRIGGER IF EXISTS update_video_assets_updated_at ON video_assets;
+CREATE TRIGGER update_video_assets_updated_at
+  BEFORE UPDATE ON video_assets
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- Create index for better performance on creator_id lookups

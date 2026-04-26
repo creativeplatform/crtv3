@@ -40,6 +40,7 @@ import { type Address, type Hex, encodeFunctionData, parseAbi, parseUnits, forma
 import { USDC_TOKEN_ADDRESSES, USDC_TOKEN_DECIMALS } from "@/lib/contracts/USDCToken";
 import { DAI_TOKEN_ADDRESSES, DAI_TOKEN_DECIMALS } from "@/lib/contracts/DAIToken";
 import { logger } from '@/lib/utils/logger';
+import { appendBuilderCode } from "@/lib/utils/builder-code";
 
 
 // Token configuration
@@ -172,7 +173,7 @@ export default function SendTransaction() {
         operation = await client!.sendUserOperation({
           uo: {
             target: recipient as Address,
-            data: "0x" as Hex,
+            data: appendBuilderCode("0x" as Hex),
             value: valueInWei,
           },
         });
@@ -197,7 +198,7 @@ export default function SendTransaction() {
         operation = await client!.sendUserOperation({
           uo: {
             target: tokenInfo.address as Address,
-            data: transferCalldata as Hex,
+            data: appendBuilderCode(transferCalldata as Hex),
             value: BigInt(0), // No native value for ERC-20 transfers
           },
         });

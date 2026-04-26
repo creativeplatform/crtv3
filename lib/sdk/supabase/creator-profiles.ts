@@ -88,15 +88,19 @@ export class CreatorProfileSupabaseService {
 
   // Update creator profile
   async updateCreatorProfile(
-    ownerAddress: string, 
-    updateData: UpdateCreatorProfileData
+    ownerAddress: string,
+    updateData: UpdateCreatorProfileData,
+    authHeaders?: Record<string, string>
   ): Promise<CreatorProfile> {
     try {
       // Use upsert to handle both create and update cases
-      return await this.upsertCreatorProfile({
-        owner_address: ownerAddress,
-        ...updateData,
-      });
+      return await this.upsertCreatorProfile(
+        {
+          owner_address: ownerAddress,
+          ...updateData,
+        },
+        authHeaders
+      );
     } catch (error) {
       // Handle case where creator_profiles table doesn't exist
       if (error instanceof Error && error.message.includes('relation "public.creator_profiles" does not exist')) {
@@ -106,14 +110,25 @@ export class CreatorProfileSupabaseService {
     }
   }
 
-  // Upsert creator profile (create or update)
-  async upsertCreatorProfile(profileData: CreateCreatorProfileData): Promise<CreatorProfile> {
+  /**
+   * Upsert creator profile (create or update).
+   *
+   * The `/api/creator-profiles/upsert` route now requires wallet auth headers
+   * proving the caller controls `owner_address`. Pass `authHeaders` (from
+   * `useWalletAuth().getAuthHeaders()`) when calling from a client component
+   * that has a wallet connected.
+   */
+  async upsertCreatorProfile(
+    profileData: CreateCreatorProfileData,
+    authHeaders?: Record<string, string>
+  ): Promise<CreatorProfile> {
     try {
       // Use API route to bypass RLS issues
       const response = await fetch('/api/creator-profiles/upsert', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...(authHeaders || {}),
         },
         body: JSON.stringify(profileData),
       });

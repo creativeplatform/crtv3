@@ -6,6 +6,7 @@ import {
 } from "@account-kit/react";
 import { toast } from "sonner";
 import { logger } from '@/lib/utils/logger';
+import { appendBuilderCode } from "@/lib/utils/builder-code";
 
 
 export type Transaction = {
@@ -63,9 +64,11 @@ export function useBatchTransactions() {
       const userOperationTransactions = transactions.map((tx) => ({
         target: tx.target as `0x${string}`,
         value: tx.value ? BigInt(Math.floor(parseFloat(tx.value) * 10 ** 18)) : BigInt(0),
-        data: tx.data && tx.data.startsWith("0x") 
-            ? (tx.data as `0x${string}`) 
-            : ("0x" + (tx.data || "")) as `0x${string}`,
+        data: appendBuilderCode(
+          tx.data && tx.data.startsWith("0x")
+            ? (tx.data as `0x${string}`)
+            : ("0x" + (tx.data || "")) as `0x${string}`
+        ),
       }));
 
       // Send the batch transaction

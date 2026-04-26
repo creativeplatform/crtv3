@@ -2,7 +2,6 @@ import { signAccessJwt } from "@livepeer/core/crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { checkBotId } from "botid/server";
 import { rateLimiters } from "@/lib/middleware/rateLimit";
-import { unlockService } from "@/lib/sdk/unlock/services";
 
 export async function POST(req: NextRequest) {
     const verification = await checkBotId();
@@ -34,25 +33,6 @@ export async function POST(req: NextRequest) {
             );
         }
 
-        // Server-Side Membership Verification
-        if (!userAddress) {
-            return NextResponse.json(
-                { message: "Login required to watch this stream" },
-                { status: 401 }
-            );
-        }
-
-        // Check if user has ANY valid membership (Creator Pass)
-        const memberships = await unlockService.getAllMemberships(userAddress);
-        const hasValidMembership = memberships.some(m => m.isValid);
-
-        if (!hasValidMembership) {
-            return NextResponse.json(
-                { message: "Valid membership required to watch this stream" },
-                { status: 403 }
-            );
-        }
-
         const token = await signAccessJwt({
             privateKey: accessControlPrivateKey,
             publicKey: accessControlPublicKey,
@@ -60,7 +40,7 @@ export async function POST(req: NextRequest) {
             playbackId,
             expiration: 3600, // 1 hour
             custom: {
-                userId: userAddress // Bind the JWT to the user's address for auditing if needed
+                userId: userAddress || "anonymous"
             }
         });
 

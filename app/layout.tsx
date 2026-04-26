@@ -47,6 +47,9 @@ export const metadata: Metadata = {
     description: "The Way Content Should Be.",
     images: ["/Creative_TV.png"],
   },
+  other: {
+    ...(process.env.NEXT_PUBLIC_BASE_APP_ID && { "base:app_id": process.env.NEXT_PUBLIC_BASE_APP_ID }),
+  },
 };
 
 export default async function RootLayout({

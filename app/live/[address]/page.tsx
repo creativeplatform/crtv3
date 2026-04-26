@@ -12,7 +12,7 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Slash, VideoIcon } from "lucide-react";
+import { Slash, VideoIcon, Share2, ShieldCheck } from "lucide-react";
 import { FaExclamationTriangle } from "react-icons/fa";
 import { MembershipGuard } from "@/components/auth/MembershipGuard";
 import { ProfilePageGuard } from "@/components/UserProfile/UserProfile";
@@ -26,7 +26,15 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import { LivestreamThumbnail } from "@/components/Live/LivestreamThumbnail";
 import { StreamThumbnailUploader } from "@/components/Live/StreamThumbnailUploader";
+import { StreamIPRegistration } from "@/components/Live/StreamIPRegistration";
+import { CreatorClipsList } from "@/components/Live/CreatorClipsList";
 import { getThumbnailUrl } from "@/services/livepeer-thumbnails";
+import { Switch } from "@/components/ui/switch";
+import { Button } from "@/components/ui/button";
+import { LiveChat } from "@/components/Live/LiveChat";
+import { ShareDialog } from "@/components/Videos/ShareDialog";
+import { ModeratorsDialog } from "@/components/Live/ModeratorsDialog";
+import { DigitalTwinOverlay } from "@/components/Live/DigitalTwinOverlay";
 import { logger } from '@/lib/utils/logger';
 
 
@@ -48,6 +56,19 @@ export default function LivePage() {
   const [streamCreateError, setStreamCreateError] = useState<string | null>(
     null
   );
+  const [allowClipping, setAllowClipping] = useState(true);
+  const [isUpdatingClipPref, setIsUpdatingClipPref] = useState(false);
+  const [streamName, setStreamName] = useState<string | null>(null);
+  const [storyIpId, setStoryIpId] = useState<string | null>(null);
+  const [storyLicenseTermsId, setStoryLicenseTermsId] = useState<string | null>(null);
+  const [storyRevShare, setStoryRevShare] = useState<number | null>(null);
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
+  const [moderatorsDialogOpen, setModeratorsDialogOpen] = useState(false);
+
+  // Match the viewer-side derivation in WatchClient so host + viewers share the
+  // same XMTP group ID.
+  const chatStreamId = playbackId || "";
+  const chatSessionId = playbackId ? `session-${playbackId}` : "";
 
 
   // Fetch existing stream and multistream targets
@@ -64,6 +85,11 @@ export default function LivePage() {
           setStreamId(stream.stream_id);
           setPlaybackId(stream.playback_id);
           setThumbnailUrl(stream.thumbnail_url || null);
+          setAllowClipping(stream.allow_clipping ?? true);
+          setStreamName(stream.name ?? null);
+          setStoryIpId(stream.story_ip_id ?? null);
+          setStoryLicenseTermsId(stream.story_license_terms_id ?? null);
+          setStoryRevShare(stream.story_commercial_rev_share ?? null);
         }
 
         // 2. Fetch targets (only if we have a streamId, which we might have just set)
@@ -129,6 +155,21 @@ export default function LivePage() {
 
   function handleThumbnailUpdated(url: string) {
     setThumbnailUrl(url);
+  }
+
+  async function handleToggleClipping(next: boolean) {
+    if (!user?.address) return;
+    const previous = allowClipping;
+    setAllowClipping(next);
+    setIsUpdatingClipPref(true);
+    try {
+      await updateStream(user.address, { allow_clipping: next });
+    } catch (err) {
+      logger.error("Failed to update clipping preference:", err);
+      setAllowClipping(previous);
+    } finally {
+      setIsUpdatingClipPref(false);
+    }
   }
 
   async function handleCreateStream() {
@@ -311,9 +352,85 @@ export default function LivePage() {
                 )}
               </div>
             ) : (
-              <>
-                <Broadcast streamKey={streamKey} streamId={streamId} creatorAddress={user.address} />
-              </>
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="lg:col-span-2 relative">
+                  <Broadcast streamKey={streamKey} streamId={streamId} creatorAddress={user.address} />
+                  {user?.address && (
+                    <DigitalTwinOverlay creatorAddress={user.address} />
+                  )}
+                  {playbackId && (
+                    <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setShareDialogOpen(true)}
+                      >
+                        <Share2 className="h-4 w-4 mr-1.5" /> Share Stream
+                      </Button>
+                      {chatStreamId && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setModeratorsDialogOpen(true)}
+                        >
+                          <ShieldCheck className="h-4 w-4 mr-1.5" /> Manage Moderators
+                        </Button>
+                      )}
+                    </div>
+                  )}
+                </div>
+                <div className="lg:col-span-1">
+                  {chatStreamId && chatSessionId ? (
+                    <LiveChat
+                      streamId={chatStreamId}
+                      sessionId={chatSessionId}
+                      creatorAddress={user.address}
+                    />
+                  ) : (
+                    <div className="border rounded-lg p-4 text-sm text-muted-foreground">
+                      Chat will appear here once the stream is ready.
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+            {streamId && user?.address && (
+              <StreamIPRegistration
+                creatorAddress={user.address}
+                streamName={streamName}
+                thumbnailUrl={thumbnailUrl}
+                storyIpId={storyIpId}
+                licenseTermsId={storyLicenseTermsId}
+                commercialRevShare={storyRevShare}
+                onRegistered={({ ipId, licenseTermsId, commercialRevShare }) => {
+                  setStoryIpId(ipId);
+                  setStoryLicenseTermsId(licenseTermsId);
+                  setStoryRevShare(commercialRevShare);
+                }}
+              />
+            )}
+            {streamId && (
+              <div className="mt-4 border-t border-white/20 pt-3 max-w-[576px] mx-auto">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-semibold">Allow viewer clipping</p>
+                    <p className="text-xs text-gray-400">
+                      Let viewers create short clips from your stream and mint them as NFTs.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={allowClipping}
+                    onCheckedChange={handleToggleClipping}
+                    disabled={isUpdatingClipPref}
+                    aria-label="Allow viewer clipping"
+                  />
+                </div>
+              </div>
+            )}
+            {playbackId && (
+              <CreatorClipsList playbackId={playbackId} />
             )}
             <div className="mt-4 border-t border-white/20 pt-3 max-w-[576px] mx-auto">
               <p className="mb-2 text-sm font-semibold">Multistream Targets</p>
@@ -349,6 +466,27 @@ export default function LivePage() {
             </div>
           </div>
         </div>
+        {playbackId && (
+          <ShareDialog
+            open={shareDialogOpen}
+            onOpenChange={setShareDialogOpen}
+            videoTitle={streamName || "Live Stream"}
+            videoId={playbackId}
+            shareUrlOverride={`/watch/${playbackId}`}
+            titleOverride={streamName || "Live Stream"}
+            thumbnailUrlOverride={thumbnailUrl ?? undefined}
+            dialogTitle="Share Live Stream"
+            shareNoun="live stream"
+          />
+        )}
+        {chatStreamId && user?.address && (
+          <ModeratorsDialog
+            open={moderatorsDialogOpen}
+            onOpenChange={setModeratorsDialogOpen}
+            streamId={chatStreamId}
+            creatorAddress={user.address}
+          />
+        )}
       </MembershipGuard>
     </ProfilePageGuard>
   );

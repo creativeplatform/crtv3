@@ -18,6 +18,7 @@ import { parseEther, formatEther, encodeFunctionData, decodeEventLog } from 'vie
 import { parseBundlerError, shouldRetryError } from '@/lib/utils/bundlerErrorParser';
 import { getDaiTokenContract, DAI_TOKEN_ADDRESSES } from '@/lib/contracts/DAIToken';
 import { logger } from '@/lib/utils/logger';
+import { appendBuilderCode } from "@/lib/utils/builder-code";
 
 
 // MeTokens contract addresses on Base
@@ -380,7 +381,7 @@ export function useMeTokenCreation(): UseMeTokenCreationReturn {
     const approvePromise = client.sendUserOperation({
       uo: {
         target: daiContract.address as `0x${string}`,
-        data: approveData,
+        data: appendBuilderCode(approveData),
         value: BigInt(0),
       },
       context: gasContext.context,
@@ -535,7 +536,7 @@ export function useMeTokenCreation(): UseMeTokenCreationReturn {
         const sendPromise = client.sendUserOperation({
           uo: {
             target: DIAMOND,
-            data: subscribeData,
+            data: appendBuilderCode(subscribeData),
             value: BigInt(0),
           },
           context: gasContext.context,
@@ -583,7 +584,7 @@ export function useMeTokenCreation(): UseMeTokenCreationReturn {
             const deployPromise = client.sendUserOperation({
               uo: {
                 target: DIAMOND,
-                data: subscribeData,
+                data: appendBuilderCode(subscribeData),
                 value: BigInt(0),
               },
             });
@@ -653,7 +654,7 @@ export function useMeTokenCreation(): UseMeTokenCreationReturn {
           const fallbackPromise = client.sendUserOperation({
             uo: {
               target: DIAMOND,
-              data: subscribeData,
+              data: appendBuilderCode(subscribeData),
               value: BigInt(0),
             },
           });

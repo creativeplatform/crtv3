@@ -58,6 +58,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Trigger to automatically update replies_count
+DROP TRIGGER IF EXISTS trigger_update_replies_count ON video_comments;
 CREATE TRIGGER trigger_update_replies_count
   AFTER INSERT ON video_comments
   FOR EACH ROW
@@ -84,6 +85,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Trigger to automatically update likes_count
+DROP TRIGGER IF EXISTS trigger_update_likes_count ON comment_likes;
 CREATE TRIGGER trigger_update_likes_count
   AFTER INSERT OR DELETE ON comment_likes
   FOR EACH ROW
@@ -94,12 +96,14 @@ ALTER TABLE video_comments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE comment_likes ENABLE ROW LEVEL SECURITY;
 
 -- Policy: Anyone can read non-deleted comments
+DROP POLICY IF EXISTS "Anyone can read non-deleted comments" ON video_comments;
 CREATE POLICY "Anyone can read non-deleted comments"
   ON video_comments
   FOR SELECT
   USING (is_deleted = FALSE);
 
 -- Policy: Anyone can create comments
+DROP POLICY IF EXISTS "Anyone can create comments" ON video_comments;
 CREATE POLICY "Anyone can create comments"
   ON video_comments
   FOR INSERT
@@ -107,6 +111,7 @@ CREATE POLICY "Anyone can create comments"
 
 -- Policy: Anyone can update comments (authorization handled in service layer)
 -- The service layer verifies ownership before allowing updates
+DROP POLICY IF EXISTS "Anyone can update comments" ON video_comments;
 CREATE POLICY "Anyone can update comments"
   ON video_comments
   FOR UPDATE
@@ -114,12 +119,14 @@ CREATE POLICY "Anyone can update comments"
   WITH CHECK (TRUE);
 
 -- Policy: Anyone can read comment likes
+DROP POLICY IF EXISTS "Anyone can read comment likes" ON comment_likes;
 CREATE POLICY "Anyone can read comment likes"
   ON comment_likes
   FOR SELECT
   USING (TRUE);
 
 -- Policy: Anyone can like/unlike comments
+DROP POLICY IF EXISTS "Anyone can like comments" ON comment_likes;
 CREATE POLICY "Anyone can like comments"
   ON comment_likes
   FOR ALL

@@ -1,16 +1,26 @@
 "use client";
 
 import React, { useState, useRef, useEffect, useMemo } from "react";
-import { useLiveChat } from "@/lib/hooks/xmtp/useLiveChat";
+import { useLiveChatModerated } from "@/lib/hooks/xmtp/useLiveChatModerated";
 import { useUser } from "@account-kit/react";
 import useModularAccount from "@/lib/hooks/accountkit/useModularAccount";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { MessageCircle, Send, AlertCircle, Coins, Users } from "lucide-react";
+import {
+  MessageCircle,
+  Send,
+  AlertCircle,
+  Coins,
+  Users,
+  ChevronDown,
+  EyeOff,
+  UserX,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatAddress } from "@/lib/helpers";
+import { toast } from "sonner";
 import { VideoTipButton } from "../Videos/VideoTipButton";
 import { getExplorerUrl } from "@/lib/utils/video-tip";
 import { logger } from '@/lib/utils/logger';
@@ -22,6 +32,9 @@ interface LiveChatProps {
   creatorAddress?: string | null;
   viewerCount?: number;
   className?: string;
+  /** Enable moderation overlay (poll for hidden/banned + show mod controls). */
+  enableModeration?: boolean;
+  headerActions?: React.ReactNode;
 }
 
 /**
@@ -34,12 +47,14 @@ interface LiveChatProps {
  * - Auto-cleanup of old messages
  * - Optimized performance for high message volume
  */
-export function LiveChat({ 
-  streamId, 
-  sessionId, 
-  creatorAddress, 
+export function LiveChat({
+  streamId,
+  sessionId,
+  creatorAddress,
   viewerCount,
-  className 
+  className,
+  enableModeration = true,
+  headerActions,
 }: LiveChatProps) {
   const [message, setMessage] = useState("");
   const [isExpanded, setIsExpanded] = useState(true);
@@ -48,32 +63,40 @@ export function LiveChat({
   const user = useUser();
   const { address: smartAccountAddress } = useModularAccount();
 
-  const { 
-    messages, 
-    isLoading, 
-    error, 
-    sendMessage, 
-    sendTipMessage, 
-    isSending 
-  } = useLiveChat(streamId, sessionId, {
+  const {
+    messages,
+    isLoading,
+    error,
+    sendMessage,
+    sendTipMessage,
+    isSending,
+    canModerate,
+    hideMessage: hideMessageMod,
+    banUser: banUserMod,
+  } = useLiveChatModerated(streamId, sessionId, {
     maxMessages: 200,
     messageRetentionMs: 10 * 60 * 1000, // 10 minutes
     rateLimit: { count: 5, windowMs: 10000 }, // 5 messages per 10 seconds
+    creatorAddress: creatorAddress ?? null,
+    enabled: enableModeration,
   });
 
-  // Debounced scroll to bottom (only scroll if user is near bottom)
+  // Scroll tracking
   const shouldAutoScroll = useRef(true);
-  const lastScrollTop = useRef(0);
+  const [showScrollToBottom, setShowScrollToBottom] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const prevMessagesLen = useRef(messages.length);
 
+  // Track new messages arriving while scrolled up
   useEffect(() => {
-    if (!messagesContainerRef.current) return;
-    
-    const container = messagesContainerRef.current;
-    const isNearBottom = 
-      container.scrollHeight - container.scrollTop - container.clientHeight < 100;
-    
-    shouldAutoScroll.current = isNearBottom;
-  }, [messages]);
+    const newCount = messages.length - prevMessagesLen.current;
+    prevMessagesLen.current = messages.length;
+
+    if (newCount > 0 && !shouldAutoScroll.current) {
+      setUnreadCount(prev => prev + newCount);
+      setShowScrollToBottom(true);
+    }
+  }, [messages.length]);
 
   // Scroll to bottom when new messages arrive (if user is near bottom)
   useEffect(() => {
@@ -86,11 +109,20 @@ export function LiveChat({
   const handleScroll = () => {
     if (!messagesContainerRef.current) return;
     const container = messagesContainerRef.current;
-    lastScrollTop.current = container.scrollTop;
-    
-    const isNearBottom = 
+    const isNearBottom =
       container.scrollHeight - container.scrollTop - container.clientHeight < 100;
     shouldAutoScroll.current = isNearBottom;
+
+    if (isNearBottom) {
+      setShowScrollToBottom(false);
+      setUnreadCount(0);
+    }
+  };
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    setShowScrollToBottom(false);
+    setUnreadCount(0);
   };
 
   const handleSend = async (e: React.FormEvent) => {
@@ -121,16 +153,8 @@ export function LiveChat({
     );
   }
 
-  // Sort messages: tips first, then by timestamp
-  const sortedMessages = useMemo(() => {
-    return [...messages].sort((a, b) => {
-      // Tips appear first
-      if (a.type === 'tip' && b.type !== 'tip') return -1;
-      if (b.type === 'tip' && a.type !== 'tip') return 1;
-      // Then by timestamp
-      return a.sentAt.getTime() - b.sentAt.getTime();
-    });
-  }, [messages]);
+  // Display messages in chronological order (tips are styled differently but stay in-line)
+  const sortedMessages = useMemo(() => [...messages], [messages]);
 
   return (
     <div className={cn("border rounded-lg flex flex-col h-[500px] max-h-[70vh]", className)}>
@@ -147,6 +171,7 @@ export function LiveChat({
           )}
         </div>
         <div className="flex items-center gap-2">
+          {headerActions}
           {creatorAddress && user && user.address?.toLowerCase() !== creatorAddress.toLowerCase() && (
             <VideoTipButton
               creatorAddress={creatorAddress}
@@ -161,10 +186,21 @@ export function LiveChat({
       {/* Messages Area */}
       {isExpanded && (
         <>
-          <div 
+          <div className="relative flex-1 overflow-hidden">
+            {/* Scroll to bottom button */}
+            {showScrollToBottom && (
+              <button
+                onClick={scrollToBottom}
+                className="absolute bottom-2 left-1/2 -translate-x-1/2 z-10 bg-primary text-primary-foreground rounded-full px-3 py-1.5 text-xs shadow-lg flex items-center gap-1 hover:opacity-90 transition-opacity"
+              >
+                <ChevronDown className="h-3 w-3" />
+                {unreadCount > 0 ? `${unreadCount} new message${unreadCount === 1 ? '' : 's'}` : 'Scroll to bottom'}
+              </button>
+            )}
+          <div
             ref={messagesContainerRef}
             onScroll={handleScroll}
-            className="flex-1 p-3 overflow-y-auto space-y-2"
+            className="h-full p-3 overflow-y-auto space-y-2"
           >
             {isLoading && messages.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-center">
@@ -191,16 +227,38 @@ export function LiveChat({
                   const userSCA = smartAccountAddress?.toLowerCase();
                   const msgAddress = msg.senderAddress?.toLowerCase();
                   const isOwnMessage = msgAddress && (
-                    (userEOA && msgAddress === userEOA) || 
+                    (userEOA && msgAddress === userEOA) ||
                     (userSCA && msgAddress === userSCA)
                   );
                   const isTipMessage = msg.type === 'tip' && msg.tipData;
-                  
+                  const showModControls = canModerate && !isTipMessage && !isOwnMessage;
+
+                  const handleHide = async () => {
+                    try {
+                      await hideMessageMod(msg.id);
+                      toast.success("Message hidden");
+                    } catch (err) {
+                      logger.error("Failed to hide message:", err);
+                      toast.error(err instanceof Error ? err.message : "Failed to hide message");
+                    }
+                  };
+
+                  const handleBan = async () => {
+                    if (!msg.senderAddress) return;
+                    try {
+                      await banUserMod(msg.senderAddress);
+                      toast.success(`Banned ${formatAddress(msg.senderAddress)}`);
+                    } catch (err) {
+                      logger.error("Failed to ban user:", err);
+                      toast.error(err instanceof Error ? err.message : "Failed to ban user");
+                    }
+                  };
+
                   return (
                     <div
                       key={msg.id}
                       className={cn(
-                        "flex gap-2 items-start",
+                        "group/msg flex gap-2 items-start",
                         isOwnMessage && "flex-row-reverse"
                       )}
                     >
@@ -236,6 +294,31 @@ export function LiveChat({
                               minute: "2-digit",
                             })}
                           </span>
+                          {showModControls && (
+                            <div
+                              className={cn(
+                                "ml-auto flex items-center gap-0.5 opacity-0 group-hover/msg:opacity-100 transition-opacity",
+                                isOwnMessage && "ml-0 mr-auto"
+                              )}
+                            >
+                              <button
+                                type="button"
+                                onClick={handleHide}
+                                title="Hide this message"
+                                className="p-0.5 rounded hover:bg-muted-foreground/10 text-muted-foreground hover:text-foreground"
+                              >
+                                <EyeOff className="h-3 w-3" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={handleBan}
+                                title="Ban this user from chat"
+                                className="p-0.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
+                              >
+                                <UserX className="h-3 w-3" />
+                              </button>
+                            </div>
+                          )}
                         </div>
                         {isTipMessage ? (
                           <div
@@ -279,6 +362,7 @@ export function LiveChat({
                 <div ref={messagesEndRef} />
               </div>
             )}
+          </div>
           </div>
 
           {/* Input Area */}

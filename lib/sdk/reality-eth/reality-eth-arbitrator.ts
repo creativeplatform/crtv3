@@ -2,6 +2,7 @@ import { type Address, type WalletClient, encodeFunctionData, type PublicClient 
 import { base } from "@account-kit/infra";
 import { getRealityEthConfig } from "./reality-eth-client";
 import { serverLogger } from "@/lib/utils/logger";
+import { appendBuilderCode } from "@/lib/utils/builder-code";
 
 /**
  * Kleros Arbitrator Proxy Interface
@@ -83,7 +84,7 @@ export async function submitEvidence(
             const operation = await walletClient.sendUserOperation({
                 uo: {
                     target: arbitratorAddress,
-                    data: data as `0x${string}`,
+                    data: appendBuilderCode(data as `0x${string}`),
                     value: 0n,
                 },
             });

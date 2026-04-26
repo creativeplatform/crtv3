@@ -26,6 +26,7 @@ import { encodeFunctionData, parseAbi, getAddress } from "viem";
 import { createStoryPublicClient } from "./client";
 import { createServiceClient } from "@/lib/sdk/supabase/service";
 import { serverLogger } from '@/lib/utils/logger';
+import { appendBuilderCode } from "@/lib/utils/builder-code";
 import { keccak256, toBytes } from "viem";
 
 
@@ -350,7 +351,7 @@ export async function mintInCreatorCollection(
     const hash = await walletClient.sendUserOperation({
       uo: {
         target: collectionAddress,
-        data: mintData,
+        data: appendBuilderCode(mintData),
         value: BigInt(0),
       },
     });
@@ -418,7 +419,7 @@ export async function grantPlatformMinterRole(
     const hash = await walletClient.sendUserOperation({
       uo: {
         target: collectionAddress,
-        data: grantData,
+        data: appendBuilderCode(grantData),
         value: BigInt(0),
       },
     });

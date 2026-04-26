@@ -56,11 +56,12 @@ const VideoViewMetrics: React.FC<VideoViewMetricsProps> = ({ playbackId }) => {
   if (loading) return <Skeleton className="w-16 h-4" />;
   if (error) return <p>Error: {error}</p>;
 
+  const totalViews =
+    (viewMetrics?.viewCount ?? 0) + (viewMetrics?.legacyViewCount ?? 0);
+
   return (
     <>
-      <h3 className="font-medium text-sm md:text-base text-gray-500">{`Views: ${
-        viewMetrics?.viewCount ?? "0"
-      }`}</h3>
+      <h3 className="font-medium text-sm md:text-base text-gray-500">{`Views: ${totalViews}`}</h3>
     </>
   );
 };

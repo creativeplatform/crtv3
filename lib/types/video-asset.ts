@@ -54,6 +54,13 @@ export interface VideoAsset {
   splits_address: string | null;  // Address of the Splits contract for revenue distribution
   // Livepeer Verifiable Video
   livepeer_attestation_id: string | null;  // Livepeer attestation id (creator attestation)
+  // Clip / source origin (defaults to 'Upload' for non-clip content)
+  source_type?: "Upload" | "Livestream" | "Clip";
+  parent_playback_id?: string | null;  // For clips: playback_id of the source stream
+  parent_story_ip_id?: string | null;  // For clips: Story IP ID of the source stream (if registered)
+  clip_start_ms?: number | null;
+  clip_end_ms?: number | null;
+  clipper_address?: string | null;     // For clips: wallet that created the clip
   created_at: Date;
   updated_at: Date;
 }

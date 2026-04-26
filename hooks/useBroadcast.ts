@@ -24,6 +24,8 @@ interface UseBroadcastReturn {
     changeAudioDevice: (deviceId: string) => Promise<void>;
     changeVideoDevice: (deviceId: string) => Promise<void>;
     error: string | null;
+    isScreenSharing: boolean;
+    toggleScreenShare: () => Promise<void>;
 }
 
 export function useBroadcast({ ingestUrl, streamKey }: UseBroadcastProps): UseBroadcastReturn {
@@ -34,10 +36,12 @@ export function useBroadcast({ ingestUrl, streamKey }: UseBroadcastProps): UseBr
     const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
     const [selectedAudioDeviceId, setSelectedAudioDeviceId] = useState<string>('');
     const [selectedVideoDeviceId, setSelectedVideoDeviceId] = useState<string>('');
+    const [isScreenSharing, setIsScreenSharing] = useState(false);
 
     const videoRef = useRef<HTMLVideoElement>(null);
     const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
     const mediaStreamRef = useRef<MediaStream | null>(null);
+    const screenStreamRef = useRef<MediaStream | null>(null);
     const [localStream, setLocalStream] = useState<MediaStream | null>(null);
 
     // Enumerate devices
@@ -110,6 +114,9 @@ export function useBroadcast({ ingestUrl, streamKey }: UseBroadcastProps): UseBr
             if (mediaStreamRef.current) {
                 mediaStreamRef.current.getTracks().forEach(track => track.stop());
             }
+            if (screenStreamRef.current) {
+                screenStreamRef.current.getTracks().forEach(track => track.stop());
+            }
         };
     }, [initStream]);
 
@@ -170,8 +177,44 @@ export function useBroadcast({ ingestUrl, streamKey }: UseBroadcastProps): UseBr
             const pc = new RTCPeerConnection({ iceServers });
             peerConnectionRef.current = pc;
 
-            // Add tracks
-            mediaStreamRef.current.getTracks().forEach(track => {
+            // Monitor connection state for mid-stream failures
+            pc.onconnectionstatechange = () => {
+                const state = pc.connectionState;
+                logger.debug('WebRTC connection state:', state);
+
+                switch (state) {
+                    case 'disconnected':
+                        toast.warning('Connection unstable, attempting to recover...');
+                        break;
+                    case 'failed':
+                        setError('Broadcast connection failed');
+                        setStatus('error');
+                        toast.error('Broadcast connection lost');
+                        stopBroadcast();
+                        break;
+                    case 'closed':
+                        if (status === 'live') {
+                            setStatus('idle');
+                        }
+                        break;
+                }
+            };
+
+            pc.oniceconnectionstatechange = () => {
+                const state = pc.iceConnectionState;
+                logger.debug('ICE connection state:', state);
+
+                if (state === 'failed') {
+                    setError('Network connection failed');
+                    setStatus('error');
+                    toast.error('Network connection lost');
+                    stopBroadcast();
+                }
+            };
+
+            // Add tracks — use screen stream if screen sharing, otherwise camera
+            const activeStream = screenStreamRef.current || mediaStreamRef.current;
+            activeStream.getTracks().forEach(track => {
                 pc.addTransceiver(track, { direction: 'sendonly' });
             });
 
@@ -203,7 +246,6 @@ export function useBroadcast({ ingestUrl, streamKey }: UseBroadcastProps): UseBr
             if (!offerSdp) throw new Error('Failed to generate SDP offer');
 
             // WHIP Request
-            // Note: We use the resolved endpointUrl which should be the playback/webrtc URL that accepts POST
             logger.debug(`Posting SDP offer to: ${endpointUrl}`);
 
             const response = await fetch(endpointUrl, {
@@ -235,10 +277,30 @@ export function useBroadcast({ ingestUrl, streamKey }: UseBroadcastProps): UseBr
     };
 
     const stopBroadcast = () => {
+        // Stop screen sharing if active
+        if (screenStreamRef.current) {
+            screenStreamRef.current.getTracks().forEach(track => track.stop());
+            screenStreamRef.current = null;
+            setIsScreenSharing(false);
+        }
+
         if (peerConnectionRef.current) {
             peerConnectionRef.current.close();
             peerConnectionRef.current = null;
         }
+
+        // Stop media tracks to release camera/mic
+        if (mediaStreamRef.current) {
+            mediaStreamRef.current.getTracks().forEach(track => track.stop());
+            mediaStreamRef.current = null;
+        }
+
+        // Clear video element
+        if (videoRef.current) {
+            videoRef.current.srcObject = null;
+        }
+
+        setLocalStream(null);
         setStatus('idle');
     };
 
@@ -272,6 +334,82 @@ export function useBroadcast({ ingestUrl, streamKey }: UseBroadcastProps): UseBr
         // InitStream will trigger due to dependency change
     };
 
+    // Screen sharing — uses replaceTrack for seamless mid-stream switching
+    const toggleScreenShare = async () => {
+        if (isScreenSharing) {
+            // Stop screen share, revert to camera
+            if (screenStreamRef.current) {
+                screenStreamRef.current.getTracks().forEach(track => track.stop());
+                screenStreamRef.current = null;
+            }
+
+            // Replace track on peer connection if live
+            const pc = peerConnectionRef.current;
+            if (pc && mediaStreamRef.current) {
+                const cameraTrack = mediaStreamRef.current.getVideoTracks()[0];
+                const videoSender = pc.getSenders().find(s => s.track?.kind === 'video');
+                if (videoSender && cameraTrack) {
+                    await videoSender.replaceTrack(cameraTrack);
+                }
+            }
+
+            // Restore camera preview
+            if (videoRef.current && mediaStreamRef.current) {
+                videoRef.current.srcObject = mediaStreamRef.current;
+            }
+
+            setIsScreenSharing(false);
+            toast.success('Screen sharing stopped');
+        } else {
+            // Start screen share
+            try {
+                const screenStream = await navigator.mediaDevices.getDisplayMedia({
+                    video: true,
+                    audio: true,
+                });
+                screenStreamRef.current = screenStream;
+
+                // Replace track on peer connection if live
+                const pc = peerConnectionRef.current;
+                if (pc) {
+                    const screenVideoTrack = screenStream.getVideoTracks()[0];
+                    const videoSender = pc.getSenders().find(s => s.track?.kind === 'video');
+                    if (videoSender && screenVideoTrack) {
+                        await videoSender.replaceTrack(screenVideoTrack);
+                    }
+
+                    // If screen share has audio, replace or add audio track
+                    const screenAudioTrack = screenStream.getAudioTracks()[0];
+                    if (screenAudioTrack) {
+                        const audioSender = pc.getSenders().find(s => s.track?.kind === 'audio');
+                        if (audioSender) {
+                            await audioSender.replaceTrack(screenAudioTrack);
+                        }
+                    }
+                }
+
+                // Show screen in local preview
+                if (videoRef.current) {
+                    videoRef.current.srcObject = screenStream;
+                }
+
+                // Auto-revert when user clicks browser's "Stop sharing" button
+                screenStream.getVideoTracks()[0].onended = () => {
+                    toggleScreenShare(); // Recursively stops screen share
+                };
+
+                setIsScreenSharing(true);
+                toast.success('Screen sharing started');
+            } catch (err: any) {
+                // User cancelled the screen picker or error
+                if (err.name !== 'NotAllowedError') {
+                    logger.error('Screen share error:', err);
+                    toast.error('Failed to start screen sharing');
+                }
+            }
+        }
+    };
+
     return {
         status,
         startBroadcast,
@@ -286,6 +424,8 @@ export function useBroadcast({ ingestUrl, streamKey }: UseBroadcastProps): UseBr
         selectedVideoDeviceId,
         changeAudioDevice,
         changeVideoDevice,
-        error
+        error,
+        isScreenSharing,
+        toggleScreenShare
     };
 }

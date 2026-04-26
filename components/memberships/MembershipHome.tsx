@@ -9,6 +9,7 @@ import { MembershipIcon } from "./MembershipIcon";
 import unlockAbiJson from "@/lib/abis/Unlock.json";
 import { toast } from "sonner";
 import { getUsdcTokenContract, USDC_TOKEN_DECIMALS } from "@/lib/contracts/USDCToken";
+import { appendBuilderCode } from "@/lib/utils/builder-code";
 
 type HomeProps = {
     setActiveTab: (tab: string) => void;
@@ -193,12 +194,12 @@ export function MembershipHome({ setActiveTab }: HomeProps) {
             uo: [
                 {
                     target: usdcAddress as `0x${string}`,
-                    data: approvalData,
+                    data: appendBuilderCode(approvalData),
                     value: 0n,
                 },
                 {
                     target: selectedTier.address as `0x${string}`,
-                    data: purchaseData,
+                    data: appendBuilderCode(purchaseData),
                     value: 0n,
                 },
             ],

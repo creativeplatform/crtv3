@@ -302,14 +302,9 @@ const HookMultiStepForm = () => {
 
             toast.success("Video uploaded and published successfully!");
 
-            // Navigate to Discover immediately so the user can see their published video
+            // Navigate to Discover so the user can see their published video
             logger.debug("Redirecting to discover page...");
             router.replace("/discover");
-            setTimeout(() => {
-              if (typeof window !== "undefined" && window.location.pathname !== "/discover") {
-                window.location.href = "/discover";
-              }
-            }, 800);
 
             // --- STORY PROTOCOL IP REGISTRATION ---
             if (data.storyConfig?.registerIP && address) {
@@ -463,25 +458,19 @@ const HookMultiStepForm = () => {
             }
 
             // --- AUTO DEPLOY CONTENT COIN ---
+            // Fire-and-forget so navigation to /discover isn't blocked by the deploy transaction.
+            // handleUploadSuccess swallows its own errors; .catch is a safety net.
             if (finalMeTokenId && address && metadata?.ticker) {
               toast.info("Deploying Content Coin Market...");
-              try {
-                // 15s timeout for content coin
-                await withTimeout(
-                  handleUploadSuccess(
-                    metadata.title,
-                    metadata.ticker,
-                    finalMeTokenId,
-                    address
-                  ),
-                  15000
-                );
-                // The hook handles its own toasts usually, but we ensure we don't hang
-                // Note: handleUploadSuccess logs success
-              } catch (ccError) {
+              handleUploadSuccess(
+                metadata.title,
+                metadata.ticker,
+                finalMeTokenId,
+                address,
+                livepeerAsset.playbackId
+              ).catch((ccError) => {
                 logger.error("Content Coin deployment error:", ccError);
-                // Swallowed; user already redirected to Discover
-              }
+              });
             }
           }}
         />

@@ -13,6 +13,12 @@ export interface Stream {
     name?: string | null;
     is_live: boolean;
     last_live_at?: string | null;
+    allow_clipping?: boolean;
+    story_ip_id?: string | null;
+    story_license_terms_id?: string | null;
+    story_ip_registration_tx?: string | null;
+    story_ip_registered_at?: string | null;
+    story_commercial_rev_share?: number | null;
     created_at: string;
     updated_at: string;
 }
@@ -51,7 +57,7 @@ export async function getStreamByPlaybackId(playbackId: string) {
 
     const { data, error } = await supabase
         .from("streams")
-        .select("id, creator_id, playback_id, thumbnail_url, name, is_live, last_live_at")
+        .select("id, creator_id, playback_id, thumbnail_url, name, is_live, last_live_at, allow_clipping, story_ip_id, story_license_terms_id, story_commercial_rev_share, story_ip_registered_at")
         .eq("playback_id", playbackId)
         .maybeSingle();
 
@@ -105,6 +111,42 @@ export async function updateStream(creatorId: string, updates: UpdateStreamParam
     if (error) {
         console.error("Error updating stream record:", error);
         throw new Error(`Failed to update stream: ${error.message}`);
+    }
+
+    return data as Stream;
+}
+
+/**
+ * Record Story Protocol IP registration for a stream
+ */
+export async function updateStreamStoryIp(
+    creatorId: string,
+    storyData: {
+        story_ip_id: string;
+        story_license_terms_id?: string | null;
+        story_ip_registration_tx: string;
+        story_commercial_rev_share?: number | null;
+    }
+) {
+    const supabase = await createServiceClient();
+
+    const { data, error } = await supabase
+        .from("streams")
+        .update({
+            story_ip_id: storyData.story_ip_id,
+            story_license_terms_id: storyData.story_license_terms_id ?? null,
+            story_ip_registration_tx: storyData.story_ip_registration_tx,
+            story_ip_registered_at: new Date().toISOString(),
+            story_commercial_rev_share: storyData.story_commercial_rev_share ?? null,
+            updated_at: new Date().toISOString(),
+        })
+        .ilike("creator_id", creatorId)
+        .select()
+        .single();
+
+    if (error) {
+        console.error("Error updating stream Story IP status:", error);
+        throw new Error(`Failed to update stream Story IP: ${error.message}`);
     }
 
     return data as Stream;

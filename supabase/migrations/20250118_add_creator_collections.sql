@@ -43,18 +43,21 @@ END $$;
 ALTER TABLE creator_collections ENABLE ROW LEVEL SECURITY;
 
 -- Policy: Creators can view their own collections
+DROP POLICY IF EXISTS "Creators can view their own collections" ON creator_collections;
 CREATE POLICY "Creators can view their own collections"
   ON creator_collections
   FOR SELECT
   USING (auth.uid()::text = creator_id OR creator_id = current_setting('request.jwt.claims', true)::json->>'sub');
 
 -- Policy: Creators can insert their own collections
+DROP POLICY IF EXISTS "Creators can insert their own collections" ON creator_collections;
 CREATE POLICY "Creators can insert their own collections"
   ON creator_collections
   FOR INSERT
   WITH CHECK (auth.uid()::text = creator_id OR creator_id = current_setting('request.jwt.claims', true)::json->>'sub');
 
 -- Policy: Creators can update their own collections
+DROP POLICY IF EXISTS "Creators can update their own collections" ON creator_collections;
 CREATE POLICY "Creators can update their own collections"
   ON creator_collections
   FOR UPDATE

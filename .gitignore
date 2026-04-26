@@ -60,6 +60,10 @@ subgraphs/**/node_modules/
 .cursorrules
 .vscode/
 .agent/
+.claude/
+
+# Supabase CLI local state
+supabase/.temp/
 
 sw.js
 

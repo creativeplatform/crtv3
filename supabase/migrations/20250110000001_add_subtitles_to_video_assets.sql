@@ -21,10 +21,24 @@ CREATE INDEX IF NOT EXISTS idx_video_assets_subtitles_uri ON video_assets(subtit
 
 -- Example subtitle structure validation (optional constraint)
 -- Ensures the subtitles JSONB follows the correct format
-ALTER TABLE video_assets ADD CONSTRAINT valid_subtitles_format 
-  CHECK (
-    subtitles IS NULL OR (
-      jsonb_typeof(subtitles) = 'object'
-    )
-  );
+-- Idempotent: remote DB may already have this constraint from manual or out-of-band applies
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint c
+    JOIN pg_class t ON c.conrelid = t.oid
+    JOIN pg_namespace n ON t.relnamespace = n.oid
+    WHERE c.conname = 'valid_subtitles_format'
+      AND t.relname = 'video_assets'
+      AND n.nspname = 'public'
+  ) THEN
+    ALTER TABLE public.video_assets ADD CONSTRAINT valid_subtitles_format
+      CHECK (
+        subtitles IS NULL OR (
+          jsonb_typeof(subtitles) = 'object'
+        )
+      );
+  END IF;
+END $$;
 

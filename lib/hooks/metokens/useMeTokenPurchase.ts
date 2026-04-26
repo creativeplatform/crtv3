@@ -4,6 +4,7 @@ import { encodeFunctionData, parseEther } from 'viem';
 import { useToast } from '@/components/ui/use-toast';
 import { useGasSponsorship } from '@/lib/hooks/wallet/useGasSponsorship';
 import { logger } from '@/lib/utils/logger';
+import { appendBuilderCode } from "@/lib/utils/builder-code";
 
 
 const ERC20_ABI = [
@@ -57,7 +58,7 @@ export function useMeTokenPurchase() {
 
             const uoCallData = {
                 target: meTokenAddress as `0x${string}`,
-                data: data,
+                data: appendBuilderCode(data),
                 value: BigInt(0),
             };
 

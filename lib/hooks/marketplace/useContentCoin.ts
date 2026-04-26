@@ -7,6 +7,7 @@ import { METOKEN_FACTORY_ABI, METOKEN_FACTORY_ADDRESSES } from '@/lib/contracts/
 import { METOKEN_ABI } from '@/lib/contracts/MeToken';
 import { parseBundlerError } from '@/lib/utils/bundlerErrorParser';
 import { logger } from '@/lib/utils/logger';
+import { appendBuilderCode } from "@/lib/utils/builder-code";
 
 
 // Diamond Address (Hardcoded for Base as per previous files)
@@ -58,7 +59,7 @@ export function useContentCoin() {
             const sendOpPromise = client.sendUserOperation({
                 uo: {
                     target: METOKEN_FACTORY_ADDRESSES.base,
-                    data: createData,
+                    data: appendBuilderCode(createData),
                     value: BigInt(0),
                 },
             });
@@ -189,7 +190,7 @@ export function useContentCoin() {
 
             logger.debug('Sending approve user operation...');
             const approveOp = await client.sendUserOperation({
-                uo: { target: creatorTokenAddress as `0x${string}`, data: approveData, value: BigInt(0) }
+                uo: { target: creatorTokenAddress as `0x${string}`, data: appendBuilderCode(approveData), value: BigInt(0) }
             });
 
             logger.debug('Approve user operation sent, waiting for confirmation...', approveOp.hash);
@@ -210,7 +211,7 @@ export function useContentCoin() {
 
             logger.debug('Sending mint user operation...');
             const mintOp = await client.sendUserOperation({
-                uo: { target: DIAMOND as `0x${string}`, data: mintData, value: BigInt(0) }
+                uo: { target: DIAMOND as `0x${string}`, data: appendBuilderCode(mintData), value: BigInt(0) }
             });
 
             setIsPending(false);
@@ -264,7 +265,7 @@ export function useContentCoin() {
             });
 
             const burnOp = await client.sendUserOperation({
-                uo: { target: DIAMOND as `0x${string}`, data: burnData, value: BigInt(0) }
+                uo: { target: DIAMOND as `0x${string}`, data: appendBuilderCode(burnData), value: BigInt(0) }
             });
 
             setIsPending(false);

@@ -12,6 +12,7 @@ import { useUser } from '@account-kit/react';
 import { useToast } from '@/components/ui/use-toast';
 import { useWalletStatus } from '@/lib/hooks/accountkit/useWalletStatus';
 import { AvatarUpload } from './AvatarUpload';
+import { DigitalTwinSection } from './DigitalTwinSection';
 import { Loader2, CheckCircle, AlertCircle, User, Save, Edit3 } from 'lucide-react';
 
 interface CreatorProfileManagerProps {
@@ -114,6 +115,7 @@ export function CreatorProfileManager({ targetAddress, onProfileUpdated }: Creat
   }
 
   return (
+    <div className="space-y-4">
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
@@ -236,5 +238,14 @@ export function CreatorProfileManager({ targetAddress, onProfileUpdated }: Creat
         )}
       </CardContent>
     </Card>
+    {(targetAddress || user?.address) && (
+      <DigitalTwinSection
+        ownerAddress={(targetAddress || user?.address) as string}
+        initialProfile={profile ?? null}
+        isOwner={isOwner}
+        onSaved={onProfileUpdated}
+      />
+    )}
+    </div>
   );
 }

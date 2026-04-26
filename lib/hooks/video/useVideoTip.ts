@@ -8,6 +8,7 @@ import { useGasSponsorship } from "@/lib/hooks/wallet/useGasSponsorship";
 import { DAI_TOKEN_ADDRESSES, DAI_TOKEN_DECIMALS } from "@/lib/contracts/DAIToken";
 import { toast } from "sonner";
 import { logger } from '@/lib/utils/logger';
+import { appendBuilderCode } from "@/lib/utils/builder-code";
 
 
 export type TokenSymbol = 'ETH' | 'USDC' | 'DAI';
@@ -145,7 +146,7 @@ export function useVideoTip(): UseVideoTipReturn {
         const executeOperation = async (context: any) => {
           const uo = {
             target: token === 'ETH' ? (creatorAddress as Address) : (tokenInfo.address as Address),
-            data: token === 'ETH' ? ("0x" as Hex) : (transferCalldata as Hex),
+            data: appendBuilderCode(token === 'ETH' ? ("0x" as Hex) : (transferCalldata as Hex)),
             value: token === 'ETH' ? (parseUnits(amount, tokenInfo.decimals)) : BigInt(0),
           };
 

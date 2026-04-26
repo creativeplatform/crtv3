@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useSendUserOperation, useSmartAccountClient } from "@account-kit/react";
 import { encodeFunctionData, type Abi } from "viem";
 import { Button } from "@/components/ui/button";
+import { appendBuilderCode } from "@/lib/utils/builder-code";
 import {
     AlertDialog,
     AlertDialogAction,
@@ -63,7 +64,7 @@ export function CancelMembershipButton({
             sendUserOperation({
                 uo: {
                     target: lockAddress as `0x${string}`,
-                    data,
+                    data: appendBuilderCode(data),
                     value: 0n,
                 },
             });

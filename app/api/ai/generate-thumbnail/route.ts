@@ -31,7 +31,13 @@ async function verifyPaymentProof(
   model: string
 ): Promise<{ valid: boolean; error?: string }> {
   const requiredAmount = BigInt(MODEL_PRICE[model] ?? MODEL_PRICE['nano-banana']);
-  const claimedAmount = BigInt(amount);
+
+  let claimedAmount: bigint;
+  try {
+    claimedAmount = BigInt(amount);
+  } catch {
+    return { valid: false, error: 'Invalid payment amount' };
+  }
 
   if (claimedAmount < requiredAmount) {
     return { valid: false, error: 'Payment amount is less than required for this model' };

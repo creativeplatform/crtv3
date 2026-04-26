@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchAllViews } from '@/app/api/livepeer/views';
+import { createClient } from '@/lib/sdk/supabase/server';
 import { serverLogger } from '@/lib/utils/logger';
 
 /**
  * Read-only endpoint to fetch view metrics from Livepeer
- * This does NOT update the database - use /api/video-assets/sync-views for that
+ * Falls back to database views_count if Livepeer API fails or returns 0
  */
 export async function GET(
   request: NextRequest,
@@ -22,17 +23,34 @@ export async function GET(
 
     // Fetch metrics from Livepeer API
     const metrics = await fetchAllViews(playbackId);
-    
-    if (!metrics) {
-      return NextResponse.json(
-        { error: 'Failed to fetch view metrics from Livepeer' },
-        { status: 500 }
-      );
+
+    if (metrics) {
+      const livepeerTotal = (metrics.viewCount ?? 0) + (metrics.legacyViewCount ?? 0);
+
+      if (livepeerTotal > 0) {
+        return NextResponse.json({
+          success: true,
+          ...metrics,
+        });
+      }
     }
+
+    // Livepeer returned 0 or failed — fall back to database views_count
+    const supabase = await createClient();
+    const { data: videoAsset } = await supabase
+      .from('video_assets')
+      .select('views_count')
+      .eq('playback_id', playbackId)
+      .single();
+
+    const dbViewCount = videoAsset?.views_count ?? 0;
 
     return NextResponse.json({
       success: true,
-      ...metrics
+      playbackId,
+      viewCount: dbViewCount,
+      playtimeMins: metrics?.playtimeMins ?? 0,
+      legacyViewCount: 0,
     });
 
   } catch (error) {

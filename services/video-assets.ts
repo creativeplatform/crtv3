@@ -176,6 +176,87 @@ export async function createVideoAsset(
   return result;
 }
 
+export interface CreateClipVideoAssetParams {
+  assetId: string;
+  playbackId: string;
+  playbackUrl?: string | null;
+  thumbnailUrl?: string | null;
+  name?: string | null;
+  parentPlaybackId: string;
+  parentStoryIpId?: string | null;
+  clipStartMs: number;
+  clipEndMs: number;
+  clipperAddress: string;
+}
+
+export async function createClipVideoAsset(params: CreateClipVideoAssetParams) {
+  const supabase = createServiceClient();
+
+  const { data: existing } = await supabase
+    .from("video_assets")
+    .select("*")
+    .eq("asset_id", params.assetId)
+    .maybeSingle();
+  if (existing) return existing;
+
+  const title = params.name?.trim() || `Clip of ${params.parentPlaybackId.slice(0, 8)}`;
+  const durationSec = Math.max(0, Math.round((params.clipEndMs - params.clipStartMs) / 1000));
+
+  const { data, error } = await supabase
+    .from("video_assets")
+    .insert({
+      title,
+      asset_id: params.assetId,
+      playback_id: params.playbackId,
+      category: "clip",
+      location: "",
+      description: null,
+      creator_id: params.clipperAddress.toLowerCase(),
+      status: "draft",
+      duration: durationSec,
+      views_count: 0,
+      likes_count: 0,
+      is_minted: false,
+      current_supply: 0,
+      thumbnail_url: params.thumbnailUrl ?? null,
+      source_type: "Clip",
+      parent_playback_id: params.parentPlaybackId,
+      parent_story_ip_id: params.parentStoryIpId ?? null,
+      clip_start_ms: params.clipStartMs,
+      clip_end_ms: params.clipEndMs,
+      clipper_address: params.clipperAddress.toLowerCase(),
+    })
+    .select()
+    .single();
+
+  if (error) {
+    throw new Error(`Failed to create clip video asset: ${error.message}`);
+  }
+
+  return data;
+}
+
+export async function listClipsByParentPlaybackId(
+  parentPlaybackId: string,
+  limit: number = 20
+) {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("video_assets")
+    .select(
+      "id, title, playback_id, thumbnail_url, status, is_minted, duration, clip_start_ms, clip_end_ms, clipper_address, token_id, story_ip_id, contract_address, created_at"
+    )
+    .eq("source_type", "Clip")
+    .eq("parent_playback_id", parentPlaybackId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    throw new Error(`Failed to list clips: ${error.message}`);
+  }
+  return data ?? [];
+}
+
 export async function getVideoAssetById(id: number) {
   const supabase = await createClient();
 

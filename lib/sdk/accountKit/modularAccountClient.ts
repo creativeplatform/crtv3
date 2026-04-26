@@ -5,6 +5,7 @@ import { type Chain } from "viem";
 import { modularAccountFactoryAddresses } from "@/lib/utils/modularAccount";
 import { signer } from "./signer";
 import { serverLogger } from "@/lib/utils/logger";
+import { appendBuilderCode } from "@/lib/utils/builder-code";
 
 interface CreateModularAccountClientParams {
   chain?: Chain;
@@ -62,7 +63,7 @@ export async function sendUserOperation({
     const operation = await client.sendUserOperation({
       uo: {
         target,
-        data,
+        data: appendBuilderCode(data ?? "0x"),
         value,
       },
     });

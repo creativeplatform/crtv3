@@ -47,6 +47,7 @@ import { toast } from "sonner";
 import { useWalletStatus } from "@/lib/hooks/accountkit/useWalletStatus";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { logger } from '@/lib/utils/logger';
+import { appendBuilderCode } from "@/lib/utils/builder-code";
 
 
 /**
@@ -188,7 +189,7 @@ function SendTransactionTab({ client }: { client: any }) {
       sendUserOperation({
         uo: {
           target: formattedRecipient,
-          data: formattedData as `0x${string}`,
+          data: appendBuilderCode(formattedData as `0x${string}`),
           value: valueInWei,
         },
       });

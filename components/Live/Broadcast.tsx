@@ -21,7 +21,7 @@ import {
   Minimize,
   Loader2,
   Square,
-  Radio, // For "Go Live"
+  Radio,
 } from "lucide-react";
 
 import { logger } from '@/lib/utils/logger';
@@ -35,12 +35,12 @@ import {
 import { updateStream } from "@/services/streams";
 
 interface BroadcastProps {
-  streamKey: string | null;
+  streamKey: string;
   streamId?: string | null;
   creatorAddress: string;
 }
 
-interface StreamProfile {
+export interface StreamProfile {
   name: string;
   width: number;
   height: number;
@@ -52,7 +52,7 @@ interface StreamProfile {
   profile: string;
 }
 
-interface CreateStreamProxyParams {
+export interface CreateStreamProxyParams {
   name: string;
   profiles: StreamProfile[];
   record: boolean;
@@ -81,87 +81,9 @@ export async function createStreamViaProxy(params: CreateStreamProxyParams) {
 }
 
 function BroadcastWithControls({ streamKey, streamId: propStreamId, creatorAddress }: BroadcastProps) {
-  const [isCreatingStream, setIsCreatingStream] = React.useState(false);
-  const [streamData, setStreamData] = React.useState<any>(null);
-  const streamCreationInitiatedRef = React.useRef(false);
-
-  // Auto-create stream if key not provided
-  React.useEffect(() => {
-    const createStream = async () => {
-      if (
-        !streamKey &&
-        !isCreatingStream &&
-        !streamCreationInitiatedRef.current
-      ) {
-        streamCreationInitiatedRef.current = true;
-        setIsCreatingStream(true);
-        try {
-          const result = await createStreamViaProxy({
-            name: `Broadcast-${Date.now()}`,
-            profiles: [
-              {
-                name: "480p",
-                width: 854,
-                height: 480,
-                bitrate: 1_000_000,
-                fps: 30,
-                fpsDen: 1,
-                quality: 23,
-                gop: "2",
-                profile: "H264Baseline",
-              },
-              {
-                name: "720p",
-                width: 1280,
-                height: 720,
-                bitrate: 2_500_000,
-                fps: 30,
-                fpsDen: 1,
-                quality: 23,
-                gop: "2",
-                profile: "H264Baseline",
-              },
-              {
-                name: "1080p",
-                width: 1920,
-                height: 1080,
-                bitrate: 4_500_000,
-                fps: 30,
-                fpsDen: 1,
-                quality: 23,
-                gop: "2",
-                profile: "H264Baseline",
-              },
-            ],
-            record: false,
-            playbackPolicy: { type: "jwt" },
-            multistream: undefined,
-          });
-
-          logger.debug("Stream created:", result);
-          setStreamData(result);
-          toast.success("Stream created successfully!");
-        } catch (error) {
-          logger.error("Error creating stream:", error);
-          toast.error("Failed to create stream. Please try again.");
-        } finally {
-          setIsCreatingStream(false);
-        }
-      }
-    };
-
-    createStream();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [streamKey, isCreatingStream]);
-
-  const activeStreamKey = streamKey || streamData?.streamKey;
-
   const ingestUrl = React.useMemo(() => {
-    if (activeStreamKey) {
-      return `https://ingest.livepeer.studio/whip/${activeStreamKey}`;
-    }
-    return null;
-  }, [activeStreamKey]);
+    return `https://ingest.livepeer.studio/whip/${streamKey}`;
+  }, [streamKey]);
 
   const {
     status,
@@ -177,8 +99,10 @@ function BroadcastWithControls({ streamKey, streamId: propStreamId, creatorAddre
     selectedVideoDeviceId,
     changeAudioDevice,
     changeVideoDevice,
-    error: broadcastError
-  } = useBroadcast({ ingestUrl, streamKey: activeStreamKey });
+    error: broadcastError,
+    isScreenSharing,
+    toggleScreenShare
+  } = useBroadcast({ ingestUrl, streamKey });
 
   useEffect(() => {
     if (broadcastError) {
@@ -196,9 +120,6 @@ function BroadcastWithControls({ streamKey, streamId: propStreamId, creatorAddre
           await updateStream(creatorAddress, { is_live: true, last_live_at: new Date().toISOString() });
           logger.info("Stream marked as live in DB");
         } else if (status === 'idle' || status === 'error') {
-          // Only unmark if we were previously tracking it or just as a cleanup
-          // We might want to be careful not to unmark if just loading.
-          // But 'idle' and 'error' are terminal states for the broadcast session usually.
           await updateStream(creatorAddress, { is_live: false });
           logger.info("Stream marked as offline in DB");
         }
@@ -229,16 +150,6 @@ function BroadcastWithControls({ streamKey, streamId: propStreamId, creatorAddre
     document.addEventListener("fullscreenchange", handleFullscreenChange);
     return () => document.removeEventListener("fullscreenchange", handleFullscreenChange);
   }, []);
-
-
-  if (!ingestUrl) {
-    return (
-      <BroadcastLoading
-        title="Setting up stream"
-        description="Please wait while we set up your stream..."
-      />
-    );
-  }
 
   return (
     <div className="mx-auto max-w-[576px]">
@@ -281,6 +192,12 @@ function BroadcastWithControls({ streamKey, streamId: propStreamId, creatorAddre
               {status === 'live' ? 'Live' : status.toUpperCase()}
             </span>
           </div>
+          {isScreenSharing && (
+            <div className="flex items-center gap-1 rounded-full px-2 py-1 backdrop-blur-md bg-green-500/80">
+              <MonitorUp size={12} className="text-white" />
+              <span className="text-xs font-medium text-white">Screen</span>
+            </div>
+          )}
         </div>
 
         {/* Controls */}
@@ -306,12 +223,19 @@ function BroadcastWithControls({ streamKey, streamId: propStreamId, creatorAddre
               >
                 {isAudioEnabled ? <Mic size={20} /> : <MicOff size={20} className="text-red-500" />}
               </button>
+              <button
+                onClick={toggleScreenShare}
+                className="p-2 rounded-full hover:bg-white/10 text-white transition-colors"
+                title={isScreenSharing ? "Stop Screen Share" : "Share Screen"}
+              >
+                {isScreenSharing ? <MonitorOff size={20} className="text-green-500" /> : <MonitorUp size={20} />}
+              </button>
             </div>
 
             {/* Right Controls */}
             <div className="flex items-center gap-2">
               <Settings
-                streamId={streamData?.id || propStreamId || ""}
+                streamId={propStreamId || ""}
                 streamKey={streamKey}
                 ingestUrl={ingestUrl}
                 devices={devices}

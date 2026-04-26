@@ -4,6 +4,7 @@ import { useGasSponsorship } from "@/lib/hooks/wallet/useGasSponsorship";
 import { parseEther, formatEther, encodeFunctionData } from 'viem';
 import { meTokensSubgraph, MeToken } from '@/lib/sdk/metokens/subgraph';
 import { logger } from '@/lib/utils/logger';
+import { appendBuilderCode } from "@/lib/utils/builder-code";
 
 
 // MeTokens contract addresses on Base
@@ -636,11 +637,11 @@ export function useMeTokens() {
       await sendUserOperationAsync({
         uo: {
           target: DIAMOND,
-          data: encodeFunctionData({
+          data: appendBuilderCode(encodeFunctionData({
             abi: DIAMOND_ABI,
             functionName: 'mint',
             args: [meTokenAddress as `0x${string}`, parseEther(collateralAmount), address as `0x${string}`],
-          }),
+          })),
           value: BigInt(0),
         },
       });
@@ -657,11 +658,11 @@ export function useMeTokens() {
       await sendUserOperationAsync({
         uo: {
           target: DIAMOND,
-          data: encodeFunctionData({
+          data: appendBuilderCode(encodeFunctionData({
             abi: DIAMOND_ABI,
             functionName: 'burn',
             args: [meTokenAddress as `0x${string}`, parseEther(meTokenAmount), address as `0x${string}`],
-          }),
+          })),
           value: BigInt(0),
         },
       });

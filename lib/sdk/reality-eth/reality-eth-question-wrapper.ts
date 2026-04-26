@@ -3,6 +3,7 @@ import { base } from "@account-kit/infra";
 import { getRealityEthContract, getRealityEthContractAddress, getRealityEthABI } from "./reality-eth-client";
 import { encodeQuestionText, validateQuestionData, type QuestionData } from "./reality-eth-utils";
 import { serverLogger } from '@/lib/utils/logger';
+import { appendBuilderCode } from "@/lib/utils/builder-code";
 
 
 /**
@@ -149,7 +150,7 @@ export async function createQuestion(
       const operation = await walletClient.sendUserOperation({
         uo: {
           target: contractAddress,
-          data: data as `0x${string}`,
+          data: appendBuilderCode(data as `0x${string}`),
           value: bond,
         },
       });
@@ -245,7 +246,7 @@ export async function submitAnswer(
       const operation = await walletClient.sendUserOperation({
         uo: {
           target: contractAddress,
-          data: data as `0x${string}`,
+          data: appendBuilderCode(data as `0x${string}`),
           value: bond,
         },
       });
@@ -750,7 +751,7 @@ export async function claimWinnings(
 
   if (walletClient.sendUserOperation && typeof walletClient.sendUserOperation === "function") {
     const op = await walletClient.sendUserOperation({
-      uo: { target: contractAddress, data: data as `0x${string}`, value: 0n },
+      uo: { target: contractAddress, data: appendBuilderCode(data as `0x${string}`), value: 0n },
     });
     if (walletClient.waitForUserOperationTransaction) {
       const receipt = await walletClient.waitForUserOperationTransaction({ hash: op.hash });
@@ -791,7 +792,7 @@ export async function withdraw(
 
   if (walletClient.sendUserOperation && typeof walletClient.sendUserOperation === "function") {
     const op = await walletClient.sendUserOperation({
-      uo: { target: contractAddress, data: data as `0x${string}`, value: 0n },
+      uo: { target: contractAddress, data: appendBuilderCode(data as `0x${string}`), value: 0n },
     });
     if (walletClient.waitForUserOperationTransaction) {
       const receipt = await walletClient.waitForUserOperationTransaction({ hash: op.hash });

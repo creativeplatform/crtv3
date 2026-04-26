@@ -9,6 +9,7 @@
 import type { Address } from "viem";
 import { encodeFunctionData, parseAbi } from "viem";
 import { serverLogger } from '@/lib/utils/logger';
+import { appendBuilderCode } from "@/lib/utils/builder-code";
 
 
 /**
@@ -76,7 +77,7 @@ export async function setTokenRoyaltyToSplit(
     const operation = await smartAccountClient.sendUserOperation({
       uo: {
         target: collectionAddress,
-        data: setRoyaltyData,
+        data: appendBuilderCode(setRoyaltyData),
         value: BigInt(0),
       },
     });

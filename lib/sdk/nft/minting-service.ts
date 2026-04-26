@@ -17,6 +17,7 @@ import { mintAndRegisterIp, mintAndRegisterIpAndAttachPilTerms, createCollection
 import { PILFlavor } from "@story-protocol/core-sdk";
 import { WIP_TOKEN_ADDRESS } from "@/lib/sdk/story/constants";
 import { serverLogger } from "@/lib/utils/logger";
+import { appendBuilderCode } from "@/lib/utils/builder-code";
 
 // Standard ERC721 ABI for minting
 const ERC721_MINT_ABI = parseAbi([
@@ -87,7 +88,7 @@ export async function mintVideoNFT(
     const operation = await smartAccountClient.sendUserOperation({
       uo: {
         target: nftContractAddress,
-        data: mintData,
+        data: appendBuilderCode(mintData),
         value: BigInt(0),
       },
     });

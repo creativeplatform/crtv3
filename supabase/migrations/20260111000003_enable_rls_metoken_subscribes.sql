@@ -8,6 +8,7 @@ ALTER TABLE public.metoken_subscribes ENABLE ROW LEVEL SECURITY;
 -- Allow public read access to metoken_subscribes
 -- This is blockchain event data, so it's safe to allow public read access
 -- Writes come from the Goldsky pipeline (service_role), which bypasses RLS
+DROP POLICY IF EXISTS "Allow public read access to metoken_subscribes" ON public.metoken_subscribes;
 CREATE POLICY "Allow public read access to metoken_subscribes"
   ON public.metoken_subscribes
   FOR SELECT

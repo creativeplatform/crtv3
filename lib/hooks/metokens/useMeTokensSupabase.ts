@@ -9,6 +9,7 @@ import { DAI_TOKEN_ADDRESSES, getDaiTokenContract } from '@/lib/contracts/DAITok
 import { useToast } from '@/components/ui/use-toast';
 import { useGasSponsorship } from '@/lib/hooks/wallet/useGasSponsorship';
 import { logger } from '@/lib/utils/logger';
+import { appendBuilderCode } from "@/lib/utils/builder-code";
 
 // MeTokens contract addresses on Base
 const METOKEN_FACTORY = '0xb31Ae2583d983faa7D8C8304e6A16E414e721A0B';
@@ -664,7 +665,7 @@ export function useMeTokensSupabase(targetAddress?: string) {
               approveOp = await client.sendUserOperation({
                 uo: {
                   target: daiContract.address as `0x${string}`,
-                  data: approveData,
+                  data: appendBuilderCode(approveData),
                   value: BigInt(0),
                 },
                 context: approvePrimaryContext, // Apply gas sponsorship
@@ -676,7 +677,7 @@ export function useMeTokensSupabase(targetAddress?: string) {
                 const fallbackApprovePromise = client.sendUserOperation({
                   uo: {
                     target: daiContract.address as `0x${string}`,
-                    data: approveData,
+                    data: appendBuilderCode(approveData),
                     value: BigInt(0),
                   },
                   // No context = standard ETH payment
@@ -799,7 +800,7 @@ You can try creating your MeToken with 0 DAI deposit and add liquidity later.`;
             diamondApproveOp = await client.sendUserOperation({
               uo: {
                 target: daiContract.address as `0x${string}`,
-                data: diamondApproveData,
+                data: appendBuilderCode(diamondApproveData),
                 value: BigInt(0),
               },
               context: diamondApprovePrimaryContext, // Apply gas sponsorship
@@ -811,7 +812,7 @@ You can try creating your MeToken with 0 DAI deposit and add liquidity later.`;
               const fallbackDiamondApprovePromise = client.sendUserOperation({
                 uo: {
                   target: daiContract.address as `0x${string}`,
-                  data: diamondApproveData,
+                  data: appendBuilderCode(diamondApproveData),
                   value: BigInt(0),
                 },
                 // No context = standard ETH payment
@@ -940,7 +941,7 @@ You can try creating your MeToken with 0 DAI deposit and add liquidity later.`;
         const sendOpPromise = client.sendUserOperation({
           uo: {
             target: DIAMOND, // Subscribe is called on the Diamond contract
-            data: subscribeData,
+            data: appendBuilderCode(subscribeData),
             value: BigInt(0),
           },
           context: primaryContext, // Apply gas sponsorship context
@@ -983,7 +984,7 @@ You can try creating your MeToken with 0 DAI deposit and add liquidity later.`;
             const fallbackSubscribePromise = client.sendUserOperation({
               uo: {
                 target: DIAMOND,
-                data: subscribeData,
+                data: appendBuilderCode(subscribeData),
                 value: BigInt(0),
               },
               // No context = standard ETH payment
@@ -1423,7 +1424,7 @@ You can try creating your MeToken with 0 DAI deposit and add liquidity later.`;
         const approveOp = await client.sendUserOperation({
           uo: {
             target: daiContract.address as `0x${string}`,
-            data: approveData,
+            data: appendBuilderCode(approveData),
             value: BigInt(0),
           },
           context: gasContext,
@@ -1467,7 +1468,7 @@ You can try creating your MeToken with 0 DAI deposit and add liquidity later.`;
         const approveOp = await client.sendUserOperation({
           uo: {
             target: daiContract.address as `0x${string}`,
-            data: approveData,
+            data: appendBuilderCode(approveData),
             value: BigInt(0),
           },
           context: gasContext,
@@ -1499,11 +1500,11 @@ You can try creating your MeToken with 0 DAI deposit and add liquidity later.`;
       const mintOperation = {
         uo: {
           target: DIAMOND as `0x${string}`,
-          data: encodeFunctionData({
+          data: appendBuilderCode(encodeFunctionData({
             abi: METOKEN_ABI,
             functionName: 'mint',
             args: [meTokenAddress as `0x${string}`, parseEther(collateralAmount), address as `0x${string}`],
-          }),
+          })),
           value: BigInt(0),
         },
       };
@@ -1725,11 +1726,11 @@ You can try creating your MeToken with 0 DAI deposit and add liquidity later.`;
         const operation = await client.sendUserOperation({
           uo: {
             target: daiContract.address as `0x${string}`,
-            data: encodeFunctionData({
+            data: appendBuilderCode(encodeFunctionData({
               abi: daiContract.abi,
               functionName: 'approve',
               args: [vaultAddress as `0x${string}`, BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff')], // Max approval
-            }),
+            })),
             value: BigInt(0),
           },
         });
@@ -1873,7 +1874,7 @@ You can try creating your MeToken with 0 DAI deposit and add liquidity later.`;
         const approveOp = await client.sendUserOperation({
           uo: {
             target: meTokenAddress as `0x${string}`,
-            data: approveData,
+            data: appendBuilderCode(approveData),
             value: BigInt(0),
           },
         });
@@ -1916,7 +1917,7 @@ You can try creating your MeToken with 0 DAI deposit and add liquidity later.`;
         const approveOp = await client.sendUserOperation({
           uo: {
             target: meTokenAddress as `0x${string}`,
-            data: approveData,
+            data: appendBuilderCode(approveData),
             value: BigInt(0),
           },
         });
@@ -1948,11 +1949,11 @@ You can try creating your MeToken with 0 DAI deposit and add liquidity later.`;
       const burnOperation = {
         uo: {
           target: DIAMOND as `0x${string}`,
-          data: encodeFunctionData({
+          data: appendBuilderCode(encodeFunctionData({
             abi: METOKEN_ABI,
             functionName: 'burn',
             args: [meTokenAddress as `0x${string}`, sellAmountWei, address as `0x${string}`],
-          }),
+          })),
           value: BigInt(0),
         },
       };
