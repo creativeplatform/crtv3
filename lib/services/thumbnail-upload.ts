@@ -1,5 +1,12 @@
 import { groveService } from '@/lib/sdk/grove/service';
+import { uploadFileToGrove } from '@/lib/sdk/orb/grove-upload';
 import { serverLogger } from '@/lib/utils/logger';
+
+export interface ThumbnailUploadOptions {
+  /** Lens account address for Orb Grove upload plugin (browser only). */
+  groveAccount?: string;
+  onProgress?: (progress: number) => void;
+}
 
 
 export interface ThumbnailUploadResult {
@@ -19,8 +26,7 @@ export interface ThumbnailUploadResult {
 export async function uploadThumbnailToIPFS(
   file: File,
   playbackId: string,
-  // service param removed but kept compatible if passed as any/ignored, 
-  // though we change signature here as we confirmed callsites don't pass it.
+  options?: ThumbnailUploadOptions,
 ): Promise<ThumbnailUploadResult> {
   try {
     // Validate file type
@@ -32,6 +38,25 @@ export async function uploadThumbnailToIPFS(
     }
 
     serverLogger.debug('[ThumbnailUpload] Starting upload with Grove...');
+
+    if (typeof window !== 'undefined' && options?.groveAccount) {
+      try {
+        const orbResult = await uploadFileToGrove({
+          file,
+          account: options.groveAccount,
+          onProgress: options.onProgress,
+        });
+        return {
+          success: true,
+          thumbnailUrl: orbResult.gatewayUrl,
+        };
+      } catch (orbErr) {
+        serverLogger.warn(
+          '[ThumbnailUpload] Orb Grove upload failed, falling back:',
+          orbErr,
+        );
+      }
+    }
 
     const result = await groveService.uploadFile(file);
 

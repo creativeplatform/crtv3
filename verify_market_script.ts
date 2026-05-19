@@ -1,6 +1,6 @@
 
 import { createPublicClient, http, parseAbi, formatEther } from 'viem';
-import { base } from 'viem/chains';
+import { baseMainnet } from '@/lib/utils/chains/base';
 import { getMeTokenInfoFromBlockchain, getMeTokenProtocolInfo } from './lib/utils/metokenUtils';
 
 async function main() {
@@ -8,7 +8,7 @@ async function main() {
 
     // 1. Find a recent MeToken
     const publicClient = createPublicClient({
-        chain: base,
+        chain: baseMainnet,
         transport: http('https://base.llamarpc.com')
     });
 

@@ -1,0 +1,75 @@
+diff --git a/dist/build/webpack/loaders/next-flight-action-entry-loader.js b/dist/build/webpack/loaders/next-flight-action-entry-loader.js
+index ac945638e63581bbb51cba2b063bd741d973e8a0..0d644ed03cd56b72b2e819fd77ccbbaff0eee2da 100644
+--- a/dist/build/webpack/loaders/next-flight-action-entry-loader.js
++++ b/dist/build/webpack/loaders/next-flight-action-entry-loader.js
+@@ -8,6 +8,16 @@ Object.defineProperty(exports, "default", {
+         return _default;
+     }
+ });
++function resolveActionExportName(exportedName) {
++    if (typeof exportedName === 'string') return exportedName;
++    let cur = exportedName;
++    while (cur != null && typeof cur === 'object' && Object.prototype.hasOwnProperty.call(cur, 'name')){
++        const n = cur.name;
++        if (typeof n === 'string') return n;
++        cur = n;
++    }
++    throw new Error(`next-flight-action-entry-loader: invalid exportedName ${JSON.stringify(exportedName)}`);
++}
+ function nextFlightActionEntryLoader() {
+     const { actions } = this.getOptions();
+     const actionList = JSON.parse(actions);
+@@ -22,8 +32,9 @@ function nextFlightActionEntryLoader() {
+     }).flat();
+     return `
+ ${individualActions.map(([id, path, exportedName])=>{
++        const exportId = resolveActionExportName(exportedName);
+         // Re-export the same functions from the original module path as action IDs.
+-        return `export { ${exportedName} as "${id}" } from ${JSON.stringify(path)}`;
++        return `export { ${exportId} as "${id}" } from ${JSON.stringify(path)}`;
+     }).join('\n')}
+ `;
+ }
+diff --git a/dist/build/webpack/plugins/flight-client-entry-plugin.js b/dist/build/webpack/plugins/flight-client-entry-plugin.js
+index 084047467941b07eeb1c50d414364dc8f364e9ff..8bcea3fc6102b0074d05dc99de6e35d82bb295a9 100644
+--- a/dist/build/webpack/plugins/flight-client-entry-plugin.js
++++ b/dist/build/webpack/plugins/flight-client-entry-plugin.js
+@@ -31,6 +31,16 @@ function _interop_require_default(obj) {
+         default: obj
+     };
+ }
++function resolveServerActionExportName(actionInfo) {
++    if (typeof actionInfo === 'string') return actionInfo;
++    let cur = actionInfo;
++    while (cur != null && typeof cur === 'object' && Object.prototype.hasOwnProperty.call(cur, 'name')){
++        const n = cur.name;
++        if (typeof n === 'string') return n;
++        cur = n;
++    }
++    return undefined;
++}
+ const PLUGIN_NAME = 'FlightClientEntryPlugin';
+ const pluginState = (0, _buildcontext.getProxiedPluginState)({
+     // A map to track "action" -> "list of bundles".
+@@ -417,8 +427,8 @@ class FlightClientEntryPlugin {
+                 const actionIds = (_getModuleBuildInfo_rsc = (0, _getmodulebuildinfo.getModuleBuildInfo)(mod).rsc) == null ? void 0 : _getModuleBuildInfo_rsc.actionIds;
+                 if (actionIds) {
+                     collectedActions.set(modResource, Object.entries(actionIds).map(([id, actionInfo])=>{
+-                        // Handle both old format (string) and new format (object with name)
+-                        const exportedName = typeof actionInfo === 'object' && actionInfo !== null ? actionInfo.name : actionInfo;
++                        // Handle string, { name }, and nested { name: { name } } shapes from SWC
++                        const exportedName = resolveServerActionExportName(actionInfo);
+                         return {
+                             id,
+                             exportedName,
+@@ -478,8 +488,8 @@ class FlightClientEntryPlugin {
+                 actionImports.push([
+                     modResource,
+                     Object.entries(actionIds).map(([id, actionInfo])=>{
+-                        // Handle both old format (string) and new format (object with name)
+-                        const exportedName = typeof actionInfo === 'object' && actionInfo !== null ? actionInfo.name : actionInfo;
++                        // Handle string, { name }, and nested { name: { name } } shapes from SWC
++                        const exportedName = resolveServerActionExportName(actionInfo);
+                         return {
+                             id,
+                             exportedName,

@@ -39,6 +39,10 @@ export async function POST(request: NextRequest) {
       twin_address,
       twin_avatar_glb_url,
       twin_chat_endpoint,
+      orb_account_id,
+      lens_account_id,
+      lens_handle,
+      lens_avatar_uri,
     } = body;
 
     if (!owner_address) {
@@ -77,6 +81,10 @@ export async function POST(request: NextRequest) {
     }
     if (twin_avatar_glb_url !== undefined) payload.twin_avatar_glb_url = twin_avatar_glb_url;
     if (twin_chat_endpoint !== undefined) payload.twin_chat_endpoint = twin_chat_endpoint;
+    if (orb_account_id !== undefined) payload.orb_account_id = orb_account_id;
+    if (lens_account_id !== undefined) payload.lens_account_id = lens_account_id;
+    if (lens_handle !== undefined) payload.lens_handle = lens_handle;
+    if (lens_avatar_uri !== undefined) payload.lens_avatar_uri = lens_avatar_uri;
 
     let data, error;
 

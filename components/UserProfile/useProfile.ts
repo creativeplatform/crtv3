@@ -1,7 +1,7 @@
 import { useEffect, useReducer } from "react";
 import { createPublicClient, createWalletClient, custom, http } from "viem";
 import type { Account } from "@/lib/types/account";
-import { base } from "viem/chains";
+import { baseMainnet } from "@/lib/utils/chains/base";
 import { formatAddress, stack } from "@/lib/sdk/stack/stackClient";
 import Unlock from "@/lib/contracts/Unlock.json";
 import { toast } from "sonner";
@@ -58,7 +58,7 @@ export function useProfile(account: Account | null) {
   const [state, dispatch] = useReducer(profileReducer, initialState);
 
   const publicClient = createPublicClient({
-    chain: base,
+    chain: baseMainnet,
     transport: http(
       `https://base-mainnet.g.alchemy.com/v2/${process.env.NEXT_PUBLIC_ALCHEMY_API_KEY}`
     ),
@@ -67,7 +67,7 @@ export function useProfile(account: Account | null) {
   const walletClient =
     typeof window !== "undefined"
       ? createWalletClient({
-          chain: base,
+          chain: baseMainnet,
           transport: custom(window.ethereum),
         })
       : null;

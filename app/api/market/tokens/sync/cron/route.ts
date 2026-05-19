@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/sdk/supabase/service';
 import { getMeTokenProtocolInfo } from '@/lib/utils/metokenUtils';
 import { createPublicClient, http, formatEther } from 'viem';
-import { base } from 'viem/chains';
+import { baseMainnet } from '@/lib/utils/chains/base';
 import { serverLogger } from '@/lib/utils/logger';
 
 export const dynamic = 'force-dynamic';
@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
 
     const supabase = createServiceClient();
     const publicClient = createPublicClient({
-      chain: base,
+      chain: baseMainnet,
       transport: http(process.env.NEXT_PUBLIC_ALCHEMY_RPC_URL || process.env.NEXT_PUBLIC_BASE_RPC_URL),
     });
 

@@ -14,7 +14,7 @@ import { logger } from '@/lib/utils/logger';
  * from the HeliaProvider context, making it the primary method
  * for IPFS operations.
  * 
- * @param config - Optional IPFS configuration (Lighthouse, Storacha, Filecoin, etc.)
+ * @param config - Optional IPFS configuration (Lighthouse mirror, Filecoin archival, gateway)
  *                 Note: For optimal performance, memoize this object with useMemo if passing config.
  * @returns IPFSService instance configured with Helia from context
  * 
@@ -55,18 +55,12 @@ export function useIpfsService(config?: Omit<IPFSConfig, 'helia' | 'fs'>) {
     return {
       lighthouseApiKey: config.lighthouseApiKey,
       filecoinFirstApiKey: config.filecoinFirstApiKey,
-      key: config.key,
-      proof: config.proof,
-      email: config.email,
       gateway: config.gateway,
       enableFilecoinArchival: config.enableFilecoinArchival,
     };
   }, [
     config?.lighthouseApiKey,
     config?.filecoinFirstApiKey,
-    config?.key,
-    config?.proof,
-    config?.email,
     config?.gateway,
     config?.enableFilecoinArchival,
   ]);

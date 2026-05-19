@@ -1,9 +1,8 @@
 "use client";
 
 import React, { createContext, useContext, useEffect, useState, ReactNode, useRef } from "react";
-import { Helia } from "helia";
-import { createNode } from "../lib/sdk/ipfs/helia-config";
-import { unixfs, UnixFS } from "@helia/unixfs";
+import type { Helia } from "helia";
+import type { UnixFS } from "@helia/unixfs";
 import { logger } from "@/lib/utils/logger";
 
 /**
@@ -106,10 +105,14 @@ export const HeliaProvider: React.FC<{ children: ReactNode }> = ({
       try {
         logger.debug("[HeliaProvider] Initializing Helia...");
 
-        // Create Helia instance
-        heliaInstance = await createNode();
+        // Load Helia only in the browser — static imports pull node-datachannel (native .node)
+        // into the SSR bundle and crash Node (MODULE_NOT_FOUND for node_datachannel.node).
+        const [{ createNode }, { unixfs }] = await Promise.all([
+          import("@/lib/sdk/ipfs/helia-config"),
+          import("@helia/unixfs"),
+        ]);
 
-        // Create UnixFS instance
+        heliaInstance = await createNode();
         const fsInstance = unixfs(heliaInstance!);
 
         // Only update state if component is still mounted

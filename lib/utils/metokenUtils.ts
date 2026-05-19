@@ -1,5 +1,5 @@
 import { createPublicClient, http, parseAbi, formatEther } from 'viem';
-import { base } from 'viem/chains';
+import { baseMainnet } from '@/lib/utils/chains/base';
 import { logger } from '@/lib/utils/logger';
 
 // MeTokenFactory ABI - we only need the MeTokenCreated event
@@ -11,7 +11,7 @@ const METOKEN_FACTORY_ADDRESS = '0xb31Ae2583d983faa7D8C8304e6A16E414e721A0B';
 
 // Create a public client for reading blockchain data
 const publicClient = createPublicClient({
-  chain: base,
+  chain: baseMainnet,
   transport: http(undefined, {
     fetchOptions: {
       headers: {

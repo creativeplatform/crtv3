@@ -3,7 +3,10 @@
 import React, { useEffect, useState } from "react";
 import { PreviewPlayer } from "../Player/PreviewPlayer";
 import { getFeaturedPlaybackSource } from "@/lib/hooks/livepeer/useFeaturePlaybackSource";
-import { FEATURED_VIDEO_TITLE } from "@/context/context";
+import {
+  FEATURED_VIDEO_TITLE,
+  LIVEPEER_FEATURED_PLAYBACK_ID,
+} from "@/context/context";
 import { Src } from "@livepeer/react";
 import { useVideo } from "@/context/VideoContext";
 import { logger } from '@/lib/utils/logger';
@@ -96,7 +99,11 @@ const FeaturedVideo: React.FC = () => {
       <h2 className="mb-8 text-2xl font-bold">Featured</h2>
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
         <div className="overflow-hidden rounded-lg bg-gray-900 shadow-md transition-all hover:shadow-lg">
-          <PreviewPlayer src={playbackSource} title={FEATURED_VIDEO_TITLE} />
+          <PreviewPlayer
+            src={playbackSource}
+            title={FEATURED_VIDEO_TITLE}
+            playbackId={LIVEPEER_FEATURED_PLAYBACK_ID}
+          />
         </div>
         <div className="space-y-4">
           <h3 className="text-xl font-medium">{FEATURED_VIDEO_TITLE}</h3>

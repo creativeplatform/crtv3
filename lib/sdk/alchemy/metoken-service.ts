@@ -1,6 +1,6 @@
 import { Alchemy, Network, Utils } from "alchemy-sdk";
 import { createPublicClient, createWalletClient, http, parseEther, formatEther, encodeFunctionData } from "viem";
-import { base } from "viem/chains";
+import { baseMainnet } from "@/lib/utils/chains/base";
 import { privateKeyToAccount } from "viem/accounts";
 import { serverLogger } from "@/lib/utils/logger";
 
@@ -166,7 +166,7 @@ export class AlchemyMeTokenService {
     
     // Create Viem clients for blockchain interactions
     this.publicClient = createPublicClient({
-      chain: base,
+      chain: baseMainnet,
       transport: http(`https://base-mainnet.g.alchemy.com/v2/${process.env.NEXT_PUBLIC_ALCHEMY_API_KEY}`, {
         fetchOptions: {
           headers: {
@@ -182,7 +182,7 @@ export class AlchemyMeTokenService {
       const account = privateKeyToAccount(process.env.ALCHEMY_SWAP_PRIVATE_KEY as `0x${string}`);
       this.walletClient = createWalletClient({
         account,
-        chain: base,
+        chain: baseMainnet,
         transport: http(`https://base-mainnet.g.alchemy.com/v2/${process.env.NEXT_PUBLIC_ALCHEMY_API_KEY}`, {
           fetchOptions: {
             headers: {

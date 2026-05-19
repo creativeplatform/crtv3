@@ -1,0 +1,96 @@
+# MeTokens entities — field names aligned with Goldsky `metokens/1.0.2` deployment
+type Subscribe @entity(immutable: true) {
+  id: Bytes!
+  block_number: BigInt!
+  timestamp_: BigInt!
+  transactionHash_: Bytes!
+  contractId_: Bytes!
+  meToken: Bytes!
+  owner: Bytes!
+  minted: BigInt!
+  asset: Bytes!
+  assetsDeposited: BigInt!
+  name: String!
+  symbol: String!
+  hubId: BigInt!
+}
+
+type Mint @entity(immutable: true) {
+  id: Bytes!
+  block_number: BigInt!
+  timestamp_: BigInt!
+  transactionHash_: Bytes!
+  contractId_: Bytes!
+  meToken: Bytes!
+  asset: Bytes!
+  depositor: Bytes!
+  recipient: Bytes!
+  assetsDeposited: BigInt!
+  meTokensMinted: BigInt!
+}
+
+type Burn @entity(immutable: true) {
+  id: Bytes!
+  block_number: BigInt!
+  timestamp_: BigInt!
+  transactionHash_: Bytes!
+  contractId_: Bytes!
+  meToken: Bytes!
+  asset: Bytes!
+  burner: Bytes!
+  recipient: Bytes!
+  meTokensBurned: BigInt!
+  assetsReturned: BigInt!
+}
+
+type Register @entity(immutable: true) {
+  id: Bytes!
+  block_number: BigInt!
+  timestamp_: BigInt!
+  transactionHash_: Bytes!
+  contractId_: Bytes!
+  idParam: BigInt!
+  owner: Bytes!
+  asset: Bytes!
+  vault: Bytes!
+  refundRatio: BigInt!
+  baseY: BigInt!
+  reserveWeight: BigInt!
+  encodedVaultArgs: Bytes!
+}
+
+type Question @entity(immutable: false) {
+  id: Bytes!
+  template_id: BigInt!
+  question: String!
+  created: BigInt!
+  opening_ts: BigInt!
+  timeout: BigInt!
+  finalize_ts: BigInt
+  is_pending_arbitration: Boolean!
+  bounty: BigInt!
+  best_answer: Bytes!
+  history_hash: Bytes!
+  arbitrator: Bytes!
+  min_bond: BigInt!
+  last_bond: BigInt!
+  last_bond_ts: BigInt!
+  category: String
+  language: String
+  outcomes: String
+  answers: [Answer!]! @derivedFrom(field: "question")
+}
+
+type Answer @entity(immutable: true) {
+  id: Bytes!
+  question: Question!
+  answer: Bytes!
+  bond: BigInt!
+  answerer: Bytes!
+  created: BigInt!
+  is_commitment: Boolean!
+  history_hash: Bytes!
+  transactionHash: Bytes!
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+}

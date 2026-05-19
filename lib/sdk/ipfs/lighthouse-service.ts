@@ -176,7 +176,11 @@ export class LighthouseService {
   async uploadBuffer(
     buffer: ArrayBuffer | Buffer | Uint8Array
   ): Promise<LighthouseUploadResult> {
-    const blob = new Blob([buffer]);
+    const bytes =
+      buffer instanceof ArrayBuffer
+        ? new Uint8Array(buffer)
+        : Uint8Array.from(buffer);
+    const blob = new Blob([bytes]);
     return this.uploadFile(blob);
   }
 

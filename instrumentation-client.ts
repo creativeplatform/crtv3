@@ -9,6 +9,7 @@ initBotId({
     { path: '/api/swap/execute', method: 'POST' },
     { path: '/api/ipfs/upload', method: 'POST' },
     { path: '/api/creator-profiles/upsert', method: 'POST' },
+    { path: '/api/creator-profiles/link-orb', method: 'POST' },
     { path: '/api/creator-profiles', method: 'POST' },
     { path: '/api/creator-profiles', method: 'PUT' },
     { path: '/api/creator-profiles', method: 'DELETE' },

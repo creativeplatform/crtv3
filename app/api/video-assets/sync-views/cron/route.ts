@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/sdk/supabase/service';
 import { fetchAllViews } from '@/app/api/livepeer/views';
+import { mergeViewCounts, sumLivepeerViewMetrics } from '@/lib/livepeer/view-count';
 import { serverLogger } from '@/lib/utils/logger';
 
 export const maxDuration = 300; // 5 minutes for cron jobs
@@ -9,7 +10,8 @@ export const dynamic = 'force-dynamic';
 /**
  * Cron job to sync view counts from Livepeer to Supabase
  * Runs daily to catch videos that don't get client-side syncing
- * 
+ * Schedule: see `vercel.json` crons (`/api/video-assets/sync-views/cron`).
+ *
  * Security: Requires CRON_SECRET in Authorization header
  */
 export async function GET(request: NextRequest) {
@@ -74,26 +76,27 @@ export async function GET(request: NextRequest) {
             const metrics = await fetchAllViews(video.playback_id);
             
             if (metrics) {
-              const totalViews = metrics.viewCount + metrics.legacyViewCount;
-              
-              // Only update if views have changed (saves DB writes)
-              if (totalViews !== video.views_count) {
+              const livepeerTotal = sumLivepeerViewMetrics(metrics);
+              const merged = mergeViewCounts(video.views_count ?? 0, livepeerTotal);
+
+              if (merged !== video.views_count) {
                 const { error: updateError } = await supabase
                   .from('video_assets')
-                  .update({ views_count: totalViews })
+                  .update({ views_count: merged })
                   .eq('id', video.id);
-                
+
                 if (updateError) {
                   serverLogger.error(`[Cron] Failed to update ${video.playback_id}:`, updateError);
                   errorCount++;
                   errors.push(`${video.title}: ${updateError.message}`);
                 } else {
-                  serverLogger.debug(`[Cron] Updated ${video.title}: ${video.views_count} → ${totalViews} views`);
+                  serverLogger.debug(
+                    `[Cron] Updated ${video.title}: ${video.views_count} → ${merged} views (livepeer=${livepeerTotal})`,
+                  );
                   updatedCount++;
                   successCount++;
                 }
               } else {
-                // No change, but still count as success
                 successCount++;
               }
             } else {

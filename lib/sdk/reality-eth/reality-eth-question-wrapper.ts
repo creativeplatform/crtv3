@@ -1,6 +1,7 @@
 import { type Address, type PublicClient, type WalletClient, encodeFunctionData, parseAbi, keccak256, encodePacked } from "viem";
 import { base } from "@account-kit/infra";
 import { getRealityEthContract, getRealityEthContractAddress, getRealityEthABI } from "./reality-eth-client";
+import { getRealityEthSubgraphUrl } from "./reality-eth-subgraph";
 import { encodeQuestionText, validateQuestionData, type QuestionData } from "./reality-eth-utils";
 import { serverLogger } from '@/lib/utils/logger';
 import { appendBuilderCode } from "@/lib/utils/builder-code";
@@ -573,21 +574,20 @@ export async function getAnswerHistory(
   if (entries.length === 0 || entries[0].history_hash !== zeroHash) {
     serverLogger.info(`⚠️ RPC logs incomplete for ${questionId} (Start hash: ${entries[0]?.history_hash || 'none'}). Fetching from Subgraph...`);
 
-    // Public Goldsky endpoint for Reality.eth on Base
-    const GRAPH_URL = "https://api.goldsky.com/api/public/project_cmh0iv6s500dbw2p22vsxcfo6/subgraphs/reality-eth/1.0.0/gn";
+    const GRAPH_URL = getRealityEthSubgraphUrl();
 
     const query = `
-      query GetHistory($qId: String!) {
-        logNewQuestions(where: { question_id: $qId }) {
-           user
-           arbitrator
+      query GetHistory($qId: ID!) {
+        question(id: $qId) {
+          id
+          arbitrator
         }
-        logNewAnswers(where: { question_id: $qId }, orderBy: ts, orderDirection: asc) {
+        answers(where: { question: $qId }, orderBy: created, orderDirection: asc) {
           answer
           history_hash
-          user
+          answerer
           bond
-          ts
+          created
           is_commitment
         }
       }
@@ -601,16 +601,19 @@ export async function getAnswerHistory(
       });
 
       const result = await response.json();
-      const answerLogs = result.data?.logNewAnswers;
-      const questionLog = result.data?.logNewQuestions?.[0]; // Get creator/arbitrator info
+      if (result.errors?.length) {
+        serverLogger.error("Reality.eth subgraph GraphQL errors:", result.errors);
+      }
+      const answerLogs = result.data?.answers;
+      const questionMeta = result.data?.question;
 
       if (answerLogs && Array.isArray(answerLogs)) {
         entries = answerLogs.map((a: any) => ({
           answer: a.answer as `0x${string}`,
           history_hash: a.history_hash as `0x${string}`,
-          user: a.user as Address,
+          user: a.answerer as Address,
           bond: BigInt(a.bond),
-          ts: BigInt(a.ts),
+          ts: BigInt(a.created),
           is_commitment: Boolean(a.is_commitment),
         }));
 
@@ -640,8 +643,9 @@ export async function getAnswerHistory(
             serverLogger.warn("Could not fetch min_bond from contract", e);
           }
 
-          const creator = questionLog?.user as Address || "0x0000000000000000000000000000000000000000";
-          const arbitrator = questionLog?.arbitrator as Address || "0x0000000000000000000000000000000000000000";
+          const zeroAddr = "0x0000000000000000000000000000000000000000" as Address;
+          const creator = zeroAddr;
+          const arbitrator = (questionMeta?.arbitrator as Address) || zeroAddr;
 
           const reconstructed = reconstructMissingEntry(entries[0].history_hash, creator, arbitrator, minBond);
 

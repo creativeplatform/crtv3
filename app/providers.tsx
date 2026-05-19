@@ -1,4 +1,5 @@
 "use client";
+import "@/lib/utils/suppressDevWarnings";
 import "@/lib/utils/xmtp/wasm-patch";
 import { config, queryClient } from "@/config";
 import { AlchemyAccountProvider } from "@account-kit/react";
@@ -15,10 +16,10 @@ import { ApolloNextAppProvider } from "@apollo/client-integration-nextjs";
 import { makeClient } from "./apolloWrapper";
 import { RadixProvider } from "@/components/ui/radix-provider";
 import { cleanupExistingIframes } from "@/components/IframeCleanup";
-// Import dev warning suppression (only active in development)
-import "@/lib/utils/suppressDevWarnings";
 import { MembershipGuard } from "@/components/auth/MembershipGuard";
 import { AccountKitStoreGuard } from "@/components/auth/AccountKitStoreGuard";
+import { OrbSessionProvider } from "@/context/OrbSessionContext";
+import { OrbLoginModal } from "@/components/auth/OrbLoginModal";
 import NoSSR from "@/components/NoSSR";
 
 function ErrorFallback({ error }: { error: Error }) {
@@ -76,12 +77,15 @@ export const Providers = (
                     <HeliaProvider>
                       <TourProvider>
                         <VideoProvider>
-                          <AccountKitStoreGuard>
-                          <MembershipGuard>
-                            {props.children}
-                          </MembershipGuard>
-                        </AccountKitStoreGuard>
-                          <Toaster position="top-right" richColors />
+                          <OrbSessionProvider>
+                            <AccountKitStoreGuard>
+                              <MembershipGuard>
+                                {props.children}
+                              </MembershipGuard>
+                            </AccountKitStoreGuard>
+                            <OrbLoginModal />
+                            <Toaster position="top-right" richColors />
+                          </OrbSessionProvider>
                         </VideoProvider>
                       </TourProvider>
                     </HeliaProvider>

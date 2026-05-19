@@ -2,18 +2,18 @@
 
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card } from "@/components/ui/card";
-import { motion } from "framer-motion";
+import { motion, type Variants } from "framer-motion";
 import { Vote } from "lucide-react";
 
 function ProposalListSkeleton() {
-  const containerVariants = {
+  const containerVariants: Variants = {
     hidden: { opacity: 0 },
     visible: {
       opacity: 1,
       transition: { staggerChildren: 0.15 },
     },
   };
-  const itemVariants = {
+  const itemVariants: Variants = {
     hidden: { y: 20, opacity: 0 },
     visible: {
       y: 0,
@@ -30,14 +30,22 @@ function ProposalListSkeleton() {
       backgroundSize: ["200% 100%", "200% 100%"],
       backgroundPosition: ["0% 0%", "200% 0%"],
     },
-    transition: { duration: 1.5, repeat: Infinity, ease: "linear" },
+    transition: {
+      duration: 1.5,
+      repeat: Infinity,
+      ease: "linear" as const,
+    },
   };
   return (
     <div className="relative">
       <motion.div
         className="absolute right-4 top-20 md:right-8 md:top-24 opacity-10 pointer-events-none"
         animate={{ y: [0, -15, 0], rotate: [0, 5, 0, -5, 0] }}
-        transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
+        transition={{
+          duration: 6,
+          repeat: Infinity,
+          ease: "easeInOut" as const,
+        }}
       >
         <Vote className="w-16 h-16 md:w-24 md:h-24 text-primary" />
       </motion.div>

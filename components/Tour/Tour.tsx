@@ -1,31 +1,34 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Joyride, { CallBackProps, STATUS, Step, EVENTS } from 'react-joyride';
-import { usePathname, useRouter } from 'next/navigation';
+import {
+    Joyride,
+    EVENTS,
+    STATUS,
+    type CallBackProps,
+    type Step,
+} from 'react-joyride';
+import { usePathname } from 'next/navigation';
 import { useUser } from '@account-kit/react';
 import { useTour } from '@/context/TourContext';
 import { logger } from '@/lib/utils/logger';
 
+type TourStep = Step & {
+    data?: { id: string };
+};
 
-const DESKTOP_STEPS: Step[] = [
+const DESKTOP_STEPS: TourStep[] = [
     {
         target: '#connect-wallet-btn',
         content: 'Sign in to get started! Click "Get Started" to create your account with just your email.',
         disableBeacon: true,
-        disableOverlayClose: true,
-        hideCloseButton: true,
         spotlightClicks: true,
-        floaterProps: {
-            hideArrow: false,
-        },
         data: { id: 'connect' }
     },
     {
         target: '#nav-user-menu',
         content: 'Click your profile to open the menu, then select "Upload" to start adding content.',
         spotlightClicks: true,
-        disableOverlayClose: true,
         data: { id: 'user-menu' }
     },
     {
@@ -57,7 +60,6 @@ const DESKTOP_STEPS: Step[] = [
 
 export const Tour = () => {
     const { run, stepIndex, setRun, setStepIndex } = useTour();
-    const router = useRouter();
     const pathname = usePathname();
     const user = useUser();
     const isConnected = !!user;
@@ -75,13 +77,11 @@ export const Tour = () => {
         return () => window.removeEventListener('resize', checkMobile);
     }, []);
 
-    const MOBILE_STEPS: Step[] = [
+    const MOBILE_STEPS: TourStep[] = [
         {
             target: '#mobile-menu-btn',
             content: 'Tap the menu to get started by signing in.',
             disableBeacon: true,
-            disableOverlayClose: true,
-            hideCloseButton: true,
             data: { id: 'connect' }
         },
         {
@@ -115,13 +115,13 @@ export const Tour = () => {
 
     // Helper to find step index by ID
     const getStepIndex = (id: string) => {
-        return steps.findIndex(s => (s.data as any)?.id === id);
+        return steps.findIndex(s => s.data?.id === id);
     };
 
     const handleJoyrideCallback = (data: CallBackProps) => {
         const { index, status, type, action } = data;
         const currentStep = steps[index];
-        const currentId = (currentStep?.data as any)?.id;
+        const currentId = currentStep?.data?.id;
 
         logger.debug("Tour: Callback", { index, status, type, action, currentId });
 
@@ -238,13 +238,14 @@ export const Tour = () => {
             continuous
             showProgress
             showSkipButton
-            tooltipComponent={TourTooltip}
+            disableOverlayClose
             styles={{
                 options: {
-                    zIndex: 10000,
                     primaryColor: '#4f46e5',
+                    zIndex: 10000,
                 },
             }}
+            tooltipComponent={TourTooltip}
         />
     );
 };

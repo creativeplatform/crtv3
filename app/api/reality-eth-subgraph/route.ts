@@ -16,7 +16,15 @@ const getSubgraphUrl = (subgraphName: string, version: string, specificAccessTyp
   return `https://api.goldsky.com/api/${accessType}/${PROJECT_ID}/subgraphs/${subgraphName}/${version}/gn`;
 };
 
-const REALITY_ETH_SUBGRAPH_URL = getSubgraphUrl('reality-eth', '1.0.0');
+type ProviderMode = 'goldsky' | 'studio' | 'dual';
+
+const getProviderMode = (): ProviderMode => {
+  const rawMode = process.env.SUBGRAPH_PROVIDER_MODE?.toLowerCase();
+  if (rawMode === 'studio' || rawMode === 'dual' || rawMode === 'goldsky') return rawMode;
+  return 'goldsky';
+};
+
+const getStudioUrl = () => process.env.GRAPH_STUDIO_CREATIVE_PLATFORM_URL;
 
 export async function POST(request: NextRequest) {
   const verification = await checkBotId();
@@ -33,14 +41,23 @@ export async function POST(request: NextRequest) {
       variables: body.variables,
     });
 
-    // Determine endpoints
+    const providerMode = getProviderMode();
+    const studioEndpoint = getStudioUrl();
+
+    // Determine Goldsky endpoints
     const isPrivate = !!process.env.GOLDSKY_API_KEY;
     const privateEndpoint = getSubgraphUrl('reality-eth', '1.0.0', 'private');
     const publicEndpoint = getSubgraphUrl('reality-eth', '1.0.0', 'public');
+    const goldskyPrimary = isPrivate ? privateEndpoint : publicEndpoint;
 
-    // Default to private if key exists, otherwise public
-    let subgraphEndpoint = isPrivate ? privateEndpoint : publicEndpoint;
-    serverLogger.debug(`Forwarding to Goldsky Reality.eth subgraph endpoint: ${subgraphEndpoint}`);
+    const candidateEndpoints: string[] = [];
+    if (providerMode === 'studio' || providerMode === 'dual') {
+      if (studioEndpoint) candidateEndpoints.push(studioEndpoint);
+    }
+    if (providerMode === 'goldsky' || providerMode === 'dual' || !studioEndpoint) {
+      candidateEndpoints.push(goldskyPrimary);
+    }
+    if (isPrivate) candidateEndpoints.push(publicEndpoint);
 
     // Prepare headers
     const headers: Record<string, string> = {
@@ -60,17 +77,26 @@ export async function POST(request: NextRequest) {
       });
     };
 
-    let response = await performFetch(subgraphEndpoint, headers);
-
-    // Fallback logic: If private endpoint fails with 404 (not enabled) or 5xx (server error), try public
-    if (isPrivate && (response.status === 404 || response.status >= 500)) {
-      serverLogger.warn(`Private endpoint returned ${response.status}, falling back to public endpoint...`);
-      subgraphEndpoint = publicEndpoint;
-      const publicHeaders = { ...headers };
-      delete publicHeaders['Authorization'];
-
-      response = await performFetch(subgraphEndpoint, publicHeaders);
+    if (candidateEndpoints.length === 0) {
+      throw new Error('No subgraph endpoints configured. Set GRAPH_STUDIO_CREATIVE_PLATFORM_URL or Goldsky variables.');
     }
+
+    let response: Response | null = null;
+    let subgraphEndpoint = '';
+    for (const endpoint of candidateEndpoints) {
+      subgraphEndpoint = endpoint;
+      const endpointHeaders = endpoint.includes('goldsky.com') ? headers : { 'Content-Type': 'application/json' };
+      if (!endpoint.includes('goldsky.com') && endpointHeaders['Authorization']) {
+        delete endpointHeaders['Authorization'];
+      }
+      serverLogger.debug(`Forwarding Reality.eth query to endpoint: ${endpoint}`);
+      response = await performFetch(endpoint, endpointHeaders);
+      // Try every candidate until one succeeds. (Previous logic stopped on any 4xx,
+      // so a misconfigured Graph Studio URL blocked Goldsky fallback entirely.)
+      if (response.ok) break;
+    }
+
+    if (!response) throw new Error('No subgraph endpoint available');
 
     serverLogger.debug('Reality.eth subgraph response status:', response.status);
 
@@ -88,10 +114,10 @@ export async function POST(request: NextRequest) {
           details: errorText,
           status: response.status,
           hint: response.status === 404
-            ? 'Subgraph not found. Deploy the Reality.eth subgraph to Goldsky first.'
+            ? 'Subgraph not found. Verify Studio URL or Goldsky deployment details.'
             : response.status === 429
               ? 'Rate limit exceeded. Please try again later.'
-              : 'Subgraph server error. The Goldsky subgraph may be down or experiencing issues.',
+              : 'Subgraph server error. The selected provider may be down or misconfigured.',
         },
         { status: response.status }
       );

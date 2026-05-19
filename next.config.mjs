@@ -22,7 +22,7 @@ const nextConfig = {
   // Externalize thread-stream and pino packages on server to avoid bundling test files
   serverExternalPackages: ['thread-stream', 'pino', 'pino-pretty', 'node-datachannel'],
   // Webpack configuration for WebAssembly support
-  webpack: (config, { isServer, webpack }) => {
+  webpack: (config, { isServer, webpack, dev }) => {
     // Enable async WebAssembly loading (required for XMTP WASM bindings)
     config.experiments = {
       ...config.experiments,
@@ -63,11 +63,6 @@ const nextConfig = {
       config.module.noParse.push(/node_modules\/thread-stream\/.*\.test\./);
       config.module.noParse.push(/node_modules\/thread-stream\/.*\.spec\./);
       config.module.noParse.push(/node_modules\/thread-stream\/bench\.js/);
-    }
-
-    // Ensure plugins array exists
-    if (!config.plugins) {
-      config.plugins = [];
     }
 
     // Use IgnorePlugin with multiple patterns to catch all test file references
@@ -178,16 +173,47 @@ const nextConfig = {
         // Plugin not available or not needed (Turbopack mode)
         console.warn('WasmWorkerPlugin not loaded (may be using Turbopack):', e.message);
       }
-
-      // Set publicPath to ensure WASM files are served correctly
-      // This helps with resolving paths in workers
-      if (!config.output.publicPath) {
-        config.output.publicPath = '/_next/';
-      }
     }
 
-    // Exclude node server-side libraries from client bundle
-    config.externals.push("pino-pretty", "lokijs", "encoding");
+    // Exclude node server-side libraries from client bundle only (avoid mutating server externals)
+    if (!isServer && Array.isArray(config.externals)) {
+      config.externals.push("pino-pretty", "lokijs", "encoding");
+    }
+
+    // App Router uses mini-css-extract for CSS; if the plugin is missing, the loader throws.
+    // This can happen with some config merge orders — ensure Next's plugin is present on the client.
+    if (!isServer && Array.isArray(config.plugins)) {
+      const hasNextCssPlugin = config.plugins.some((p) => p && p.__next_css_remove === true);
+      if (!hasNextCssPlugin) {
+        const NextMiniCssExtractPlugin = require('next/dist/build/webpack/plugins/mini-css-extract-plugin').default;
+        config.plugins.push(
+          new NextMiniCssExtractPlugin({
+            filename: dev ? 'static/css/[name].css' : 'static/css/[contenthash].css',
+            chunkFilename: dev ? 'static/css/[name].css' : 'static/css/[contenthash].css',
+            ignoreOrder: true,
+            insert: function (linkTag) {
+              if (typeof _N_E_STYLE_LOAD === 'function') {
+                var href = linkTag.href;
+                var onload = linkTag.onload;
+                var onerror = linkTag.onerror;
+                _N_E_STYLE_LOAD(
+                  href.indexOf(window.location.origin) === 0 ? new URL(href).pathname : href
+                ).then(
+                  function () {
+                    if (onload) onload.call(linkTag, { type: 'load' });
+                  },
+                  function () {
+                    if (onerror) onerror.call(linkTag, {});
+                  }
+                );
+              } else {
+                document.head.appendChild(linkTag);
+              }
+            },
+          })
+        );
+      }
+    }
 
     return config;
   },

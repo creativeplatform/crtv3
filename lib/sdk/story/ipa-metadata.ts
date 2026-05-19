@@ -103,13 +103,19 @@ export async function uploadIpaMetadataToIpfs(
   const blob = new Blob([jsonString], { type: "application/json" });
   const result = await ipfsService.uploadFile(blob);
 
-  if (!result.success || !result.hash) {
+  if (!result.success || (!result.hash && !result.url)) {
     throw new Error(
       result.error ?? "Failed to upload IPA metadata to IPFS"
     );
   }
 
-  const ipMetadataURI = `ipfs://${result.hash}`;
+  const ipMetadataURI =
+    result.url &&
+    (result.url.startsWith("http://") ||
+      result.url.startsWith("https://") ||
+      result.url.startsWith("ipfs://"))
+      ? result.url
+      : `ipfs://${result.hash}`;
   const ipMetadataHash = `0x${createHash("sha256").update(jsonString).digest("hex")}`;
 
   return {

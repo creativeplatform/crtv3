@@ -506,7 +506,7 @@ export class MeTokenSupabaseService {
   // Subscribe to real-time MeToken updates
   subscribeToMeTokenUpdates(meTokenAddress: string, callback: (payload: any) => void) {
     return supabase
-      .channel(`metoken-${meTokenAddress}`)
+      .channel(`metoken:${meTokenAddress.toLowerCase()}:${crypto.randomUUID()}`)
       .on(
         'postgres_changes',
         {
@@ -523,7 +523,7 @@ export class MeTokenSupabaseService {
   // Subscribe to real-time balance updates
   subscribeToBalanceUpdates(userAddress: string, callback: (payload: any) => void) {
     return supabase
-      .channel(`balance-${userAddress}`)
+      .channel(`balance:${userAddress.toLowerCase()}:${crypto.randomUUID()}`)
       .on(
         'postgres_changes',
         {

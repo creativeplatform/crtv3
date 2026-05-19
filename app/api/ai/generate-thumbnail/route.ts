@@ -220,7 +220,8 @@ export async function POST(request: NextRequest) {
     const mimeType = imageFile.mimeType;
     const ext = mimeType === 'image/png' ? 'png' : mimeType === 'image/jpeg' ? 'jpg' : 'png';
 
-    const buffer = imageFile.uint8Array;
+    // Copy so BlobPart/File sees Uint8Array backed by ArrayBuffer (not ArrayBufferLike).
+    const buffer = new Uint8Array(imageFile.uint8Array);
     const file = new File([buffer], `${imageId}.${ext}`, { type: mimeType });
 
     let url: string;

@@ -15,6 +15,10 @@ if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
     /signal is aborted without reason/i,
     /aria-hidden on an element because its descendant retained focus/i,
     /Blocked aria-hidden/i,
+    // next-themes ThemeProvider injects a blocking inline script (no FOUC). React 19 warns; behavior is intentional.
+    /Encountered a script tag while rendering React component/i,
+    // Webpack + viem/ox Tempo dynamic import (harmless; narrowed by avoiding `viem/chains` where possible).
+    /Critical dependency: the request of a dependency is an expression/i,
   ];
 
   /**

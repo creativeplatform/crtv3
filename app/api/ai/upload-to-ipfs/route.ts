@@ -4,18 +4,17 @@ import { IPFSService } from '@/lib/sdk/ipfs/service';
 import { serverLogger } from '@/lib/utils/logger';
 import { rateLimiters } from '@/lib/middleware/rateLimit';
 
-// Initialize IPFS service with hybrid storage
-// Lighthouse (Primary) - Better CDN distribution, especially for West Coast
-// Storacha (Backup) - Ensures long-term persistence
+// Lens Grove first; optional Lighthouse if API key is set (see lib/sdk/ipfs/service.ts).
 const ipfsService = new IPFSService({
   lighthouseApiKey: process.env.NEXT_PUBLIC_LIGHTHOUSE_API_KEY,
-  key: process.env.STORACHA_KEY,
-  proof: process.env.STORACHA_PROOF,
-  email: process.env.NEXT_PUBLIC_STORACHA_EMAIL,
-  gateway: process.env.NEXT_PUBLIC_IPFS_GATEWAY || 
-    (process.env.NEXT_PUBLIC_LIGHTHOUSE_API_KEY 
-      ? 'https://gateway.lighthouse.storage/ipfs' 
-      : 'https://w3s.link/ipfs')
+  filecoinFirstApiKey: process.env.NEXT_PUBLIC_FILECOIN_FIRST_API_KEY,
+  enableFilecoinArchival:
+    process.env.NEXT_PUBLIC_ENABLE_FILECOIN_ARCHIVAL === 'true',
+  gateway:
+    process.env.NEXT_PUBLIC_IPFS_GATEWAY ||
+    (process.env.NEXT_PUBLIC_LIGHTHOUSE_API_KEY
+      ? 'https://gateway.lighthouse.storage/ipfs'
+      : 'https://w3s.link/ipfs'),
 });
 
 /**

@@ -14,13 +14,15 @@ const getSubgraphUrl = (subgraphName: string, version: string, specificAccessTyp
   return `https://api.goldsky.com/api/${accessType}/${PROJECT_ID}/subgraphs/${subgraphName}/${version}/gn`;
 };
 
-const METOKENS_SUBGRAPH_URL = getSubgraphUrl('metokens', '1.0.2');
+type ProviderMode = 'goldsky' | 'studio' | 'dual';
 
+const getProviderMode = (): ProviderMode => {
+  const rawMode = process.env.SUBGRAPH_PROVIDER_MODE?.toLowerCase();
+  if (rawMode === 'studio' || rawMode === 'dual' || rawMode === 'goldsky') return rawMode;
+  return 'goldsky';
+};
 
-
-// Creative TV subgraph endpoint - now using Goldsky
-// Deployment ID: QmbDp8Wfy82g8L7Mv6RCAZHRcYUQB4prQfqchvexfZR8yZ
-const CREATIVE_TV_SUBGRAPH_URL = getSubgraphUrl('creative_tv', '0.1');
+const getStudioUrl = () => process.env.GRAPH_STUDIO_CREATIVE_PLATFORM_URL;
 
 export async function POST(request: NextRequest) {
   const verification = await checkBotId();
@@ -50,14 +52,23 @@ export async function POST(request: NextRequest) {
       variables: body.variables,
     });
 
-    // Determine endpoints
+    const providerMode = getProviderMode();
+    const studioEndpoint = getStudioUrl();
+
+    // Determine Goldsky endpoints
     const isPrivate = !!process.env.GOLDSKY_API_KEY;
     const privateEndpoint = getSubgraphUrl('metokens', '1.0.2', 'private');
     const publicEndpoint = getSubgraphUrl('metokens', '1.0.2', 'public');
+    const goldskyPrimary = isPrivate ? privateEndpoint : publicEndpoint;
 
-    // Default to private if key exists, otherwise public
-    let subgraphEndpoint = isPrivate ? privateEndpoint : publicEndpoint;
-    serverLogger.debug(`Forwarding to Goldsky subgraph endpoint: ${subgraphEndpoint}`);
+    const candidateEndpoints: string[] = [];
+    if (providerMode === 'studio' || providerMode === 'dual') {
+      if (studioEndpoint) candidateEndpoints.push(studioEndpoint);
+    }
+    if (providerMode === 'goldsky' || providerMode === 'dual' || !studioEndpoint) {
+      candidateEndpoints.push(goldskyPrimary);
+    }
+    if (isPrivate) candidateEndpoints.push(publicEndpoint);
 
     // Prepare headers
     const headers: Record<string, string> = {
@@ -77,18 +88,24 @@ export async function POST(request: NextRequest) {
       });
     };
 
-    let response = await performFetch(subgraphEndpoint, headers);
-
-    // Fallback logic: If private endpoint fails with 404 (not enabled) or 5xx (server error), try public
-    if (isPrivate && (response.status === 404 || response.status >= 500)) {
-      serverLogger.warn(`Private endpoint returned ${response.status}, falling back to public endpoint...`);
-      subgraphEndpoint = publicEndpoint;
-      // Remove auth header for public request (optional, but cleaner)
-      const publicHeaders = { ...headers };
-      delete publicHeaders['Authorization'];
-
-      response = await performFetch(subgraphEndpoint, publicHeaders);
+    if (candidateEndpoints.length === 0) {
+      throw new Error('No subgraph endpoints configured. Set GRAPH_STUDIO_CREATIVE_PLATFORM_URL or Goldsky variables.');
     }
+
+    let response: Response | null = null;
+    let subgraphEndpoint = '';
+
+    for (const endpoint of candidateEndpoints) {
+      subgraphEndpoint = endpoint;
+      const endpointHeaders = endpoint.includes('goldsky.com') ? headers : { 'Content-Type': 'application/json' };
+      if (!endpoint.includes('goldsky.com') && endpointHeaders['Authorization']) {
+        delete endpointHeaders['Authorization'];
+      }
+      response = await performFetch(endpoint, endpointHeaders);
+      if (response.ok) break;
+    }
+
+    if (!response) throw new Error('No subgraph endpoint available');
 
 
     serverLogger.debug('Subgraph response status:', response.status);
@@ -108,7 +125,7 @@ export async function POST(request: NextRequest) {
           details: errorText,
           status: response.status,
           hint: response.status === 404
-            ? 'Subgraph not found. Verify the Goldsky deployment ID and subgraph name.'
+            ? 'Subgraph not found. Verify Studio URL or Goldsky deployment details.'
             : response.status === 429
               ? 'Rate limit exceeded. Please try again later.'
               : 'Subgraph server error.',

@@ -1,6 +1,6 @@
 
 import { StorageClient, immutable } from "@lens-chain/storage-client";
-import { chains } from "@lens-chain/sdk/viem";
+import { getLensChainId } from "@/lib/sdk/lens/chains";
 import { serverLogger } from '@/lib/utils/logger';
 
 export interface GroveUploadResult {
@@ -26,13 +26,7 @@ export class GroveService {
      */
     async uploadFile(file: File): Promise<GroveUploadResult> {
         try {
-            // Use Testnet chain ID for now as per examples (or default to a safe one)
-            // If we are on Mainnet, we should switch. 
-            // Ideally this comes from config, but for now we follow the 'lens-getting-started' pattern.
-            // 37111 is Lens Testnet (Sepolia). 
-            // chains.testnet might ideally map to this.
-
-            const acl = immutable(chains.testnet.id);
+            const acl = immutable(getLensChainId());
 
             const response = await this.client.uploadFile(file, { acl });
 
@@ -68,7 +62,7 @@ export class GroveService {
      */
     async uploadJson(json: unknown): Promise<GroveUploadResult> {
         try {
-            const acl = immutable(chains.testnet.id);
+            const acl = immutable(getLensChainId());
 
             const response = await this.client.uploadAsJson(json, { acl });
 

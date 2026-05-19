@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/sdk/supabase/server';
 import { formatEther, createPublicClient, http, fallback, parseAbi } from 'viem';
-import { base } from 'viem/chains';
+import { baseMainnet } from '@/lib/utils/chains/base';
 import { METOKEN_ABI } from '@/lib/contracts/MeToken';
 import { serverLogger } from '@/lib/utils/logger';
 
@@ -111,7 +111,7 @@ export async function GET(
         rpcUrls.push('https://mainnet.base.org');
 
         const publicClient = createPublicClient({
-          chain: base,
+          chain: baseMainnet,
           transport: fallback(rpcUrls.map((url) => http(url))),
         });
 

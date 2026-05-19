@@ -3,12 +3,21 @@ import { getPublishedVideoAssets } from "@/services/video-assets";
 import { serverLogger } from "@/lib/utils/logger";
 
 export const runtime = "edge";
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+export const fetchCache = "force-no-store";
+
+const noStoreHeaders = {
+  "Cache-Control": "no-store, no-cache, max-age=0, must-revalidate",
+  Pragma: "no-cache",
+  Expires: "0",
+};
 
 /**
  * GET /api/video-assets/published
  * 
- * Fetches published video assets from Supabase with caching
- * Uses Vercel Edge Cache for optimal performance
+ * Fetches published video assets from Supabase without caching so view-count
+ * ordering reflects the latest synced metrics.
  * 
  * Query parameters:
  * - limit: number (default: 12)
@@ -35,7 +44,7 @@ export async function GET(request: NextRequest) {
     if (limit < 1 || limit > 100) {
       return NextResponse.json(
         { error: "Limit must be between 1 and 100" },
-        { status: 400 }
+        { status: 400, headers: noStoreHeaders }
       );
     }
 
@@ -50,24 +59,7 @@ export async function GET(request: NextRequest) {
       search,
     });
 
-    // Create cache key based on query parameters
-    const cacheKey = `published-videos-${limit}-${offset}-${orderBy}-${order}-${creatorId || 'all'}-${category || 'all'}-${search || 'none'}`;
-
-    // Set cache headers for Vercel Edge Cache
-    // Cache for 60 seconds, revalidate in background for 300 seconds
-    const response = NextResponse.json(result);
-    
-    response.headers.set(
-      "Cache-Control",
-      search 
-        ? "public, s-maxage=30, stale-while-revalidate=60" // Shorter cache for search queries
-        : "public, s-maxage=60, stale-while-revalidate=300" // Longer cache for standard queries
-    );
-    
-    // Add custom cache tags for Vercel
-    response.headers.set("x-vercel-cache-tags", `videos,published,${cacheKey}`);
-
-    return response;
+    return NextResponse.json(result, { headers: noStoreHeaders });
   } catch (error) {
     serverLogger.error("Error fetching published videos:", error);
     
@@ -80,7 +72,7 @@ export async function GET(request: NextRequest) {
             error: 'Database connection error',
             details: 'Unable to connect to the database. Please try again later.'
           },
-          { status: 503 }
+          { status: 503, headers: noStoreHeaders }
         );
       }
       
@@ -91,7 +83,7 @@ export async function GET(request: NextRequest) {
             error: 'Validation error',
             details: error.message
           },
-          { status: 400 }
+          { status: 400, headers: noStoreHeaders }
         );
       }
     }
@@ -101,7 +93,7 @@ export async function GET(request: NextRequest) {
         error: "Failed to fetch published videos",
         details: error instanceof Error ? error.message : "Unknown error"
       },
-      { status: 500 }
+      { status: 500, headers: noStoreHeaders }
     );
   }
 }

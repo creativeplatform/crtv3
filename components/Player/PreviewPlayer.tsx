@@ -17,10 +17,12 @@ import { safelyPauseVideo, safelyPlayVideo } from "@/lib/utils/video-controls";
 import { logger } from '@/lib/utils/logger';
 
 
-export const PreviewPlayer: React.FC<{ src: Src[]; title: string }> = ({
-  src,
-  title,
-}) => {
+export const PreviewPlayer: React.FC<{
+  src: Src[];
+  title: string;
+  /** Canonical Livepeer playback id for view metrics (preferred over parsing src). */
+  playbackId?: string;
+}> = ({ src, title, playbackId: playbackIdProp }) => {
   const [controlsVisible, setControlsVisible] = useState(true);
   const fadeTimeoutRef = useRef<NodeJS.Timeout>();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -246,7 +248,9 @@ export const PreviewPlayer: React.FC<{ src: Src[]; title: string }> = ({
                 <h3 className="text-lg font-medium text-white line-clamp-1">
                   {title}
                 </h3>
-                <ViewsComponent playbackId={getPlaybackId(src)} />
+                <ViewsComponent
+                  playbackId={playbackIdProp || getPlaybackId(src)}
+                />
               </div>
             </div>
 

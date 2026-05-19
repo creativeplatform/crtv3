@@ -1,27 +1,29 @@
-
+import { resolveOrbImageUrl, shouldResolveWithOrbMedia } from '@/lib/sdk/orb/media';
 import { logger } from '@/lib/utils/logger';
+
+/** Apply Orb media resolver before IPFS gateway fallbacks. */
+export function resolveOrbMediaForGateway(url: string | null | undefined): string {
+  if (!url) return '';
+  if (!shouldResolveWithOrbMedia(url)) return url;
+  return resolveOrbImageUrl(url) ?? url;
+}
 /**
  * IPFS Gateway utilities with fallback support
  * Handles conversion of IPFS URLs to alternative gateways when primary gateway fails
  */
 
-// List of IPFS gateways to try (in order of preference)
-// Lighthouse first for better CDN distribution (especially West Coast)
-// Using actual IPFS gateways for proper decentralized access
-// List of IPFS gateways to try (in order of preference)
-// Storacha (w3s.link) - Primary (Fast, reliable, redirects to subdomain)
-// Cloudflare - Very fast, reliable public gateway
-// Lighthouse - Good fallback
+// Public read gateways first (no API key). Lighthouse often returns 402 without billing.
+// cloudflare-ipfs.com was retired (DNS fails); use ipfs.io / dweb / cf-ipfs instead.
 const IPFS_GATEWAYS = [
-  'https://w3s.link/ipfs', // Storacha (Primary)
-  'https://cloudflare-ipfs.com/ipfs', // Cloudflare - High availability
-  'https://gateway.ipfscdn.io/ipfs', // IPFS CDN - Optimized for media
-  'https://gateway.lighthouse.storage/ipfs', // Lighthouse
-  'https://gateway.pinata.cloud/ipfs', // Pinata
-  'https://dweb.link/ipfs', // Protocol Labs
-  'https://4everland.io/ipfs', // 4everland
-  'https://ipfs.io/ipfs', // Public gateway
-  'https://api.grove.storage/ipfs', // Grove (Backup)
+  'https://ipfs.io/ipfs',
+  'https://dweb.link/ipfs',
+  'https://w3s.link/ipfs',
+  'https://cf-ipfs.com/ipfs',
+  'https://gateway.ipfscdn.io/ipfs',
+  'https://4everland.io/ipfs',
+  'https://gateway.pinata.cloud/ipfs',
+  'https://api.grove.storage/ipfs',
+  'https://gateway.lighthouse.storage/ipfs',
 ];
 
 /**
@@ -38,7 +40,7 @@ export function extractIpfsHash(url: string): string | null {
   }
 
   // Handle gateway URLs (e.g., https://gateway.lighthouse.storage/ipfs/bafy...)
-  const gatewayMatch = url.match(/\/ipfs\/([a-zA-Z0-9]+)/);
+  const gatewayMatch = url.match(/\/ipfs\/([^/?#]+)/);
   if (gatewayMatch) {
     return gatewayMatch[1];
   }
@@ -54,7 +56,7 @@ export function extractIpfsHash(url: string): string | null {
 /**
  * Converts an IPFS URL to use a different gateway
  * @param url - The original IPFS URL
- * @param gatewayIndex - Index of gateway to use (default: 0 for Cloudflare)
+ * @param gatewayIndex - Index of gateway to use (default: 0, ipfs.io)
  * @returns The converted URL or original if not an IPFS URL
  */
 export function convertIpfsGateway(
@@ -116,9 +118,8 @@ export function isIpfsUrl(url: string): boolean {
 }
 
 /**
- * Converts known failing/unreliable gateway URLs to alternative gateways
- * Note: Lighthouse is PRIMARY and should NOT be converted proactively.
- * Only converts known problematic gateways (like ipfs.io).
+ * Converts known failing/unreliable gateway URLs to alternative gateways.
+ * Rewrites Lighthouse (402 without billing), dead cloudflare-ipfs.com, and ipfs:// to the primary gateway.
  * Actual failures are handled by the error handler trying fallback gateways.
  * 
  * @param url - The URL that uses a known failing/unreliable gateway
@@ -126,6 +127,9 @@ export function isIpfsUrl(url: string): boolean {
  */
 export function convertFailingGateway(url: string): string {
   if (!url) return url;
+
+  const orbResolved = resolveOrbMediaForGateway(url);
+  if (orbResolved !== url) return orbResolved;
 
   // Handle Google Cloud Storage URLs (these are not IPFS, so we can't convert them)
   // These Livepeer AI images are temporary and expired - should be uploaded to IPFS
@@ -137,29 +141,28 @@ export function convertFailingGateway(url: string): string {
   const hash = extractIpfsHash(url);
   if (!hash) return url; // Not an IPFS URL
 
-  // Handle ipfs:// protocol - convert to Storacha gateway URL
-  // This is critical for thumbnails and other uploads that return ipfs:// format
+  // ipfs:// → first HTTP gateway (readable in <img>)
   if (url.startsWith('ipfs://')) {
     return `${IPFS_GATEWAYS[0]}/${hash}`;
   }
 
-  // Note: Storacha is now the PRIMARY gateway and should be tried first
-  // Do NOT convert Storacha URLs proactively - let them try first
-
-  // Handle known slow/unreliable gateways - convert to Primary (Storacha) for better performance
-  if (url.includes('ipfs.io/ipfs')) {
-    // ipfs.io can be slow/unreliable, prefer Primary for better performance
+  // Lighthouse public gateway often returns 402 without a paid plan — avoid first hop.
+  if (url.includes('gateway.lighthouse.storage')) {
     return `${IPFS_GATEWAYS[0]}/${hash}`;
   }
 
-  // If it's already an IPFS URL but not using a known good gateway, prefer Primary
-  const isKnownGood = IPFS_GATEWAYS.some(g => url.startsWith(g));
-  if (!isKnownGood) {
-    // If it's not one of our known good gateways, force upgrade to Primary
-    // But check if it matches the pattern of a gateway URL first to be safe
-    if (url.includes('/ipfs/')) {
-      return `${IPFS_GATEWAYS[0]}/${hash}`;
-    }
+  // Legacy Cloudflare hostname (NXDOMAIN) — rewrite to working gateway
+  if (url.includes('cloudflare-ipfs.com')) {
+    return `${IPFS_GATEWAYS[0]}/${hash}`;
+  }
+
+  if (url.includes('ipfs.io/ipfs')) {
+    return url;
+  }
+
+  const isKnownGood = IPFS_GATEWAYS.some((g) => url.startsWith(g));
+  if (!isKnownGood && url.includes('/ipfs/')) {
+    return `${IPFS_GATEWAYS[0]}/${hash}`;
   }
 
   // For known good gateways, return as-is
@@ -171,7 +174,7 @@ export function convertFailingGateway(url: string): string {
  * Parses an IPFS URI and returns the HTTP gateway URL with fallback support
  * Enhanced version of parseIpfsUri that uses alternative gateways
  * @param uri - The IPFS URI to parse
- * @param preferGateway - Preferred gateway index (default: 0 for Storacha)
+ * @param preferGateway - Preferred gateway index (default: 0)
  * @returns The HTTP gateway URL
  */
 export function parseIpfsUriWithFallback(
@@ -226,7 +229,7 @@ export function getImageUrlWithFallback(url: string): {
   if (hash) {
     const allGateways = getAllIpfsGateways(url);
     return {
-      primary: allGateways[0], // Storacha - better CDN distribution
+      primary: allGateways[0],
       fallbacks: allGateways.slice(1),
     };
   }

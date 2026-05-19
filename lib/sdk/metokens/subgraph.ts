@@ -103,13 +103,14 @@ const GET_HUB = gql`
 // GraphQL query to get recent mints
 const GET_RECENT_MINTS = gql`
   query GetRecentMints($first: Int = 10) {
-    mints(first: $first, orderBy: timestamp, orderDirection: desc) {
+    mints(first: $first, orderBy: timestamp_, orderDirection: desc) {
       id
       meToken
-      user
-      collateralAmount
-      meTokenAmount
-      timestamp
+      depositor
+      recipient
+      assetsDeposited
+      meTokensMinted
+      timestamp_
     }
   }
 `;
@@ -117,13 +118,14 @@ const GET_RECENT_MINTS = gql`
 // GraphQL query to get recent burns
 const GET_RECENT_BURNS = gql`
   query GetRecentBurns($first: Int = 10) {
-    burns(first: $first, orderBy: timestamp, orderDirection: desc) {
+    burns(first: $first, orderBy: timestamp_, orderDirection: desc) {
       id
       meToken
-      user
-      meTokenAmount
-      collateralAmount
-      timestamp
+      burner
+      recipient
+      meTokensBurned
+      assetsReturned
+      timestamp_
     }
   }
 `;
@@ -136,9 +138,9 @@ const GET_SUBSCRIBES_BY_HUB_ID = gql`
       meToken
       hubId
       assetsDeposited
-      blockTimestamp
-      blockNumber
-      transactionHash
+      timestamp_
+      block_number
+      transactionHash_
     }
   }
 `;

@@ -98,6 +98,10 @@ export interface CreatorProfile {
   twin_pinata_connected_at?: string | null;
   // twin_pinata_gateway_token deliberately omitted from client-readable type;
   // it's column-locked to service-role reads.
+  orb_account_id?: string | null;
+  lens_account_id?: string | null;
+  lens_handle?: string | null;
+  lens_avatar_uri?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -111,6 +115,10 @@ export interface CreateCreatorProfileData {
   twin_address?: string | null;
   twin_avatar_glb_url?: string | null;
   twin_chat_endpoint?: string | null;
+  orb_account_id?: string | null;
+  lens_account_id?: string | null;
+  lens_handle?: string | null;
+  lens_avatar_uri?: string | null;
 }
 
 export interface UpdateCreatorProfileData {
@@ -121,4 +129,8 @@ export interface UpdateCreatorProfileData {
   twin_address?: string | null;
   twin_avatar_glb_url?: string | null;
   twin_chat_endpoint?: string | null;
+  orb_account_id?: string | null;
+  lens_account_id?: string | null;
+  lens_handle?: string | null;
+  lens_avatar_uri?: string | null;
 }

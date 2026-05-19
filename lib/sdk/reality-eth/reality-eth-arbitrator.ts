@@ -1,6 +1,6 @@
 import { type Address, type WalletClient, encodeFunctionData, type PublicClient } from "viem";
 import { base } from "@account-kit/infra";
-import { getRealityEthConfig } from "./reality-eth-client";
+import { getCanonicalRealityEthArbitratorAddress } from "./reality-eth-client";
 import { serverLogger } from "@/lib/utils/logger";
 import { appendBuilderCode } from "@/lib/utils/builder-code";
 
@@ -22,22 +22,11 @@ export const ARBITRATOR_PROXY_ABI = [
 ] as const;
 
 /**
- * Get the Kleros Arbitrator Proxy address for the current network.
- * Currently hardcoded for Base Mainnet based on existing config.
+ * Kleros (or other) Reality.eth arbitrator proxy — same address used at question creation and for `submitEvidence`.
+ * @see getCanonicalRealityEthArbitratorAddress
  */
 export function getArbitratorProxyAddress(): Address {
-    const config = getRealityEthConfig();
-    // Using the first arbitrator from the list as the primary one
-    // In reality-eth-client.ts: 
-    // "0x05295972F75cFeE7fE66E6BDDC0435c9Fd083D18": "Kleros (Oracle court)"
-    if (config.arbitrators) {
-        const addresses = Object.keys(config.arbitrators);
-        if (addresses.length > 0) {
-            return addresses[0] as Address;
-        }
-    }
-    // Fallback if config structure changes, though this should match client.ts
-    return "0x05295972F75cFeE7fE66E6BDDC0435c9Fd083D18";
+    return getCanonicalRealityEthArbitratorAddress();
 }
 
 /**

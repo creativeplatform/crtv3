@@ -8,13 +8,15 @@ import { http } from "viem";
 import { QueryClient } from "@tanstack/react-query";
 import { modularAccountFactoryAddresses } from "./lib/utils/modularAccount";
 import { getStoryChain } from "./lib/sdk/story/chains";
+import { getLensChain } from "./lib/sdk/lens/chains";
 import { SITE_TOPIC_LOGO } from "./context/context";
 import Image from "next/image";
 import React from "react";
 
-// Define the chains we want to support (Base + Story Protocol for client-side signing)
+// Define the chains we want to support (Base + Story + Lens for client-side signing)
 const storyChain = getStoryChain();
-export const chains = [base, storyChain];
+export const lensChain = getLensChain();
+export const chains = [base, storyChain, lensChain];
 
 // Default chain for initial connection
 const defaultChain = base;
@@ -122,6 +124,7 @@ const uiConfig: AlchemyAccountsUIConfig = {
 
 // Transport for Story Protocol (RPC only; client-side signing uses this chain)
 const storyTransport = http(storyChain.rpcUrls.default.http[0] as string);
+const lensTransport = http(lensChain.rpcUrls.default.http[0] as string);
 
 // Create the Account Kit config
 export const config = createConfig(
@@ -131,6 +134,7 @@ export const config = createConfig(
     chains: [
       { chain: base, transport },
       { chain: storyChain, transport: storyTransport },
+      { chain: lensChain, transport: lensTransport },
     ],
     ssr: true,
     enablePopupOauth: true,

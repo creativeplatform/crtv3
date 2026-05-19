@@ -1,0 +1,58 @@
+[
+  {
+    "anonymous": false,
+    "inputs": [
+      { "indexed": true, "internalType": "address", "name": "meToken", "type": "address" },
+      { "indexed": true, "internalType": "address", "name": "owner", "type": "address" },
+      { "indexed": false, "internalType": "uint256", "name": "minted", "type": "uint256" },
+      { "indexed": false, "internalType": "address", "name": "asset", "type": "address" },
+      { "indexed": false, "internalType": "uint256", "name": "assetsDeposited", "type": "uint256" },
+      { "indexed": false, "internalType": "string", "name": "name", "type": "string" },
+      { "indexed": false, "internalType": "string", "name": "symbol", "type": "string" },
+      { "indexed": false, "internalType": "uint256", "name": "hubId", "type": "uint256" }
+    ],
+    "name": "Subscribe",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      { "indexed": false, "internalType": "address", "name": "meToken", "type": "address" },
+      { "indexed": false, "internalType": "address", "name": "asset", "type": "address" },
+      { "indexed": false, "internalType": "address", "name": "depositor", "type": "address" },
+      { "indexed": false, "internalType": "address", "name": "recipient", "type": "address" },
+      { "indexed": false, "internalType": "uint256", "name": "assetsDeposited", "type": "uint256" },
+      { "indexed": false, "internalType": "uint256", "name": "meTokensMinted", "type": "uint256" }
+    ],
+    "name": "Mint",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      { "indexed": false, "internalType": "address", "name": "meToken", "type": "address" },
+      { "indexed": false, "internalType": "address", "name": "asset", "type": "address" },
+      { "indexed": false, "internalType": "address", "name": "burner", "type": "address" },
+      { "indexed": false, "internalType": "address", "name": "recipient", "type": "address" },
+      { "indexed": false, "internalType": "uint256", "name": "meTokensBurned", "type": "uint256" },
+      { "indexed": false, "internalType": "uint256", "name": "assetsReturned", "type": "uint256" }
+    ],
+    "name": "Burn",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      { "indexed": false, "internalType": "uint256", "name": "id", "type": "uint256" },
+      { "indexed": false, "internalType": "address", "name": "owner", "type": "address" },
+      { "indexed": false, "internalType": "address", "name": "asset", "type": "address" },
+      { "indexed": false, "internalType": "address", "name": "vault", "type": "address" },
+      { "indexed": false, "internalType": "uint256", "name": "refundRatio", "type": "uint256" },
+      { "indexed": false, "internalType": "uint256", "name": "baseY", "type": "uint256" },
+      { "indexed": false, "internalType": "uint32", "name": "reserveWeight", "type": "uint32" },
+      { "indexed": false, "internalType": "bytes", "name": "encodedVaultArgs", "type": "bytes" }
+    ],
+    "name": "Register",
+    "type": "event"
+  }
+]

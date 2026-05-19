@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createPublicClient, http, formatEther } from 'viem';
-import { base } from 'viem/chains';
+import { baseMainnet } from '@/lib/utils/chains/base';
 import { meTokensSubgraph } from '@/lib/sdk/metokens/subgraph';
 import { getMeTokenInfoFromBlockchain, getMeTokenProtocolInfo } from '@/lib/utils/metokenUtils';
 import { serverLogger } from '@/lib/utils/logger';
@@ -18,7 +18,7 @@ const ERC20_ABI = [
 
 // Create a public client for reading blockchain data
 const publicClient = createPublicClient({
-  chain: base,
+  chain: baseMainnet,
   transport: http(process.env.NEXT_PUBLIC_ALCHEMY_RPC_URL || process.env.NEXT_PUBLIC_BASE_RPC_URL, {
     fetchOptions: {
       headers: {

@@ -8,7 +8,36 @@ import { Skeleton } from "@/components/ui/skeleton";
 import Link from "next/link";
 import { Clock } from "lucide-react";
 import { request, gql } from "graphql-request";
+import { getAddress, isAddress } from "viem";
 import { logger } from "@/lib/utils/logger";
+import {
+  GET_LOG_NEW_QUESTIONS_LIST,
+  GET_QUESTIONS_LIST,
+  GET_QUESTIONS_LIST_BY_OPENING_TS,
+  GET_QUESTIONS_LIST_MINIMAL,
+} from "@/lib/sdk/reality-eth/reality-eth-subgraph";
+
+const APP_ARBITRATOR = "0x0000000000000000000000000000000000000000";
+
+/** Normalize subgraph Bytes (address or 32-byte word) for comparisons. */
+function normalizeArbitrator(hexLike: unknown): string {
+  if (hexLike == null) return "";
+  let s = typeof hexLike === "string" ? hexLike.trim() : "";
+  if (typeof hexLike === "object" && hexLike !== null && "hex" in hexLike) {
+    s = String((hexLike as { hex: string }).hex).trim();
+  }
+  if (!s) return "";
+  let lower = s.toLowerCase();
+  if (!lower.startsWith("0x")) lower = `0x${lower}`;
+  const body = lower.slice(2);
+  if (body.length === 64) {
+    lower = `0x${body.slice(24)}`;
+  }
+  if (isAddress(lower)) {
+    return getAddress(lower).toLowerCase();
+  }
+  return lower;
+}
 
 interface Question {
   id: string;
@@ -37,7 +66,7 @@ interface Question {
  * PredictionList Component
  * 
  * Displays a list of active Reality.eth prediction questions.
- * Fetches questions from the Reality.eth subgraph hosted on Goldsky.
+ * Fetches questions via /api/reality-eth-subgraph (Graph Studio or Goldsky).
  */
 const ITEMS_PER_PAGE = 20;
 
@@ -47,7 +76,8 @@ export function PredictionList() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
-  const [showOnlyAppQuestions, setShowOnlyAppQuestions] = useState(true); // Default to true to show only app questions
+  /** true = Creative TV only (zero arbitrator); false = all indexed Reality.eth questions */
+  const [showOnlyAppQuestions, setShowOnlyAppQuestions] = useState(true);
 
   useEffect(() => {
     async function fetchQuestions() {
@@ -87,125 +117,117 @@ export function PredictionList() {
           logger.warn('⚠️ Could not introspect schema:', introError);
         }
 
-        // GraphQL query for fetching questions
-        // The subgraph uses event-based entities, so we query log_new_question events
-        // Only query fields that actually exist in the LogNewQuestion entity
-        const GET_QUESTIONS_QUERY = gql`
-          query GetQuestions($first: Int!, $skip: Int!) {
-            logNewQuestions(
-              first: $first
-              skip: $skip
-              orderBy: opening_ts
-              orderDirection: desc
-            ) {
-              id
-              question_id
-              template_id
-              question
-              arbitrator
-              opening_ts
-              timeout
-            }
-          }
-        `;
-
-        // Query for questions - fetch more to allow filtering
-        // Fetch up to 200 questions to allow filtering and pagination
+        // Graph Studio (creative-platform) exposes `questions`. Goldsky reality-eth uses `logNewQuestions`.
+        // Try `questions` first so Studio works; prefer a non-empty list if a later query shape returns [].
         const variables = {
           first: 200,
           skip: 0,
         };
 
-        let data = await request(endpoint, GET_QUESTIONS_QUERY, variables) as any;
+        const alternativeQueries = [
+          { field: "questions" as const, query: GET_QUESTIONS_LIST, label: "questions(orderBy:created)" },
+          { field: "questions" as const, query: GET_QUESTIONS_LIST_BY_OPENING_TS, label: "questions(orderBy:opening_ts)" },
+          { field: "questions" as const, query: GET_QUESTIONS_LIST_MINIMAL, label: "questions(minimal fields)" },
+          { field: "logNewQuestions" as const, query: GET_LOG_NEW_QUESTIONS_LIST, label: "logNewQuestions" },
+          { field: "log_new_questions" as const, query: gql`query GetQuestions($first: Int!, $skip: Int!) { log_new_questions(first: $first, skip: $skip, orderBy: opening_ts, orderDirection: desc) { id question_id template_id question arbitrator opening_ts timeout } }`, label: "log_new_questions" },
+        ];
 
-        // Check for GraphQL errors
-        if (data.errors) {
-          logger.error('GraphQL errors:', data.errors);
+        let data: any = null;
+        let lastQueryError: any = null;
+        let usedField: (typeof alternativeQueries)[number]["field"] | null = null;
 
-          // Try alternative field names if logNewQuestions doesn't work
-          const alternativeQueries = [
-            { field: 'log_new_questions', query: gql`query GetQuestions($first: Int!, $skip: Int!) { log_new_questions(first: $first, skip: $skip, orderBy: blockTimestamp, orderDirection: desc) { id question_id template_id question arbitrator opening_ts timeout finalize_ts bounty min_bond blockNumber blockTimestamp transactionHash } }` },
-            { field: 'logNewQuestion', query: gql`query GetQuestions($first: Int!, $skip: Int!) { logNewQuestion(first: $first, skip: $skip, orderBy: blockTimestamp, orderDirection: desc) { id question_id template_id question arbitrator opening_ts timeout finalize_ts bounty min_bond blockNumber blockTimestamp transactionHash } }` },
-          ];
-
-          let foundAlternative = false;
-          for (const alt of alternativeQueries) {
-            try {
-              logger.debug(`Trying alternative field name: ${alt.field}`);
-              data = await request(endpoint, alt.query, variables) as any;
-              if (!data.errors && data[alt.field]) {
-                logger.debug(`Found working field: ${alt.field}`);
-                foundAlternative = true;
-                break;
-              }
-            } catch (e) {
-              logger.debug(`${alt.field} didn't work:`, e);
+        for (const alt of alternativeQueries) {
+          try {
+            logger.debug(`Trying subgraph query: ${alt.label}`);
+            const result = await request(endpoint, alt.query, variables) as any;
+            const rows = result?.[alt.field];
+            if (!Array.isArray(rows)) continue;
+            if (rows.length > 0) {
+              data = result;
+              usedField = alt.field;
+              logger.debug(`Using subgraph query: ${alt.label} (${rows.length} rows)`);
+              break;
             }
-          }
-
-          if (!foundAlternative && data.errors) {
-            const hasQuestionsError = data.errors.some((err: any) =>
-              err.message?.includes('no field') ||
-              err.message?.includes('Type `Query` has no field')
-            );
-
-            if (hasQuestionsError) {
-              const errorMsg =
-                "The Reality.eth subgraph doesn't have the expected query fields. " +
-                "Available entities: log_new_question, log_new_answer, etc.\n\n" +
-                "Please check the Goldsky dashboard GraphQL schema to see the exact field names.";
-              throw new Error(errorMsg);
+            if (!data) {
+              data = result;
+              usedField = alt.field;
+              logger.debug(`Subgraph query ${alt.label} returned 0 rows; will replace if a later query has data`);
             }
-
-            throw new Error(`GraphQL error: ${JSON.stringify(data.errors)}`);
+          } catch (e: any) {
+            lastQueryError = e;
+            logger.debug(`${alt.label} query failed:`, e?.message || e);
           }
         }
 
-        // Try different possible field names
-        const fetchedQuestions = (
-          data.logNewQuestions ||
-          data.log_new_questions ||
-          data.logNewQuestion ||
-          data.log_new_question ||
-          []
-        ) as any[];
+        if (!data || !usedField) {
+          const errMsg = lastQueryError?.message || 'Unknown subgraph query error';
+          throw new Error(
+            "The Reality.eth subgraph doesn't expose a compatible question field. " +
+            `Tried: ${alternativeQueries.map(q => q.label).join(', ')}. ` +
+            `Last error: ${errMsg}`
+          );
+        }
 
-        // Parse question text to extract title and description
-        const safeFetchedQuestions = fetchedQuestions || [];
-        const parsedQuestions = safeFetchedQuestions.map((q) => {
+        const fetchedQuestions = data[usedField] as any[];
+
+        const parsedQuestions: Question[] = (fetchedQuestions || []).map((q) => {
           let title = q.question || "Untitled Prediction";
           let description: string | undefined;
 
           try {
-            // Try to parse the question text if it's encoded
-            // In production, you'd fetch the template from the contract
-            // For now, we'll try to extract a simple title
             if (q.question && q.question.length > 0) {
-              // If the question is encoded, it might need parsing
-              // For now, use the raw question as title
               title = q.question;
             }
           } catch (e) {
             logger.warn('Could not parse question text for question', q.id, e);
           }
 
-          // Map the event-based entity to our Question interface
-          // Note: log_new_question event only has basic fields, not all question data
+          if (usedField === "questions") {
+            const outcomesRaw = q.outcomes;
+            const outcomes =
+              typeof outcomesRaw === "string" && outcomesRaw.length > 0
+                ? outcomesRaw.split("\n").filter(Boolean)
+                : undefined;
+
+            return {
+              id: q.id,
+              template_id: q.template_id?.toString() ?? "0",
+              question: q.question ?? "",
+              created: q.created?.toString() ?? "0",
+              opening_ts: q.opening_ts?.toString() ?? "0",
+              timeout: q.timeout?.toString() ?? "0",
+              finalize_ts: q.finalize_ts != null ? String(q.finalize_ts) : undefined,
+              is_pending_arbitration: Boolean(q.is_pending_arbitration),
+              bounty: q.bounty?.toString() ?? "0",
+              best_answer: q.best_answer,
+              history_hash: q.history_hash ?? "",
+              arbitrator: q.arbitrator ?? "",
+              min_bond: q.min_bond?.toString() ?? "0",
+              last_bond: q.last_bond?.toString() ?? "0",
+              last_bond_ts: q.last_bond_ts != null ? String(q.last_bond_ts) : undefined,
+              category: q.category ?? undefined,
+              language: q.language ?? undefined,
+              outcomes,
+              title,
+              description,
+            };
+          }
+
           return {
             id: q.question_id || q.id,
             template_id: q.template_id?.toString() || "0",
             question: q.question || "",
-            created: q.id || "0", // Use id as timestamp fallback since blockTimestamp isn't available
+            created: q.id || "0",
             opening_ts: q.opening_ts?.toString() || "0",
             timeout: q.timeout?.toString() || "0",
-            finalize_ts: undefined, // Not available in log_new_question event - would need to query log_finalize
-            is_pending_arbitration: false, // Not available in log_new_question event
-            bounty: "0", // Not available in log_new_question event - would need to query separately
-            best_answer: undefined, // Not available in log_new_question event
-            history_hash: "", // Not available in log_new_question event
+            finalize_ts: undefined,
+            is_pending_arbitration: false,
+            bounty: "0",
+            best_answer: undefined,
+            history_hash: "",
             arbitrator: q.arbitrator || "",
-            min_bond: "0", // Not available in log_new_question event
-            last_bond: "0", // Not available in log_new_question event
+            min_bond: "0",
+            last_bond: "0",
             last_bond_ts: undefined,
             category: undefined,
             language: undefined,
@@ -220,7 +242,8 @@ export function PredictionList() {
         // Fetch bounties for these questions
         const questionIds = parsedQuestions.map(q => q.id);
 
-        if (questionIds.length > 0) {
+        // `questions` entities already include `bounty`; log-only fallbacks may not.
+        if (usedField !== "questions" && questionIds.length > 0) {
           const GET_BOUNTIES_QUERY = gql`
             query GetBounties($questionIds: [String!]) {
               logFundAnswerBounties(
@@ -239,14 +262,6 @@ export function PredictionList() {
             const bountyData = await request(endpoint, GET_BOUNTIES_QUERY, { questionIds }) as any;
             const bounties = bountyData.logFundAnswerBounties || [];
 
-            // Create a map of question_id -> bounty
-            // Since we ordered by desc, the first entry for each question is the latest event
-            // NOTE: Ideally we should sum them up if there are multiple funding events, 
-            // but for now let's assume the latest event might have the accumulated value 
-            // OR we just take the latest funding event. 
-            // Actually, LogFundAnswerBounty emits 'bounty' which is the *amount added*.
-            // So we need to sum them up by question_id.
-
             const bountyMap = new Map<string, bigint>();
 
             bounties.forEach((b: any) => {
@@ -256,7 +271,6 @@ export function PredictionList() {
               bountyMap.set(qId, current + amount);
             });
 
-            // Update questions with bounty data
             parsedQuestions.forEach(q => {
               if (bountyMap.has(q.id)) {
                 q.bounty = bountyMap.get(q.id)?.toString() || "0";
@@ -266,17 +280,15 @@ export function PredictionList() {
             logger.debug(`Updated ${bountyMap.size} questions with bounty data`);
           } catch (bountyError) {
             logger.warn('Failed to fetch bounties:', bountyError);
-            // Continue without bounties, they will default to "0"
           }
         }
 
-        // Filter to only show questions from this app if enabled
-        // Questions created through this app use arbitrator: 0x0000000000000000000000000000000000000000
-        const APP_ARBITRATOR = "0x0000000000000000000000000000000000000000";
+        // Filter to only show questions from this app if enabled (CreatePrediction uses zero arbitrator).
+        const appArbNorm = normalizeArbitrator(APP_ARBITRATOR);
         const filteredQuestions = showOnlyAppQuestions
-          ? parsedQuestions.filter((q) =>
-            q.arbitrator?.toLowerCase() === APP_ARBITRATOR.toLowerCase()
-          )
+          ? parsedQuestions.filter(
+              (q) => normalizeArbitrator(q.arbitrator) === appArbNorm
+            )
           : parsedQuestions;
 
         setAllQuestions(filteredQuestions);
@@ -346,19 +358,6 @@ export function PredictionList() {
     );
   }
 
-  if (!questions || questions.length === 0) {
-    return (
-      <div className="p-4">
-        <div>No predictions found.</div>
-        <div className="text-sm text-gray-500 mt-2">
-          {showOnlyAppQuestions
-            ? "No predictions found from this app. Try unchecking the filter to see all predictions."
-            : "Create your first prediction to get started!"}
-        </div>
-      </div>
-    );
-  }
-
   const totalQuestions = allQuestions?.length || 0;
   const totalPages = totalQuestions > 0 ? Math.ceil(totalQuestions / ITEMS_PER_PAGE) : 1;
   const hasNextPage = totalQuestions > 0 && currentPage < totalPages;
@@ -378,33 +377,85 @@ export function PredictionList() {
     }
   };
 
+  const setFilterCreativeTv = () => {
+    setShowOnlyAppQuestions(true);
+    setCurrentPage(1);
+  };
 
+  const setFilterAllReality = () => {
+    setShowOnlyAppQuestions(false);
+    setCurrentPage(1);
+  };
 
   return (
     <div className="space-y-4">
-      {/* Filter toggle */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-2">
-          <input
-            type="checkbox"
-            id="filter-app-questions"
-            checked={!showOnlyAppQuestions}
-            onChange={(e) => {
-              setShowOnlyAppQuestions(!e.target.checked);
-              setCurrentPage(1); // Reset to first page when filter changes
-            }}
-            className="h-4 w-4 rounded border-gray-300"
-          />
-          <label htmlFor="filter-app-questions" className="text-sm text-gray-600 dark:text-gray-400 cursor-pointer">
-            Show all Reality.eth predictions
-          </label>
+        <div className="flex flex-col gap-1.5">
+          <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Source
+          </span>
+          <div
+            className="inline-flex rounded-lg border bg-muted/40 p-1"
+            role="group"
+            aria-label="Prediction source filter"
+          >
+            <Button
+              type="button"
+              variant={showOnlyAppQuestions ? "default" : "ghost"}
+              size="sm"
+              className="rounded-md shadow-none"
+              onClick={setFilterCreativeTv}
+              aria-pressed={showOnlyAppQuestions}
+            >
+              Creative TV
+            </Button>
+            <Button
+              type="button"
+              variant={!showOnlyAppQuestions ? "default" : "ghost"}
+              size="sm"
+              className="rounded-md shadow-none"
+              onClick={setFilterAllReality}
+              aria-pressed={!showOnlyAppQuestions}
+            >
+              All Reality.eth
+            </Button>
+          </div>
+          {showOnlyAppQuestions && (
+            <p className="text-xs text-muted-foreground max-w-xl">
+              Creative TV only lists markets created here with <span className="font-mono">0x0…0</span> arbitrator.
+              Questions you create on{" "}
+              <a
+                className="underline underline-offset-2 hover:text-foreground"
+                href="https://reality.eth.link"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                reality.eth
+              </a>{" "}
+              often use another arbitrator (e.g. Kleros) — switch to <strong>All Reality.eth</strong> to see those.
+            </p>
+          )}
         </div>
-        <div className="text-sm text-gray-500">
-          Showing {questions?.length || 0} of {allQuestions?.length || 0} questions
+        <div className="text-sm text-muted-foreground">
+          {totalQuestions > 0
+            ? `Showing ${questions?.length || 0} of ${totalQuestions} question${totalQuestions === 1 ? "" : "s"}`
+            : showOnlyAppQuestions
+              ? "No Creative TV predictions in this view"
+              : "No predictions in this view"}
         </div>
       </div>
 
-      {/* Questions list */}
+      {totalQuestions === 0 ? (
+        <div className="rounded-lg border border-dashed p-8 text-center">
+          <p className="font-medium text-foreground">No predictions found</p>
+          <p className="mt-2 text-sm text-muted-foreground max-w-md mx-auto">
+            {showOnlyAppQuestions
+              ? "Nothing created on Creative TV matches yet. Choose “All Reality.eth” to browse every indexed market on the network."
+              : "There are no indexed Reality.eth questions to show yet, or data is still syncing."}
+          </p>
+        </div>
+      ) : (
+        <>
       <div className="flex flex-col gap-4 w-full">
         {questions.map((question) => {
           const now = Math.floor(Date.now() / 1000);
@@ -469,7 +520,7 @@ export function PredictionList() {
             Previous
           </Button>
 
-          <div className="flex items-center gap-2 text-sm text-gray-500">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <span>Page {currentPage} of {totalPages}</span>
           </div>
 
@@ -482,6 +533,8 @@ export function PredictionList() {
             Next
           </Button>
         </div>
+      )}
+        </>
       )}
     </div>
   );

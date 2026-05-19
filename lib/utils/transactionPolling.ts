@@ -6,7 +6,7 @@
  */
 
 import { createPublicClient, http, decodeEventLog, Log, TransactionReceipt } from 'viem';
-import { base } from 'viem/chains';
+import { baseMainnet } from '@/lib/utils/chains/base';
 import { logger } from '@/lib/utils/logger';
 
 
@@ -56,7 +56,7 @@ async function getPublicClient() {
   for (const rpcUrl of RPC_ENDPOINTS) {
     try {
       const client = createPublicClient({
-        chain: base,
+        chain: baseMainnet,
         transport: http(rpcUrl),
       });
       

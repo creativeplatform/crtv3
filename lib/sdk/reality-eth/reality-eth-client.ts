@@ -1,4 +1,4 @@
-import { getContract } from "viem";
+import { getContract, getAddress, isAddress } from "viem";
 import { base } from "@account-kit/infra";
 import type { Address, PublicClient } from "viem";
 import reality_eth_contracts from "@reality.eth/contracts";
@@ -17,6 +17,47 @@ const CHAIN_ID = 8453; // Base
 const TOKEN_TICKER = "ETH"; // Native token for Base
 const VERSION = "3.0"; // Reality.eth v3
 
+/** Kleros Reality.eth arbitrator proxy on Base — Oracle court (default). */
+export const REALITY_ETH_KLEROS_ORACLE_BASE =
+  "0x05295972F75cFeE7fE66E6BDDC0435c9Fd083D18" as const satisfies Address;
+
+/** Kleros Precog proxy on Base; use via `NEXT_PUBLIC_REALITY_ETH_ARBITRATOR` if that court is required. */
+export const REALITY_ETH_KLEROS_PRECOG_BASE =
+  "0xd04f24364687dBD6db67D2101faE59e91a6e605B" as const satisfies Address;
+
+/**
+ * Single arbitrator used for new Reality.eth questions and for `submitEvidence`.
+ * Must match the Kleros (or other) proxy registered on the question at creation time.
+ *
+ * - Set `NEXT_PUBLIC_REALITY_ETH_ARBITRATOR` to override (e.g. Precog address).
+ * - Defaults to Oracle court on Base. Other products resolve to a contract address — use that here.
+ */
+export function getCanonicalRealityEthArbitratorAddress(): Address {
+  const raw = process.env.NEXT_PUBLIC_REALITY_ETH_ARBITRATOR?.trim();
+  if (raw) {
+    if (!isAddress(raw)) {
+      serverLogger.warn(
+        "NEXT_PUBLIC_REALITY_ETH_ARBITRATOR is not a valid address; falling back to Kleros Oracle proxy",
+        { raw }
+      );
+      return REALITY_ETH_KLEROS_ORACLE_BASE;
+    }
+    const normalized = getAddress(raw);
+    const config = getRealityEthConfig();
+    const known = config.arbitrators
+      ? Object.keys(config.arbitrators).map((a) => getAddress(a as Address))
+      : [];
+    if (known.length > 0 && !known.includes(normalized)) {
+      serverLogger.warn(
+        "NEXT_PUBLIC_REALITY_ETH_ARBITRATOR is not in the bundled Reality.eth Base arbitrator list; ensure this proxy matches your deployment",
+        { normalized }
+      );
+    }
+    return normalized;
+  }
+  return REALITY_ETH_KLEROS_ORACLE_BASE;
+}
+
 /**
  * Get Reality.eth contract configuration for Base network
  */
@@ -30,8 +71,8 @@ export function getRealityEthConfig() {
       block: 26260675,
       notes: null,
       arbitrators: {
-        "0x05295972F75cFeE7fE66E6BDDC0435c9Fd083D18": "Kleros (Oracle court)",
-        "0xd04f24364687dBD6db67D2101faE59e91a6e605B": "Kleros arbitrator (Precog)"
+        [REALITY_ETH_KLEROS_ORACLE_BASE]: "Kleros (Oracle court)",
+        [REALITY_ETH_KLEROS_PRECOG_BASE]: "Kleros arbitrator (Precog)",
       },
       version_number: "3.0",
       chain_id: 8453,

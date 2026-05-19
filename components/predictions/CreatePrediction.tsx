@@ -6,6 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useChain, useAuthModal, useSmartAccountClient } from "@account-kit/react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { base } from "@account-kit/infra";
 import { createPublicClient, http, parseEther, type Address } from "viem";
 import {
@@ -19,7 +20,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { Loader2 } from "lucide-react";
+import { Info, Loader2 } from "lucide-react";
 import { useWalletStatus } from "@/lib/hooks/accountkit/useWalletStatus";
 import { toast } from "sonner";
 import {
@@ -30,9 +31,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { createQuestionWithData } from "@/lib/sdk/reality-eth/reality-eth-question-wrapper";
+import { getCanonicalRealityEthArbitratorAddress } from "@/lib/sdk/reality-eth/reality-eth-client";
 import type { QuestionData } from "@/lib/sdk/reality-eth/reality-eth-utils";
-import { REALITY_ETH_CHAIN_ID } from "@/context/context";
 import { logger } from "@/lib/utils/logger";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 const predictionSchema = z.object({
   title: z.string().min(3, "Title is required"),
@@ -73,11 +75,22 @@ function getUnixTimestamp(date: string, time: string) {
 
 type PredictionForm = z.infer<typeof predictionSchema>;
 
+type PredictionQuota = {
+  unlimited: boolean;
+  premiumTier: "investor" | "brand" | null;
+  usedThisMonth: number;
+  monthlyLimit: number;
+  remaining: number | null;
+};
+
 function CreatePrediction() {
   const { chain } = useChain();
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [quota, setQuota] = useState<PredictionQuota | null>(null);
+  const [quotaLoading, setQuotaLoading] = useState(false);
+  const [quotaError, setQuotaError] = useState<string | null>(null);
 
   const {
     smartAccountClient,
@@ -111,6 +124,41 @@ function CreatePrediction() {
 
   const questionType = form.watch("type");
 
+  useEffect(() => {
+    if (!address || typeof window === "undefined") {
+      setQuota(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      setQuotaLoading(true);
+      setQuotaError(null);
+      try {
+        const res = await fetch(
+          `/api/predictions/quota?address=${encodeURIComponent(address)}`
+        );
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(
+            typeof data.error === "string" ? data.error : "Failed to load quota"
+          );
+        }
+        if (!cancelled) {
+          setQuota(data as PredictionQuota);
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setQuotaError(e instanceof Error ? e.message : "Quota error");
+        }
+      } finally {
+        if (!cancelled) setQuotaLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [address]);
+
   // Auto-populate outcomes when type changes to bool
   useEffect(() => {
     if (questionType === "bool") {
@@ -137,6 +185,18 @@ function CreatePrediction() {
       return;
     }
 
+    if (
+      quota &&
+      !quota.unlimited &&
+      quota.remaining !== null &&
+      quota.remaining <= 0
+    ) {
+      setFormError(
+        "You've reached your limit of 3 prediction markets this month (UTC). Investor or Brand members can create unlimited markets."
+      );
+      return;
+    }
+
     // Validate date and time fields
     if (!values.closeDate || !values.closeTime) {
       setFormError("Please select both a close date and close time.");
@@ -155,6 +215,27 @@ function CreatePrediction() {
     setIsSubmitting(true);
 
     try {
+      if (address) {
+        const quotaRes = await fetch(
+          `/api/predictions/quota?address=${encodeURIComponent(address)}`
+        );
+        const fresh = (await quotaRes.json()) as PredictionQuota;
+        if (
+          quotaRes.ok &&
+          fresh &&
+          !fresh.unlimited &&
+          fresh.remaining !== null &&
+          fresh.remaining <= 0
+        ) {
+          setFormError(
+            "You've reached your limit of 3 prediction markets this month (UTC). Investor or Brand members can create unlimited markets."
+          );
+          setIsSubmitting(false);
+          return;
+        }
+        if (quotaRes.ok && fresh) setQuota(fresh);
+      }
+
       logger.debug("🚀 Starting prediction creation...", {
         title: values.title,
         type: values.type,
@@ -235,9 +316,8 @@ function CreatePrediction() {
       const bond = values.bond ? parseEther(values.bond) : 0n;
       const nonce = BigInt(Date.now());
 
-      // Use a default arbitrator address (Reality.eth's default arbitrator)
-      // In production, you might want to use a custom arbitrator
-      const arbitrator = "0x0000000000000000000000000000000000000000" as Address;
+      // Must match Kleros proxy used for disputes / submitEvidence (see getCanonicalRealityEthArbitratorAddress).
+      const arbitrator = getCanonicalRealityEthArbitratorAddress();
 
       // Template ID 0 is typically used for custom questions
       // You may need to register a template first for production use
@@ -274,11 +354,30 @@ function CreatePrediction() {
 
       logger.debug("✅ Transaction hash:", hash);
 
+      try {
+        const rec = await fetch("/api/predictions/record", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            address,
+            transactionHash: hash,
+          }),
+        });
+        const recData = await rec.json();
+        if (!rec.ok && !recData.duplicate) {
+          logger.warn("Prediction quota record failed:", recData);
+          toast.warning(
+            "Prediction submitted, but usage could not be synced. If your monthly count looks wrong, contact support."
+          );
+        }
+      } catch (recErr) {
+        logger.warn("Prediction quota record error:", recErr);
+        toast.warning(
+          "Prediction submitted; monthly usage may update on the next page load."
+        );
+      }
+
       toast.success("Prediction created successfully! Transaction submitted.");
-      
-      // Extract question ID from transaction receipt
-      // Note: In production, you'd parse the question ID from the transaction logs
-      // For now, we'll redirect to the predictions list
       router.push("/predict");
     } catch (error: any) {
       logger.error("❌ Error creating prediction:", error);
@@ -336,6 +435,66 @@ function CreatePrediction() {
           onSubmit={handleFormSubmit}
           className="w-full p-5 md:w-2/5 space-y-6"
         >
+          {!isConnected || !address ? null : quotaLoading ? (
+            <Alert>
+              <Info className="h-4 w-4" />
+              <AlertTitle>Monthly allowance</AlertTitle>
+              <AlertDescription>Loading…</AlertDescription>
+            </Alert>
+          ) : quotaError ? (
+            <Alert variant="destructive">
+              <AlertTitle>Could not load allowance</AlertTitle>
+              <AlertDescription>{quotaError}</AlertDescription>
+            </Alert>
+          ) : quota ? (
+            <Alert>
+              <Info className="h-4 w-4" />
+              <AlertTitle>Monthly allowance</AlertTitle>
+              <AlertDescription>
+                {quota.unlimited ? (
+                  <>
+                    {quota.premiumTier === "investor" && (
+                      <span>Investor membership: unlimited prediction markets. </span>
+                    )}
+                    {quota.premiumTier === "brand" && (
+                      <span>Brand membership: unlimited prediction markets. </span>
+                    )}
+                    {!quota.premiumTier && (
+                      <span>Unlimited prediction markets for your account. </span>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    {quota.usedThisMonth} of {quota.monthlyLimit} markets used this
+                    month (UTC).{" "}
+                    {quota.remaining !== null && quota.remaining > 0 ? (
+                      <span>
+                        {quota.remaining} remaining.{" "}
+                        <Link
+                          href="/"
+                          className="underline font-medium text-foreground"
+                        >
+                          Upgrade to Investor or Brand
+                        </Link>{" "}
+                        for unlimited markets.
+                      </span>
+                    ) : (
+                      <span>
+                        <Link
+                          href="/"
+                          className="underline font-medium text-foreground"
+                        >
+                          Upgrade to Investor or Brand
+                        </Link>{" "}
+                        for unlimited markets.
+                      </span>
+                    )}
+                  </>
+                )}
+              </AlertDescription>
+            </Alert>
+          ) : null}
+
           <FormField
             name="title"
             control={form.control}
@@ -499,7 +658,15 @@ function CreatePrediction() {
           <Button
             type="submit"
             className="w-full"
-            disabled={isSubmitting || !isConnected || isLoadingClient}
+            disabled={
+              isSubmitting ||
+              !isConnected ||
+              isLoadingClient ||
+              (quota !== null &&
+                !quota.unlimited &&
+                quota.remaining !== null &&
+                quota.remaining <= 0)
+            }
             onClick={(e) => {
               logger.debug("🔘 Create Prediction button clicked");
               logger.debug("🔘 isSubmitting:", isSubmitting);

@@ -17,8 +17,9 @@ import { LayoutClientChunks } from "@/components/LayoutClientChunks";
 
 const inter = Inter({
   subsets: ["latin"],
-  display: 'swap',
-  preload: true,
+  display: "swap",
+  // Avoid Chrome "preloaded but not used" when first paint is delayed (dev/HMR, heavy pages).
+  preload: false,
   adjustFontFallback: true,
 });
 

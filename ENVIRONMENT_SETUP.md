@@ -86,9 +86,9 @@ Your Supabase service role key (server-side only).
 3. Go to Settings > API
 4. Copy the URL and keys
 
-### 4. Subgraph Configuration (Goldsky)
+### 4. Subgraph Configuration (Goldsky + Graph Studio)
 
-The application uses **Goldsky** for blockchain indexing:
+The application supports Goldsky and Graph Studio for blockchain indexing:
 
 #### MeTokens Subgraphs (Existing Project)
 No configuration is required as these are public endpoints:
@@ -113,6 +113,20 @@ No configuration is required as these are public endpoints:
 - Set this environment variable only if you want to use a different Goldsky project
 
 **Note:** The Reality.eth subgraph endpoint is accessed via `/api/reality-eth-subgraph` to handle CORS.
+
+#### Graph Studio (Merged Creative Platform Subgraph)
+
+`SUBGRAPH_PROVIDER_MODE` (Optional)
+- Supported values: `goldsky` (default), `studio`, `dual`
+- `dual` attempts Graph Studio first, then falls back to Goldsky
+
+`GRAPH_STUDIO_CREATIVE_PLATFORM_URL` (Required for `studio` or `dual`)
+- Full GraphQL query URL for your Graph Studio deployment
+- Example format: `https://gateway.thegraph.com/api/<query-key>/subgraphs/id/<deployment-id>`
+
+`GRAPH_STUDIO_DEPLOY_KEY` (Deployment only)
+- Used by `scripts/graph-studio/deploy-creative-platform.sh`
+- Keep server-side only
 
 ### 5. Coinbase CDP Configuration (Onramp/Offramp)
 
@@ -308,6 +322,10 @@ NEXT_PUBLIC_NFT_CONTRACT_ADDRESS=0x0000000000000000000000000000000000000000
 NEXT_PUBLIC_SUPPORT_URL=https://your-support-url.com
 
 # Note: SUBGRAPH_QUERY_KEY is no longer needed - now using Goldsky public endpoints
+# Optional Graph Studio migration vars
+# SUBGRAPH_PROVIDER_MODE=dual
+# GRAPH_STUDIO_CREATIVE_PLATFORM_URL=https://gateway.thegraph.com/api/<query-key>/subgraphs/id/<deployment-id>
+# GRAPH_STUDIO_DEPLOY_KEY=<deploy-key>
 ```
 
 3. Replace the placeholder values with your actual keys

@@ -20,7 +20,7 @@ export interface PublishedVideosResponse {
 
 /**
  * Client-side utility to fetch published videos from the API
- * Uses Vercel Edge Cache for optimal performance
+ * Uses an uncached request so view-count ordering reflects the latest synced data.
  */
 export async function fetchPublishedVideos(
   options: FetchPublishedVideosOptions = {}
@@ -37,12 +37,11 @@ export async function fetchPublishedVideos(
 
   const response = await fetch(`/api/video-assets/published?${params.toString()}`, {
     method: "GET",
+    cache: "no-store",
     headers: {
       "Content-Type": "application/json",
-    },
-    // Use Next.js cache revalidation
-    next: {
-      revalidate: options.search ? 30 : 60, // Shorter cache for search
+      "Cache-Control": "no-cache",
+      Pragma: "no-cache",
     },
   });
 

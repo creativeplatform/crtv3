@@ -1,0 +1,17 @@
+{
+  "name": "creative-platform-subgraph",
+  "private": true,
+  "version": "0.0.1",
+  "scripts": {
+    "codegen": "graph codegen",
+    "build": "graph build",
+    "create:studio": "graph create creative-platform -g https://api.studio.thegraph.com/deploy/",
+    "deploy:studio": "graph deploy creative-platform subgraph.yaml",
+    "deploy:studio:tag": "graph deploy creative-platform subgraph.yaml --version-label ${VERSION_LABEL:-v0.0.1}",
+    "auth:studio": "graph auth ${GRAPH_STUDIO_DEPLOY_KEY}"
+  },
+  "devDependencies": {
+    "@graphprotocol/graph-cli": "^0.98.1",
+    "@graphprotocol/graph-ts": "^0.38.2"
+  }
+}

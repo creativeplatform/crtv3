@@ -212,7 +212,7 @@ export class CreatorProfileSupabaseService {
   // Subscribe to real-time creator profile updates
   subscribeToCreatorProfileUpdates(ownerAddress: string, callback: (payload: any) => void) {
     return supabase
-      .channel(`creator-profile-${ownerAddress}`)
+      .channel(`creator-profile:${ownerAddress.toLowerCase()}:${crypto.randomUUID()}`)
       .on(
         'postgres_changes',
         {
