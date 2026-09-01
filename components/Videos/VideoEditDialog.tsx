@@ -33,6 +33,7 @@ import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { regenerateThumbnailFromLivepeer } from "@/lib/utils/thumbnail-regeneration";
 import { logger } from '@/lib/utils/logger';
+import { VIDEO_GENRES, getVideoGenreLabel } from "@/lib/constants/video-genres";
 
 
 interface VideoEditDialogProps {
@@ -48,25 +49,6 @@ interface VideoEditFormData {
   category: string;
   location: string;
 }
-
-const GENRES = [
-  "Pop",
-  "Rock",
-  "Hip-Hop/Rap",
-  "R&B/Soul",
-  "EDM",
-  "Country",
-  "Jazz",
-  "Blues",
-  "Classical",
-  "Folk",
-  "Reggae",
-  "Latin",
-  "Metal",
-  "Original",
-  "Podcast",
-  "World",
-];
 
 export function VideoEditDialog({
   open,
@@ -106,30 +88,28 @@ export function VideoEditDialog({
 
   const categoryValue = watch("category");
 
-  // Reset form when video asset changes
+  // Reset form when dialog opens or video identity changes (not every object refresh)
   useEffect(() => {
-    if (videoAsset) {
-      reset({
-        title: videoAsset.title || "",
-        description: videoAsset.description || "",
-        category: videoAsset.category || "",
-        location: videoAsset.location || "",
-      });
-      // Reset thumbnail state
-      setThumbnailFile(null);
-      setNewThumbnailUrl(null);
-      setUploadProgress(0);
-      setIsRegenerating(false);
-      setManualThumbnailUrl("");
-      setManualUrlError("");
-      setThumbnailTab("upload");
-      if (blobUrlRef.current) {
-        URL.revokeObjectURL(blobUrlRef.current);
-        blobUrlRef.current = null;
-      }
-      setThumbnailPreview(null);
+    if (!open || !videoAsset) return;
+    reset({
+      title: videoAsset.title || "",
+      description: videoAsset.description || "",
+      category: videoAsset.category || "",
+      location: videoAsset.location || "",
+    });
+    setThumbnailFile(null);
+    setNewThumbnailUrl(null);
+    setUploadProgress(0);
+    setIsRegenerating(false);
+    setManualThumbnailUrl("");
+    setManualUrlError("");
+    setThumbnailTab("upload");
+    if (blobUrlRef.current) {
+      URL.revokeObjectURL(blobUrlRef.current);
+      blobUrlRef.current = null;
     }
-  }, [videoAsset, reset]);
+    setThumbnailPreview(null);
+  }, [open, videoAsset?.id, reset]);
 
   // Cleanup blob URLs on unmount
   useEffect(() => {
@@ -200,17 +180,17 @@ export function VideoEditDialog({
 
         setNewThumbnailUrl(finalUrl);
 
-        // Clear preview and revoke blob URL after successful upload to prevent memory leak
-        // The uploaded IPFS thumbnail will be shown in the current thumbnail preview section
-        setThumbnailPreview(null);
+        // Keep blob preview while uploading finishes; prefer IPFS URL in UI via
+        // pendingPreview. Revoke blob to free memory but leave newThumbnailUrl set.
         if (blobUrlRef.current) {
           URL.revokeObjectURL(blobUrlRef.current);
           blobUrlRef.current = null;
         }
+        setThumbnailPreview(null);
 
         toast({
           title: "Thumbnail Uploaded",
-          description: "Thumbnail has been uploaded successfully.",
+          description: "Thumbnail has been uploaded successfully. Save changes to apply it.",
         });
       } else {
         toast({
@@ -442,9 +422,9 @@ export function VideoEditDialog({
                   <SelectValue placeholder="Select a Genre" />
                 </SelectTrigger>
                 <SelectContent>
-                  {GENRES.map((genre) => (
-                    <SelectItem key={genre} value={genre}>
-                      {genre === "World" ? "World Music" : genre}
+                  {VIDEO_GENRES.map((genre) => (
+                    <SelectItem key={genre.value} value={genre.value}>
+                      {getVideoGenreLabel(genre.value)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -473,20 +453,45 @@ export function VideoEditDialog({
             <div className="grid gap-2">
               <Label htmlFor="thumbnail">Thumbnail</Label>
               <div className="space-y-4">
-                {/* Current Thumbnail Preview */}
-                {(videoAsset as any).thumbnail_url && (
+                {/* Pending / current thumbnail preview */}
+                {(thumbnailPreview || newThumbnailUrl || (videoAsset as any).thumbnail_url) && (
                   <div className="space-y-2">
-                    <Label className="text-sm text-muted-foreground">Current Thumbnail</Label>
+                    <Label className="text-sm text-muted-foreground">
+                      {thumbnailPreview || newThumbnailUrl
+                        ? "New thumbnail (pending save)"
+                        : "Current Thumbnail"}
+                    </Label>
                     <div className="relative aspect-video w-full max-w-md rounded-lg overflow-hidden border">
-                      <GatewayImage
-                        src={(videoAsset as any).thumbnail_url}
-                        alt="Current thumbnail"
-                        fill
-                        className="object-cover"
-                        showSkeleton={true}
-                        fallbackSrc="/Creative_TV.png"
-                      />
+                      {thumbnailPreview?.startsWith("blob:") ? (
+                        <img
+                          src={thumbnailPreview}
+                          alt="Thumbnail preview"
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <GatewayImage
+                          src={
+                            thumbnailPreview ||
+                            newThumbnailUrl ||
+                            (videoAsset as any).thumbnail_url
+                          }
+                          alt={
+                            thumbnailPreview || newThumbnailUrl
+                              ? "New thumbnail pending save"
+                              : "Current thumbnail"
+                          }
+                          fill
+                          className="object-cover"
+                          showSkeleton={true}
+                          fallbackSrc="/Creative_TV.png"
+                        />
+                      )}
                     </div>
+                    {(thumbnailPreview || newThumbnailUrl) && (
+                      <p className="text-xs text-muted-foreground">
+                        Click Save changes to apply this thumbnail.
+                      </p>
+                    )}
                   </div>
                 )}
 
@@ -500,64 +505,49 @@ export function VideoEditDialog({
 
                   {/* Upload Tab */}
                   <TabsContent value="upload" className="space-y-2">
-                    {thumbnailPreview ? (
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between">
-                          <Label className="text-sm text-muted-foreground">New Thumbnail</Label>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={handleThumbnailRemove}
-                            className="h-8 w-8 p-0"
-                          >
-                            <X className="h-4 w-4" />
-                          </Button>
-                        </div>
-                        <div className="relative aspect-video w-full max-w-md rounded-lg overflow-hidden border">
-                          <img
-                            src={thumbnailPreview}
-                            alt="Thumbnail preview"
-                            className="w-full h-full object-cover"
-                          />
-                        </div>
-                        {isUploadingThumbnail && (
-                          <div className="space-y-2">
-                            <Progress value={uploadProgress} className="w-full" />
-                            <p className="text-xs text-muted-foreground">Uploading thumbnail...</p>
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="space-y-2">
-                        <Input
-                          id="thumbnail"
-                          type="file"
-                          accept="image/*"
-                          ref={fileInputRef}
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (file) {
-                              handleThumbnailSelect(file);
-                            }
-                          }}
-                          disabled={isUploadingThumbnail || isRegenerating}
-                          className="cursor-pointer"
-                        />
-                        {isUploadingThumbnail && (
-                          <div className="space-y-2">
-                            <Progress value={uploadProgress} className="w-full" />
-                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                              <span>Processing thumbnail...</span>
-                            </div>
-                          </div>
-                        )}
-                        <p className="text-xs text-muted-foreground">
-                          Upload a new thumbnail image (JPG, PNG, or WebP). Max 5MB.
-                        </p>
+                    {(thumbnailPreview || newThumbnailUrl) && (
+                      <div className="flex items-center justify-between">
+                        <Label className="text-sm text-muted-foreground">
+                          {isUploadingThumbnail ? "Uploading…" : "Ready to save"}
+                        </Label>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={handleThumbnailRemove}
+                          className="h-8 w-8 p-0"
+                          disabled={isUploadingThumbnail}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
                       </div>
                     )}
+                    <Input
+                      id="thumbnail"
+                      type="file"
+                      accept="image/*"
+                      ref={fileInputRef}
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          handleThumbnailSelect(file);
+                        }
+                      }}
+                      disabled={isUploadingThumbnail || isRegenerating}
+                      className="cursor-pointer"
+                    />
+                    {isUploadingThumbnail && (
+                      <div className="space-y-2">
+                        <Progress value={uploadProgress} className="w-full" />
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          <span>Processing thumbnail...</span>
+                        </div>
+                      </div>
+                    )}
+                    <p className="text-xs text-muted-foreground">
+                      Upload a new thumbnail image (JPG, PNG, or WebP). Max 5MB.
+                    </p>
                   </TabsContent>
 
                   {/* Regenerate Tab */}

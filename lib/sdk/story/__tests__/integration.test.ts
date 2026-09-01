@@ -2,7 +2,9 @@
  * End-to-end integration tests for factory contract service
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import {
+  describe, it, expect, beforeEach, afterEach, vi,
+} from 'vitest';
 import type { Address } from 'viem';
 import {
   deployCreatorCollection,
@@ -20,24 +22,31 @@ import {
 } from './helpers/mocks';
 
 // Mock dependencies
-vi.mock('@/lib/viem', () => ({
-  publicClient: createMockPublicClient(),
+let storyPublicClient: ReturnType<typeof createMockPublicClient>;
+let serviceSupabase: ReturnType<typeof createMockSupabaseClient>;
+
+vi.mock('@/lib/sdk/story/client', () => ({
+  createStoryPublicClient: () => storyPublicClient,
 }));
 
 vi.mock('@/lib/sdk/supabase/service', () => ({
-  createServiceClient: () => createMockSupabaseClient(),
+  createServiceClient: () => serviceSupabase,
 }));
 
 describe('Integration Tests', () => {
+  mockEnvVars();
+
   let mockSmartAccountClient: ReturnType<typeof createMockSmartAccountClient>;
   let mockPublicClient: ReturnType<typeof createMockPublicClient>;
   let mockSupabase: ReturnType<typeof createMockSupabaseClient>;
 
   beforeEach(() => {
-    mockEnvVars();
     mockSmartAccountClient = createMockSmartAccountClient();
     mockPublicClient = createMockPublicClient();
     mockSupabase = createMockSupabaseClient();
+
+    storyPublicClient = mockPublicClient;
+    serviceSupabase = mockSupabase;
 
     // Setup default mocks
     mockSmartAccountClient.sendUserOperation.mockResolvedValue({
@@ -46,6 +55,11 @@ describe('Integration Tests', () => {
     mockSmartAccountClient.waitForUserOperationTransaction.mockResolvedValue(
       testData.txHash
     );
+    mockSmartAccountClient.sendTransaction.mockResolvedValue(testData.txHash);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   describe('Full Flow: Deploy → Grant Role → Mint → Verify', () => {
@@ -94,16 +108,17 @@ describe('Integration Tests', () => {
         testData.metadataURI
       );
 
-      expect(mintResult.tokenId).toBe('1');
+      expect(mintResult.tokenId).toBe('2');
       expect(mintResult.txHash).toBe(testData.txHash);
 
       // Verify all operations were called
-      expect(mockSmartAccountClient.sendUserOperation).toHaveBeenCalledTimes(3); // Deploy, Grant, Mint
+      expect(mockSmartAccountClient.sendTransaction).toHaveBeenCalledTimes(1); // Deploy
+      expect(mockSmartAccountClient.sendUserOperation).toHaveBeenCalledTimes(2); // Grant, Mint
     });
 
     it('should handle errors gracefully at each step', async () => {
       // Deploy fails
-      mockSmartAccountClient.sendUserOperation.mockRejectedValueOnce(
+      mockSmartAccountClient.sendTransaction.mockRejectedValueOnce(
         new Error('Deployment failed')
       );
 
@@ -149,16 +164,15 @@ describe('Integration Tests', () => {
         testData.bytecode
       );
 
-      expect(mockSmartAccountClient.sendUserOperation).toHaveBeenCalledWith({
-        uo: expect.objectContaining({
-          target: testData.factoryAddress,
-          data: expect.any(String),
-          value: BigInt(0),
-        }),
+      expect(mockSmartAccountClient.sendTransaction).toHaveBeenCalledWith({
+        account: testData.creatorAddress,
+        to: testData.factoryAddress,
+        data: expect.any(String),
+        value: BigInt(0),
       });
 
-      expect(mockSmartAccountClient.waitForUserOperationTransaction).toHaveBeenCalledWith({
-        hash: '0xoperationhash',
+      expect(mockPublicClient.waitForTransactionReceipt).toHaveBeenCalledWith({
+        hash: testData.txHash,
       });
     });
 
@@ -188,7 +202,8 @@ describe('Integration Tests', () => {
       );
 
       // Both operations should succeed
-      expect(mockSmartAccountClient.sendUserOperation).toHaveBeenCalledTimes(2);
+      expect(mockSmartAccountClient.sendTransaction).toHaveBeenCalledTimes(1);
+      expect(mockSmartAccountClient.sendUserOperation).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -225,8 +240,8 @@ describe('Integration Tests', () => {
     it('should fallback to database if factory not configured', async () => {
       process.env.NEXT_PUBLIC_CREATOR_IP_FACTORY_ADDRESS = '';
 
-      mockSupabase.from().select().eq().single.mockResolvedValue({
-        data: { collection_address: testData.collectionAddress },
+      mockSupabase.from().select().eq().maybeSingle.mockResolvedValue({
+        data: { collection_address: testData.collectionAddress } as any,
         error: null,
       });
 

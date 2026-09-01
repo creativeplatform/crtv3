@@ -189,6 +189,63 @@ export interface CreateClipVideoAssetParams {
   clipperAddress: string;
 }
 
+export interface CreateLivestreamVideoAssetParams {
+  assetId: string;
+  playbackId: string;
+  creatorId: string;
+  parentPlaybackId: string;
+  title?: string | null;
+  thumbnailUrl?: string | null;
+  durationSec?: number | null;
+  sessionId?: string | null;
+}
+
+export async function createLivestreamVideoAsset(params: CreateLivestreamVideoAssetParams) {
+  const supabase = createServiceClient();
+
+  const { data: existing } = await supabase
+    .from("video_assets")
+    .select("*")
+    .eq("asset_id", params.assetId)
+    .maybeSingle();
+  if (existing) return existing;
+
+  const sessionSuffix = params.sessionId?.slice(0, 8);
+  const defaultTitle = sessionSuffix
+    ? `Livestream recording ${sessionSuffix}`
+    : `Livestream recording ${new Date().toISOString().slice(0, 10)}`;
+  const title = params.title?.trim() || defaultTitle;
+
+  const { data, error } = await supabase
+    .from("video_assets")
+    .insert({
+      title,
+      asset_id: params.assetId,
+      playback_id: params.playbackId,
+      category: "livestream",
+      location: "",
+      description: null,
+      creator_id: params.creatorId.toLowerCase(),
+      status: "published",
+      duration: params.durationSec ?? null,
+      views_count: 0,
+      likes_count: 0,
+      is_minted: false,
+      current_supply: 0,
+      thumbnail_url: params.thumbnailUrl ?? null,
+      source_type: "Livestream",
+      parent_playback_id: params.parentPlaybackId,
+    })
+    .select()
+    .single();
+
+  if (error) {
+    throw new Error(`Failed to create livestream video asset: ${error.message}`);
+  }
+
+  return data;
+}
+
 export async function createClipVideoAsset(params: CreateClipVideoAssetParams) {
   const supabase = createServiceClient();
 

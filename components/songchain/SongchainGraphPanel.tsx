@@ -29,7 +29,7 @@ function accountLabel(address: string, username?: string | null): string {
 
 export function SongchainGraphPanel({ graphId, groupId }: SongchainGraphPanelProps) {
   const { canWrite, lensAccount, getSessionClient } = useLensOrbWrite();
-  const { followAccount, unfollowAccount } = useSongchainFollow(graphId);
+  const { unfollowAccount } = useSongchainFollow(graphId);
   const [name, setName] = useState<string | null>(null);
   const [description, setDescription] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -259,6 +259,7 @@ export function SongchainFollowButton({
   const toggle = async () => {
     if (!canWrite) {
       promptWriteAccess();
+      toast.info("Connect Orb to follow on the Creative graph");
       return;
     }
     setPending(true);

@@ -7,8 +7,8 @@
 
 ### ✅ API Proxy Configuration
 - **File**: [`app/api/metokens-subgraph/route.ts`](app/api/metokens-subgraph/route.ts)
-- **Subgraph Version**: `1.0.2` ✅ (correctly configured)
-- **Public Endpoint**: `https://api.goldsky.com/api/public/project_cmh0iv6s500dbw2p22vsxcfo6/subgraphs/metokens/1.0.2/gn`
+- **Subgraph Version**: `1.0.3` ✅ (Studio primary; Goldsky fallback in proxy)
+- **Public Endpoint**: `https://api.goldsky.com/api/public/project_cmh0iv6s500dbw2p22vsxcfo6/subgraphs/metokens/1.0.3/gn`
 - **Private Endpoint**: Falls back to public if private is not enabled
 - **CORS**: Handled via API proxy (no client-side CORS issues)
 
@@ -119,7 +119,7 @@ The Market API has its own fallback:
 ## Production Readiness Checklist
 
 ### ✅ Configuration
-- [x] API proxy uses correct subgraph version (`1.0.2`)
+- [x] API proxy uses correct subgraph version (`1.0.3` Goldsky fallback)
 - [x] Public endpoint is accessible
 - [x] No environment variables required (uses defaults)
 - [x] CORS handled via API proxy
@@ -210,7 +210,7 @@ If subgraph has issues and you need the Supabase fallback:
 ✅ **Production Ready**: The subgraph integration is fully functional and production-ready.
 
 **Key Points**:
-- ✅ API proxy correctly configured with version `1.0.2`
+- ✅ API proxy correctly configured with Goldsky fallback version `1.0.3`
 - ✅ All integration points working correctly
 - ✅ Error handling and fallbacks in place
 - ✅ No environment variables required
@@ -225,5 +225,5 @@ If subgraph has issues and you need the Supabase fallback:
 ---
 
 **Last Updated**: 2025-01-22  
-**Subgraph Version**: `1.0.2`  
+**Subgraph Version**: `1.0.3`  
 **Status**: ✅ Production Ready

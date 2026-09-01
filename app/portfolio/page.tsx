@@ -1,7 +1,7 @@
 "use client";
 
 import { MeTokenPortfolio } from '@/components/wallet/balance/MeTokenPortfolio';
-import { useUser } from '@account-kit/react';
+import { useUser } from '@/lib/wallet/react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Wallet, TrendingUp, Plus, ArrowLeft } from 'lucide-react';

@@ -1,23 +1,20 @@
-import { config } from "@/config";
-import { cookieToInitialState } from "@account-kit/core";
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import { headers } from "next/headers";
 import "./globals.css";
 import { Providers } from "./providers";
 import Navbar from "@/components/Navbar";
-import { Tour } from '@/components/Tour/Tour';
 import { cn } from "@/lib/utils/utils";
 import { Toaster } from "@/components/ui/toaster";
 import Footer from "@/components/Footer";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Analytics } from "@vercel/analytics/next";
 import { LayoutClientChunks } from "@/components/LayoutClientChunks";
+import { OrbGuideChat } from "@/components/agent/OrbGuideChat";
 
 const inter = Inter({
   subsets: ["latin"],
   display: "swap",
-  // Avoid Chrome "preloaded but not used" when first paint is delayed (dev/HMR, heavy pages).
   preload: false,
   adjustFontFallback: true,
 });
@@ -57,12 +54,7 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  // Persist state across pages
   const headersList = await headers();
-  const initialState = cookieToInitialState(
-    config,
-    headersList.get("cookie") ?? undefined
-  );
   const isEmbedRoute = headersList.get("x-crtv-embed-route") === "1";
 
   return (
@@ -74,11 +66,7 @@ export default async function RootLayout({
           rel="apple-touch-icon"
           href="/icons/CreativeTV_blur-192x192.png"
         />
-        {/* Default favicon */}
         <link rel="icon" href="/favicon.ico" sizes="any" />
-        {/* Optional: SVG or PNG favicons */}
-        {/* <link rel="icon" type="image/svg+xml" href="/favicon.svg" /> */}
-        {/* <link rel="icon" type="image/png" href="/favicon.png" /> */}
       </head>
       <body
         className={cn(
@@ -88,17 +76,16 @@ export default async function RootLayout({
         suppressHydrationWarning
       >
         <div id="alchemy-signer-iframe-container" style={{ display: "none" }} />
-        {/* Alchemy signer iframe container for modular account functionality */}
         <LayoutClientChunks />
-        <Providers initialState={initialState}>
+        <Providers>
           <ErrorBoundary>
-            {!isEmbedRoute ? <Tour /> : null}
             {!isEmbedRoute ? <Navbar /> : null}
             <div className="min-h-screen flex flex-col">
               <main className="flex-1">{children}</main>
               {!isEmbedRoute ? <Footer /> : null}
             </div>
           </ErrorBoundary>
+          <OrbGuideChat />
         </Providers>
         <Toaster />
         <Analytics />

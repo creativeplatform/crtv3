@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useUser } from "@account-kit/react";
+import { useUser } from "@/lib/wallet/react";
 import useModularAccount from "@/lib/hooks/accountkit/useModularAccount";
 import { useLiveChat, type UseLiveChatReturn, type LiveChatMessage } from "./useLiveChat";
 import {

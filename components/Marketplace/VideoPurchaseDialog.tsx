@@ -4,14 +4,15 @@ import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { useMeTokensSupabase } from "@/lib/hooks/metokens/useMeTokensSupabase";
-import { useSmartAccountClient } from "@account-kit/react";
+import { useSmartAccountClient } from "@/lib/wallet/react";
 import { useMeTokenPurchase } from "@/lib/hooks/metokens/useMeTokenPurchase";
 import { Loader2, Lock, Coins, AlertCircle } from "lucide-react";
-import { formatEther, parseEther } from "viem";
+import { formatEther, parseEther, type Address } from "viem";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { VideoMeTokenBuyDialog } from "@/components/Videos/VideoMeTokenBuyDialog";
 import { Separator } from "@/components/ui/separator";
 import { logger } from '@/lib/utils/logger';
+import { getErc20Balance } from '@/lib/viem';
 
 
 interface VideoPurchaseDialogProps {
@@ -60,18 +61,10 @@ export function VideoPurchaseDialog({
         if (!client) return;
         setCheckingBalance(true);
         try {
-            const bal = await client.readContract({
-                address: meTokenAddress as `0x${string}`,
-                abi: [{
-                    name: 'balanceOf',
-                    type: 'function',
-                    inputs: [{ name: 'account', type: 'address' }],
-                    outputs: [{ name: '', type: 'uint256' }],
-                    stateMutability: 'view'
-                }],
-                functionName: 'balanceOf',
-                args: [client.account?.address as `0x${string}`]
-            }) as bigint;
+            const bal = await getErc20Balance({
+                token: meTokenAddress as Address,
+                owner: client.account?.address as Address,
+            });
             setBalance(formatEther(bal));
         } catch (e) {
             logger.error("Failed to check balance", e);

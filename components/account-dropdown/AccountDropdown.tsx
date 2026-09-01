@@ -34,8 +34,9 @@ import {
   useUser,
   useChain,
   useSendUserOperation,
-} from "@account-kit/react";
+} from "@/lib/wallet/react";
 import { useUnifiedLogout } from "@/hooks/useUnifiedLogout";
+import { getPassDisplayName } from "@/lib/access/membership-labels";
 import { base } from "@account-kit/infra";
 import { Button } from "@/components/ui/button";
 import {
@@ -68,6 +69,7 @@ import {
   ArrowRight,
   AlertTriangle,
   TrendingUp,
+  Disc3,
 } from "lucide-react";
 import { CheckIcon } from "@radix-ui/react-icons";
 import Image from "next/image";
@@ -81,7 +83,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import CoinbaseFundButton from "@/components/wallet/buy/coinbase-fund-button";
+import { FundingOptions } from "@/components/wallet/buy/FundingOptions";
 import { LoginButton } from "@/components/auth/LoginButton";
 import { AlchemySwapWidget } from "@/components/wallet/swap/AlchemySwapWidget";
 import { useSmartWalletDisplayAddress } from "@/lib/hooks/accountkit/useSmartWalletDisplayAddress";
@@ -102,26 +104,41 @@ import {
   AllowlistModule,
   installValidationActions,
 } from "@account-kit/smart-contracts/experimental";
-import { parseEther, type Address, type Hex, encodeFunctionData, parseAbi, parseUnits, formatUnits, erc20Abi } from "viem";
+import { parseEther, type Address, type Hex, encodeFunctionData, parseAbi, parseUnits, formatUnits } from "viem";
+import { getEthBalance, getErc20Balance } from "@/lib/viem";
 import { logger } from "@/lib/utils/logger";
+import { deferAfterOverlayClose } from "@/lib/utils/radixLayerFocus";
 import { appendBuilderCode } from "@/lib/utils/builder-code";
+import {
+  formatSendError,
+  getMaxEthSendAmount,
+  validateSendBalance,
+  normalizeRecipientAddress,
+} from "@/lib/utils/sendHelpers";
 import { useToast } from "@/components/ui/use-toast";
 import { ToastAction } from "@/components/ui/toast";
 import { USDC_TOKEN_ADDRESSES, USDC_TOKEN_DECIMALS } from "@/lib/contracts/USDCToken";
 import { DAI_TOKEN_ADDRESSES, DAI_TOKEN_DECIMALS } from "@/lib/contracts/DAIToken";
+import { USDS_TOKEN_ADDRESSES, USDS_TOKEN_DECIMALS } from "@/lib/contracts/USDSToken";
+import { GHO_TOKEN_ADDRESSES, GHO_TOKEN_DECIMALS } from "@/lib/contracts/GHOToken";
+import { SWAP_UI_TOKENS, emptyTokenBalances, type TokenSymbol as SwapTokenSymbol } from "@/lib/sdk/alchemy/swap-service";
 import { useSessionKeyStorage } from "@/lib/hooks/accountkit/useSessionKeyStorage";
 import { MembershipSection } from "./MembershipSection";
 import { shortenAddress } from "@/lib/utils/utils";
 import Link from "next/link";
-import { useMembershipVerification } from "@/lib/hooks/unlock/useMembershipVerification";
+import { useMembershipContext } from "@/lib/context/MembershipContext";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useMeTokensSupabase } from "@/lib/hooks/metokens/useMeTokensSupabase";
-import { useMeTokenHoldings } from "@/lib/hooks/metokens/useMeTokenHoldings";
+import { useMeTokenHoldings, type MeTokenHolding } from "@/lib/hooks/metokens/useMeTokenHoldings";
 import { chains, lensChain } from "@/config";
 import { useOrbSession } from "@/context/OrbSessionContext";
 import { HydrationSafe } from "@/components/ui/hydration-safe";
 import { useMembershipNFTs, type MembershipNFT } from "@/lib/hooks/unlock/useMembershipNFTs";
-import { LOCK_ADDRESSES } from "@/lib/sdk/unlock/services";
+import {
+  hasAnyValidPass,
+  hasValidBrandPass,
+  hasValidCreatorPass,
+} from "@/lib/access/creator-membership";
 
 const chainIconMap: Record<number, string> = {
   [base.id]: "/images/chains/base.svg",
@@ -183,22 +200,12 @@ interface SessionKeyConfig {
   };
 }
 
-// Token configuration for send modal
-type TokenSymbol = 'ETH' | 'USDC' | 'DAI';
+import { getTokenIcon } from '@/lib/utils/token-icons';
 
-const getTokenIcon = (symbol: TokenSymbol, chainId?: number) => {
-  const isBase = chainId === 8453;
-  switch (symbol) {
-    case "ETH":
-      return isBase ? "/images/tokens/ETH_on_Base.svg" : "/images/tokens/eth-logo.svg";
-    case "USDC":
-      return isBase ? "/images/tokens/USDC_on_Base.svg" : "/images/tokens/usdc-logo.svg";
-    case "DAI":
-      return isBase ? "/images/tokens/DAI_on_Base.svg" : "/images/tokens/dai-logo.svg";
-    default:
-      return "/images/tokens/eth-logo.svg";
-  }
-};
+// Token configuration for send modal
+type TokenSymbol = SwapTokenSymbol;
+
+const ERC20_SEND_TOKENS: Exclude<TokenSymbol, 'ETH'>[] = ['USDC', 'DAI', 'USDS', 'GHO'];
 
 // Helper function to get token info for the current chain
 const getTokenInfo = (chainId?: number) => {
@@ -208,17 +215,27 @@ const getTokenInfo = (chainId?: number) => {
     ETH: {
       decimals: 18,
       symbol: "ETH",
-      address: null, // Native token
+      address: null as null,
     },
     USDC: {
       decimals: USDC_TOKEN_DECIMALS,
       symbol: "USDC",
-      address: chainKey ? (USDC_TOKEN_ADDRESSES as any)[chainKey] : undefined,
+      address: chainKey ? USDC_TOKEN_ADDRESSES[chainKey] : undefined,
     },
     DAI: {
       decimals: DAI_TOKEN_DECIMALS,
       symbol: "DAI",
-      address: chainKey ? (DAI_TOKEN_ADDRESSES as any)[chainKey] : undefined,
+      address: chainKey ? DAI_TOKEN_ADDRESSES[chainKey] : undefined,
+    },
+    USDS: {
+      decimals: USDS_TOKEN_DECIMALS,
+      symbol: "USDS",
+      address: chainKey ? USDS_TOKEN_ADDRESSES[chainKey] : undefined,
+    },
+    GHO: {
+      decimals: GHO_TOKEN_DECIMALS,
+      symbol: "GHO",
+      address: chainKey ? GHO_TOKEN_ADDRESSES[chainKey] : undefined,
     },
   } as const;
 };
@@ -289,6 +306,7 @@ export const AccountDropdown = forwardRef<AccountDropdownHandle>(
   const [isArrowUp, setIsArrowUp] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState<boolean>(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState<boolean>(false);
+  const [balanceRefreshKey, setBalanceRefreshKey] = useState(0);
   const [dialogAction, setDialogAction] = useState<
     "buy" | "send" | "swap" | "session-keys"
   >("buy");
@@ -304,13 +322,10 @@ export const AccountDropdown = forwardRef<AccountDropdownHandle>(
   const [sendAmount, setSendAmount] = useState<string>("");
   const [isSending, setIsSending] = useState(false);
   const [selectedToken, setSelectedToken] = useState<TokenSymbol>('ETH');
-  const [sendType, setSendType] = useState<'token' | 'nft'>('token');
+  const [sendType, setSendType] = useState<'token' | 'nft' | 'metoken'>('token');
   const [selectedNFT, setSelectedNFT] = useState<MembershipNFT | null>(null);
-  const [tokenBalances, setTokenBalances] = useState<Record<TokenSymbol, string>>({
-    ETH: '0',
-    USDC: '0',
-    DAI: '0',
-  });
+  const [selectedMeToken, setSelectedMeToken] = useState<MeTokenHolding | null>(null);
+  const [tokenBalances, setTokenBalances] = useState<Record<TokenSymbol, string>>(emptyTokenBalances());
   const { nfts: membershipNFTs, isLoading: isLoadingNFTs } = useMembershipNFTs();
   const { toast } = useToast();
   const [isLinksLoading, setIsLinksLoading] = useState(false);
@@ -328,9 +343,7 @@ export const AccountDropdown = forwardRef<AccountDropdownHandle>(
     ? (client?.extend(installValidationActions as any) as any)
     : undefined;
 
-  const { isVerified, hasMembership, isLoading: isMembershipLoading, error: membershipError, membershipDetails } = useMembershipVerification();
-
-  const isBrandMember = membershipDetails?.some((m) => m.isValid && m.address === LOCK_ADDRESSES.BASE_CREATIVE_PASS_3);
+  const { isVerified, isLoading: isMembershipLoading, error: membershipError, membershipDetails } = useMembershipContext();
 
   // Check for MeTokens to conditionally render the section
   const { userMeToken, loading: meTokenLoading } = useMeTokensSupabase();
@@ -367,10 +380,12 @@ export const AccountDropdown = forwardRef<AccountDropdownHandle>(
     setIsDialogOpen(false);
   }, [user]);
 
-  // Reopen account menu after Orb sign-in so the Orb / Lens section shows linked state.
+  // Reopen account menu after Orb sign-in (desktop only).
   useEffect(() => {
     if (!accountMenuRefreshSignal || !isOrbAuthenticated) return;
-    setIsDropdownOpen(true);
+    if (typeof window !== "undefined" && window.matchMedia("(min-width: 768px)").matches) {
+      setIsDropdownOpen(true);
+    }
   }, [accountMenuRefreshSignal, isOrbAuthenticated]);
 
   // Fetch token balances when dialog opens with send action
@@ -379,43 +394,31 @@ export const AccountDropdown = forwardRef<AccountDropdownHandle>(
       if (!client || !smartAccountAddress || dialogAction !== 'send' || !isDialogOpen) return;
 
       try {
-        // Get ETH balance
-        const ethBalance = await client.getBalance({
-          address: smartAccountAddress as Address,
-        });
+        // Get ETH balance via public client (smart-account client is write-only)
+        const ethBalance = await getEthBalance(smartAccountAddress as Address);
 
-        // Resolve per-chain ERC-20 addresses (Base only for now)
         const chainKey = chain?.id === base.id ? "base" : undefined;
-        let usdc = 0n;
-        let dai = 0n;
-
-        if (chainKey) {
-          const usdcAddr = (USDC_TOKEN_ADDRESSES as any)[chainKey] as Address | undefined;
-          const daiAddr = (DAI_TOKEN_ADDRESSES as any)[chainKey] as Address | undefined;
-
-          if (usdcAddr) {
-            usdc = await client.readContract({
-              address: usdcAddr,
-              abi: erc20Abi,
-              functionName: 'balanceOf',
-              args: [smartAccountAddress as Address],
-            }) as bigint;
-          }
-
-          if (daiAddr) {
-            dai = await client.readContract({
-              address: daiAddr,
-              abi: erc20Abi,
-              functionName: 'balanceOf',
-              args: [smartAccountAddress as Address],
-            }) as bigint;
-          }
-        }
+        const erc20Balances = Object.fromEntries(
+          await Promise.all(
+            ERC20_SEND_TOKENS.map(async (symbol) => {
+              if (!chainKey) return [symbol, 0n] as const;
+              const info = getTokenInfo(chain?.id)[symbol];
+              if (!info.address) return [symbol, 0n] as const;
+              const balance = await getErc20Balance({
+                token: info.address as Address,
+                owner: smartAccountAddress as Address,
+              });
+              return [symbol, balance] as const;
+            })
+          )
+        ) as Record<Exclude<TokenSymbol, 'ETH'>, bigint>;
 
         setTokenBalances({
           ETH: formatUnits(ethBalance, 18),
-          USDC: formatUnits(usdc, USDC_TOKEN_DECIMALS),
-          DAI: formatUnits(dai, DAI_TOKEN_DECIMALS),
+          USDC: formatUnits(erc20Balances.USDC, USDC_TOKEN_DECIMALS),
+          DAI: formatUnits(erc20Balances.DAI, DAI_TOKEN_DECIMALS),
+          USDS: formatUnits(erc20Balances.USDS, USDS_TOKEN_DECIMALS),
+          GHO: formatUnits(erc20Balances.GHO, GHO_TOKEN_DECIMALS),
         });
       } catch (error) {
         logger.error('Error fetching token balances:', error);
@@ -434,15 +437,21 @@ export const AccountDropdown = forwardRef<AccountDropdownHandle>(
         setTimeout(() => setCopySuccess(false), 2000);
         // Optionally close dropdown after copying
         // setIsDropdownOpen(false);
-      } catch { }
+      } catch {
+        // Clipboard write may fail on unsupported contexts; ignore silently.
+      }
     }
   };
 
   const handleActionClick = useCallback(
     (action: "buy" | "send" | "swap" | "session-keys") => {
-      setDialogAction(action);
-      setIsDialogOpen(true);
-      setIsDropdownOpen(false);
+      deferAfterOverlayClose(
+        () => setIsDropdownOpen(false),
+        () => {
+          setDialogAction(action);
+          setIsDialogOpen(true);
+        }
+      );
     },
     []
   );
@@ -567,6 +576,16 @@ export const AccountDropdown = forwardRef<AccountDropdownHandle>(
   const handleSend = async () => {
     if (!client || !recipientAddress) return;
 
+    const normalizedRecipient = normalizeRecipientAddress(recipientAddress);
+    if (!normalizedRecipient) {
+      toast({
+        variant: "destructive",
+        title: "Invalid Address",
+        description: "Please enter a valid Ethereum recipient address (0x...).",
+      });
+      return;
+    }
+
     // Validate based on send type
     if (sendType === 'token' && !sendAmount) {
       toast({
@@ -581,6 +600,14 @@ export const AccountDropdown = forwardRef<AccountDropdownHandle>(
         variant: "destructive",
         title: "No NFT Selected",
         description: "Please select a membership NFT to send.",
+      });
+      return;
+    }
+    if (sendType === 'metoken' && !selectedMeToken) {
+      toast({
+        variant: "destructive",
+        title: "No MeToken Selected",
+        description: "Please select a MeToken to send.",
       });
       return;
     }
@@ -605,7 +632,7 @@ export const AccountDropdown = forwardRef<AccountDropdownHandle>(
           functionName: "safeTransferFrom",
           args: [
             smartAccountAddress as Address,
-            recipientAddress as Address,
+            normalizedRecipient,
             BigInt(selectedNFT.tokenId),
           ],
         });
@@ -623,17 +650,68 @@ export const AccountDropdown = forwardRef<AccountDropdownHandle>(
             value: BigInt(0), // No native value for NFT transfers
           },
         });
+      } else if (sendType === 'metoken' && selectedMeToken) {
+        // Send ERC-20 MeToken
+        if (!sendAmount) {
+          toast({
+            variant: "destructive",
+            title: "Amount Required",
+            description: "Please enter an amount to send.",
+          });
+          setIsSending(false);
+          return;
+        }
+
+        const rawBalance = BigInt(selectedMeToken.balanceRaw);
+        const tokenAmount = parseEther(sendAmount);
+        if (tokenAmount > rawBalance) {
+          toast({
+            variant: "destructive",
+            title: "Insufficient MeToken Balance",
+            description: `You only have ${selectedMeToken.balance} ${selectedMeToken.symbol}.`,
+          });
+          setIsSending(false);
+          return;
+        }
+
+        toast({
+          title: "Transaction Initiated",
+          description: `Sending ${sendAmount} ${selectedMeToken.symbol}...`,
+        });
+
+        const transferCalldata = encodeFunctionData({
+          abi: parseAbi(["function transfer(address,uint256) returns (bool)"]),
+          functionName: "transfer",
+          args: [normalizedRecipient, tokenAmount],
+        });
+
+        logger.debug('Sending MeToken transfer:', {
+          token: selectedMeToken.symbol,
+          tokenAddress: selectedMeToken.address,
+          recipient: recipientAddress,
+          amount: tokenAmount.toString(),
+        });
+
+        operation = await client!.sendUserOperation({
+          uo: {
+            target: selectedMeToken.address as Address,
+            data: appendBuilderCode(transferCalldata as Hex),
+            value: BigInt(0),
+          },
+        });
       } else {
         // Send token (existing logic)
-        // Check balance
-        const availableBalance = parseFloat(tokenBalances[selectedToken]);
-        const requestedAmount = parseFloat(sendAmount);
-
-        if (requestedAmount > availableBalance) {
+        // Check balance (ETH reserves gas buffer)
+        const balanceError = validateSendBalance(
+          selectedToken,
+          sendAmount,
+          tokenBalances[selectedToken],
+        );
+        if (balanceError) {
           toast({
             variant: "destructive",
             title: "Insufficient Balance",
-            description: `You have ${availableBalance} ${selectedToken}, but trying to send ${requestedAmount} ${selectedToken}`,
+            description: balanceError,
           });
           setIsSending(false);
           return;
@@ -652,13 +730,13 @@ export const AccountDropdown = forwardRef<AccountDropdownHandle>(
 
           operation = await client!.sendUserOperation({
             uo: {
-              target: recipientAddress as `0x${string}`,
+              target: normalizedRecipient,
               data: appendBuilderCode("0x" as Hex),
               value: valueInWei,
             },
           });
         } else {
-          // Send ERC-20 token (USDC or DAI)
+          // Send ERC-20 token (USDC, DAI, USDS, GHO)
           // Check if token is supported on current chain
           if (!tokenInfo.address) {
             toast({
@@ -676,7 +754,7 @@ export const AccountDropdown = forwardRef<AccountDropdownHandle>(
           const transferCalldata = encodeFunctionData({
             abi: parseAbi(["function transfer(address,uint256) returns (bool)"]),
             functionName: "transfer",
-            args: [recipientAddress as Address, tokenAmount],
+            args: [normalizedRecipient, tokenAmount],
           });
 
           logger.debug('Sending ERC-20 transfer:', {
@@ -729,17 +807,13 @@ export const AccountDropdown = forwardRef<AccountDropdownHandle>(
       setSelectedNFT(null);
       setSendType('token');
 
-      // Refresh balances - refetch on next render
-      // Token balances will be refreshed on next component update
+      setBalanceRefreshKey((key) => key + 1);
     } catch (error: unknown) {
       logger.error("Error sending transaction:", error);
       toast({
         variant: "destructive",
         title: "Transaction Failed",
-        description:
-          error instanceof Error
-            ? error.message
-            : "Failed to initiate transaction.",
+        description: formatSendError(error),
       });
     } finally {
       // Ensure sending state is always reset, even if an error occurs
@@ -801,17 +875,64 @@ export const AccountDropdown = forwardRef<AccountDropdownHandle>(
     }
   };
 
+  const renderSendDialogFooter = () => (
+    <div className="flex flex-col sm:flex-row gap-3 border-t pt-3 mt-1 shrink-0">
+      <Button
+        variant="outline"
+        className="w-full sm:w-auto sm:order-2 min-h-[44px] touch-manipulation"
+        onClick={() => {
+          setIsDialogOpen(false);
+          setSelectedNFT(null);
+          setSelectedMeToken(null);
+          setSendType('token');
+        }}
+      >
+        Cancel
+      </Button>
+      <Button
+        className="w-full sm:flex-1 sm:order-1 min-h-[44px] touch-manipulation"
+        onClick={handleSend}
+        disabled={
+          isSending ||
+          !recipientAddress ||
+          (sendType === 'token' && !sendAmount) ||
+          (sendType === 'nft' && !selectedNFT) ||
+          (sendType === 'metoken' && (!selectedMeToken || !sendAmount))
+        }
+      >
+        {isSending ? (
+          <>
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            <span className="hidden sm:inline">{sendType === 'nft' ? 'Sending NFT...' : sendType === 'metoken' ? `Sending ${selectedMeToken?.symbol}...` : `Sending ${selectedToken}...`}</span>
+            <span className="sm:hidden">Sending...</span>
+          </>
+        ) : (
+          <>
+            <Send className="mr-2 h-4 w-4" />
+            {sendType === 'nft' ? 'Send NFT' : sendType === 'metoken' ? `Send ${selectedMeToken?.symbol || 'MeToken'}` : `Send ${selectedToken}`}
+          </>
+        )}
+      </Button>
+    </div>
+  );
+
   const getDialogContent = () => {
     switch (dialogAction) {
       case "buy":
         return (
           <div className="space-y-4">
-            <p className="text-sm text-gray-500">
-              Purchase crypto directly to your wallet.
-            </p>
-            <div className="flex flex-col gap-4">
-              <CoinbaseFundButton onClose={() => setIsDialogOpen(false)} />
-            </div>
+            <FundingOptions
+              presetFiatAmount={10}
+              fiatCurrency="USD"
+              asset="USDC"
+              network="base"
+              prefillEmail={user?.email}
+              onSuccess={() => {
+                setBalanceRefreshKey((key) => key + 1);
+                setTimeout(() => setIsDialogOpen(false), 1500);
+              }}
+              onClose={() => setIsDialogOpen(false)}
+            />
           </div>
         );
       case "send":
@@ -821,14 +942,15 @@ export const AccountDropdown = forwardRef<AccountDropdownHandle>(
               {/* Send Type Selection */}
               <div className="space-y-3">
                 <label className="text-sm font-medium text-gray-900 dark:text-gray-100">Send Type</label>
-                <div className="flex flex-col sm:grid sm:grid-cols-2 gap-2">
+                <div className="grid grid-cols-3 gap-2">
                   <button
                     type="button"
                     onClick={() => {
                       setSendType('token');
                       setSelectedNFT(null);
+                      setSelectedMeToken(null);
                     }}
-                    className={`flex items-center justify-center space-x-2 p-3 sm:p-2.5 border rounded-lg transition-colors min-h-[44px] w-full ${sendType === 'token'
+                    className={`flex items-center justify-center space-x-2 p-2 sm:p-2.5 border rounded-lg transition-colors min-h-[44px] w-full ${sendType === 'token'
                       ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 dark:border-blue-400'
                       : 'border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600'
                       }`}
@@ -845,9 +967,10 @@ export const AccountDropdown = forwardRef<AccountDropdownHandle>(
                     onClick={() => {
                       setSendType('nft');
                       setSendAmount('');
+                      setSelectedMeToken(null);
                     }}
                     disabled={membershipNFTs.length === 0}
-                    className={`flex items-center justify-center space-x-2 p-3 sm:p-2.5 border rounded-lg transition-colors min-h-[44px] w-full ${sendType === 'nft'
+                    className={`flex items-center justify-center space-x-2 p-2 sm:p-2.5 border rounded-lg transition-colors min-h-[44px] w-full ${sendType === 'nft'
                       ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 dark:border-blue-400'
                       : 'border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600'
                       } ${membershipNFTs.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
@@ -856,13 +979,38 @@ export const AccountDropdown = forwardRef<AccountDropdownHandle>(
                       ? 'text-blue-700 dark:text-blue-300'
                       : 'text-gray-900 dark:text-gray-100'
                       }`}>
-                      Membership NFT
+                      NFT
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSendType('metoken');
+                      setSendAmount('');
+                      setSelectedNFT(null);
+                    }}
+                    disabled={holdings.length === 0}
+                    className={`flex items-center justify-center space-x-2 p-2 sm:p-2.5 border rounded-lg transition-colors min-h-[44px] w-full ${sendType === 'metoken'
+                      ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 dark:border-blue-400'
+                      : 'border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600'
+                      } ${holdings.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  >
+                    <span className={`text-sm font-medium ${sendType === 'metoken'
+                      ? 'text-blue-700 dark:text-blue-300'
+                      : 'text-gray-900 dark:text-gray-100'
+                      }`}>
+                      MeToken
                     </span>
                   </button>
                 </div>
                 {membershipNFTs.length === 0 && sendType === 'nft' && (
                   <p className="text-xs text-gray-500 dark:text-gray-400 px-1">
                     You don't have any membership NFTs to send.
+                  </p>
+                )}
+                {holdings.length === 0 && sendType === 'metoken' && (
+                  <p className="text-xs text-gray-500 dark:text-gray-400 px-1">
+                    You don't have any MeTokens to send.
                   </p>
                 )}
               </div>
@@ -872,8 +1020,8 @@ export const AccountDropdown = forwardRef<AccountDropdownHandle>(
                   {/* Token Selection */}
                   <div className="space-y-3">
                     <label className="text-sm font-medium text-gray-900 dark:text-gray-100">Token</label>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                      {(['ETH', 'USDC', 'DAI'] as TokenSymbol[]).map((token) => (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      {SWAP_UI_TOKENS.map((token) => (
                         <button
                           key={token}
                           type="button"
@@ -912,7 +1060,13 @@ export const AccountDropdown = forwardRef<AccountDropdownHandle>(
                       </div>
                       <button
                         type="button"
-                        onClick={() => setSendAmount(tokenBalances[selectedToken])}
+                        onClick={() => {
+                          if (selectedToken === 'ETH') {
+                            setSendAmount(getMaxEthSendAmount(tokenBalances.ETH));
+                          } else {
+                            setSendAmount(tokenBalances[selectedToken]);
+                          }
+                        }}
                         className="text-blue-600 hover:text-blue-700 dark:text-blue-400 font-medium px-3 py-1.5 rounded text-xs min-h-[32px] touch-manipulation"
                       >
                         MAX
@@ -934,7 +1088,7 @@ export const AccountDropdown = forwardRef<AccountDropdownHandle>(
                     />
                   </div>
                 </>
-              ) : (
+              ) : sendType === 'nft' ? (
                 <>
                   {/* NFT Selection */}
                   <div className="space-y-3">
@@ -978,7 +1132,7 @@ export const AccountDropdown = forwardRef<AccountDropdownHandle>(
                               </div>
                               <div className="flex-1 min-w-0">
                                 <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
-                                  {nft.metadata?.name || nft.lockName}
+                                  {nft.lockAddress ? getPassDisplayName(nft.lockAddress) : nft.lockName}
                                 </p>
                                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                                   Token ID: {nft.tokenId}
@@ -996,10 +1150,71 @@ export const AccountDropdown = forwardRef<AccountDropdownHandle>(
                     )}
                   </div>
                 </>
+              ) : (
+                <>
+                  {/* MeToken Selection */}
+                  <div className="space-y-3">
+                    <label className="text-sm font-medium text-gray-900 dark:text-gray-100">MeToken</label>
+                    {holdings.length === 0 ? (
+                      <div className="p-4 border rounded-lg text-center text-sm text-gray-500 dark:text-gray-400">
+                        No MeTokens found
+                      </div>
+                    ) : (
+                      <div className="space-y-2 max-h-48 sm:max-h-64 overflow-y-auto -mx-1 px-1">
+                        {holdings.map((holding) => (
+                          <button
+                            key={holding.address}
+                            type="button"
+                            onClick={() => setSelectedMeToken(holding)}
+                            className={`w-full p-3 sm:p-2.5 border rounded-lg text-left transition-colors min-h-[60px] sm:min-h-[56px] touch-manipulation ${selectedMeToken?.address === holding.address
+                              ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 dark:border-blue-400'
+                              : 'border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 active:bg-gray-100 dark:active:bg-gray-600'
+                              }`}
+                          >
+                            <div className="flex flex-col">
+                              <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                                {holding.symbol}
+                              </p>
+                              <p className="text-xs text-gray-500 dark:text-gray-400">
+                                Balance: {holding.balance}
+                              </p>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Amount */}
+                  <div className="space-y-3">
+                    <label className="text-sm font-medium text-gray-900 dark:text-gray-100">Amount ({selectedMeToken?.symbol || "MeToken"})</label>
+                    <input
+                      type="number"
+                      placeholder="0.0"
+                      step="any"
+                      inputMode="decimal"
+                      className="w-full p-3 sm:p-2.5 border rounded-lg dark:bg-gray-700 dark:border-gray-600 bg-white border-gray-200 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 text-base sm:text-sm min-h-[44px]"
+                      value={sendAmount}
+                      onChange={(e) => setSendAmount(e.target.value)}
+                    />
+                    <div className="flex justify-between items-center text-xs text-gray-500 dark:text-gray-400">
+                      <span>Balance: {selectedMeToken?.balance || "0"}</span>
+                      {selectedMeToken && (
+                        <button
+                          type="button"
+                          onClick={() => setSendAmount(selectedMeToken.balance)}
+                          className="text-blue-600 hover:text-blue-700 dark:text-blue-400 font-medium px-3 py-1.5 rounded text-xs min-h-[32px] touch-manipulation"
+                        >
+                          MAX
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </>
               )}
 
               {/* Recipient Address */}
-              <div className="space-y-3">
+              <div className="space-y-3 pb-2">
                 <label className="text-sm font-medium text-gray-900 dark:text-gray-100">Recipient Address</label>
                 <input
                   type="text"
@@ -1009,44 +1224,6 @@ export const AccountDropdown = forwardRef<AccountDropdownHandle>(
                   value={recipientAddress}
                   onChange={(e) => setRecipientAddress(e.target.value)}
                 />
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex flex-col sm:flex-row gap-3 pt-2">
-                <Button
-                  variant="outline"
-                  className="w-full sm:w-auto sm:order-2 min-h-[44px] touch-manipulation"
-                  onClick={() => {
-                    setIsDialogOpen(false);
-                    setSelectedNFT(null);
-                    setSendType('token');
-                  }}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  className="w-full sm:flex-1 sm:order-1 min-h-[44px] touch-manipulation"
-                  onClick={handleSend}
-                  disabled={
-                    isSending ||
-                    !recipientAddress ||
-                    (sendType === 'token' && !sendAmount) ||
-                    (sendType === 'nft' && !selectedNFT)
-                  }
-                >
-                  {isSending ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      <span className="hidden sm:inline">{sendType === 'nft' ? 'Sending NFT...' : `Sending ${selectedToken}...`}</span>
-                      <span className="sm:hidden">Sending...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Send className="mr-2 h-4 w-4" />
-                      {sendType === 'nft' ? 'Send NFT' : `Send ${selectedToken}`}
-                    </>
-                  )}
-                </Button>
               </div>
             </div>
           </div>
@@ -1058,6 +1235,7 @@ export const AccountDropdown = forwardRef<AccountDropdownHandle>(
               <AlchemySwapWidget
                 onSwapSuccess={() => {
                   setIsDialogOpen(false);
+                  setBalanceRefreshKey((key) => key + 1);
                   toast({
                     title: "Swap Completed",
                     description: "Your token swap was successful!",
@@ -1486,8 +1664,8 @@ export const AccountDropdown = forwardRef<AccountDropdownHandle>(
               </div>
             )}
 
-            {/* Member Access Links - Only for Members (hide if error or loading) */}
-            {!membershipError && !isMembershipLoading && isVerified && hasMembership && (
+            {/* Member Access Links — shown to connected users; each item gated by access rules */}
+            {!membershipError && !isMembershipLoading && isVerified && user && (
               <>
                 <div className="px-2 py-2 w-full">
                   <p className="text-xs text-muted-foreground mb-2">
@@ -1502,62 +1680,94 @@ export const AccountDropdown = forwardRef<AccountDropdownHandle>(
                     </div>
                   ) : (
                     <div className="grid grid-cols-2 gap-2">
-                      <Link href="/live" className="w-full">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className={
-                            "w-full flex flex-col items-center justify-center p-2 h-12 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-                          }
-                          onClick={() => setIsDropdownOpen(false)}
-                        >
-                          <RadioTower className="h-3 w-3 mb-1" />
-                          <span className="text-xs">Live</span>
-                        </Button>
-                      </Link>
-                      <Link href="https://create.creativeplatform.xyz" className="w-full">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="w-full flex flex-col items-center justify-center p-2 h-12 hover:bg-gray-50 
+                      {/* Live: Creator or Brand pass */}
+                      {(hasValidCreatorPass(membershipDetails) || hasValidBrandPass(membershipDetails)) && (
+                        <Link href="/live" className="w-full">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className={
+                              "w-full flex flex-col items-center justify-center p-2 h-12 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                            }
+                            onClick={() => setIsDropdownOpen(false)}
+                          >
+                            <RadioTower className="h-3 w-3 mb-1" />
+                            <span className="text-xs">Live</span>
+                          </Button>
+                        </Link>
+                      )}
+
+                      {/* Pixels: any paid pass */}
+                      {hasAnyValidPass(membershipDetails) && (
+                        <Link href="https://create.creativeplatform.xyz" className="w-full">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="w-full flex flex-col items-center justify-center p-2 h-12 hover:bg-gray-50
                           dark:hover:bg-gray-800 transition-colors relative"
-                          onClick={() => setIsDropdownOpen(false)}
-                        >
-                          <Bot className="h-3 w-3 mb-1" />
-                          <span className="text-xs">Pixels</span>
-                          <span className="absolute -top-1 -right-1 px-1 py-0.5 rounded bg-blue-500 text-white text-[8px]">
-                            Beta
-                          </span>
-                        </Button>
-                      </Link>
-                      {isBrandMember && (
+                            onClick={() => setIsDropdownOpen(false)}
+                          >
+                            <Bot className="h-3 w-3 mb-1" />
+                            <span className="text-xs">Pixels</span>
+                            <span className="absolute -top-1 -right-1 px-1 py-0.5 rounded bg-blue-500 text-white text-[8px]">
+                              Beta
+                            </span>
+                          </Button>
+                        </Link>
+                      )}
+
+                      {/* Mixtape: any paid pass */}
+                      {hasAnyValidPass(membershipDetails) && (
+                        <Link href="https://air.creativeplatform.xyz/app" className="w-full">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="w-full flex flex-col items-center justify-center p-2 h-12 hover:bg-gray-50
+                          dark:hover:bg-gray-800 transition-colors relative"
+                            onClick={() => setIsDropdownOpen(false)}
+                          >
+                            <Disc3 className="h-3 w-3 mb-1" />
+                            <span className="text-xs">Mixtape</span>
+                            <span className="absolute -top-1 -right-1 px-1 py-0.5 rounded bg-blue-500 text-white text-[8px]">
+                              Beta
+                            </span>
+                          </Button>
+                        </Link>
+                      )}
+
+                      {/* Campaigns/Polls: Brand pass only */}
+                      {hasValidBrandPass(membershipDetails) && (
                         <Link href="/vote/create" className="w-full">
                           <Button
                             variant="outline"
                             size="sm"
-                            className="w-full flex flex-col items-center justify-center p-2 h-12 hover:bg-green-50 
-                          dark:hover:bg-green-900 transition-colors text-green-600 dark:text-green-400 
+                            className="w-full flex flex-col items-center justify-center p-2 h-12 hover:bg-green-50
+                          dark:hover:bg-green-900 transition-colors text-green-600 dark:text-green-400
                           font-medium border-green-200 dark:border-green-800"
                             onClick={() => setIsDropdownOpen(false)}
                           >
                             <Plus className="h-3 w-3 mb-1" />
-                            <span className="text-xs">Poll</span>
+                            <span className="text-xs">Campaigns</span>
                           </Button>
                         </Link>
                       )}
-                      <Link href="/predict/create" className="w-full">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="w-full flex flex-col items-center justify-center p-2 h-12 hover:bg-blue-50 
-                          dark:hover:bg-blue-900 transition-colors text-blue-600 dark:text-blue-400 
+
+                      {/* Predict: non-members + Investor; blocked for Creator or Brand pass holders */}
+                      {!hasValidCreatorPass(membershipDetails) && !hasValidBrandPass(membershipDetails) && (
+                        <Link href="/predict/create" className="w-full">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="w-full flex flex-col items-center justify-center p-2 h-12 hover:bg-blue-50
+                          dark:hover:bg-blue-900 transition-colors text-blue-600 dark:text-blue-400
                           font-medium border-blue-200 dark:border-blue-800"
-                          onClick={() => setIsDropdownOpen(false)}
-                        >
-                          <TrendingUp className="h-3 w-3 mb-1" />
-                          <span className="text-xs">Predict</span>
-                        </Button>
-                      </Link>
+                            onClick={() => setIsDropdownOpen(false)}
+                          >
+                            <TrendingUp className="h-3 w-3 mb-1" />
+                            <span className="text-xs">Predict</span>
+                          </Button>
+                        </Link>
+                      )}
                     </div>
                   )}
                 </div>
@@ -1601,7 +1811,15 @@ export const AccountDropdown = forwardRef<AccountDropdownHandle>(
 
             <DropdownMenuSeparator />
 
-            {/* Wallet Actions and Balances - Moved to Bottom */}
+            {/* Balances Section */}
+            <div className="px-2 py-2">
+              <TokenBalance
+                isVisible={isDropdownOpen}
+                refreshKey={balanceRefreshKey}
+              />
+            </div>
+
+            <DropdownMenuSeparator />
 
             {/* Wallet Actions Section - Grid Layout */}
             <div className="px-2 py-2 w-full">
@@ -1635,13 +1853,6 @@ export const AccountDropdown = forwardRef<AccountDropdownHandle>(
                   <span className="text-xs">Swap</span>
                 </Button>
               </div>
-            </div>
-
-            <DropdownMenuSeparator />
-
-            {/* Balances Section */}
-            <div className="px-2 py-2">
-              <TokenBalance />
             </div>
 
             {shouldShowMetokens && (
@@ -1691,14 +1902,15 @@ export const AccountDropdown = forwardRef<AccountDropdownHandle>(
           if (!open) {
             setDialogAction("buy");
             setSelectedNFT(null);
+            setSelectedMeToken(null);
             setSendType('token');
             setRecipientAddress("");
             setSendAmount("");
           }
         }}
       >
-        <DialogContent className="w-[95vw] max-w-[425px] max-h-[95vh] sm:max-h-[90vh] overflow-hidden p-4 sm:p-6 rounded-lg">
-          <DialogHeader className="pb-4 pr-8 sm:pr-12">
+        <DialogContent className="flex w-[95vw] max-w-[425px] max-h-[min(85dvh,640px)] flex-col overflow-hidden p-4 sm:p-6 rounded-lg">
+          <DialogHeader className="shrink-0 pb-4 pr-8 sm:pr-12">
             <DialogTitle className="text-lg sm:text-xl">
               {dialogAction.charAt(0).toUpperCase() + dialogAction.slice(1)}
             </DialogTitle>
@@ -1719,10 +1931,11 @@ export const AccountDropdown = forwardRef<AccountDropdownHandle>(
               </button>
             </DialogClose>
           </DialogHeader>
-          <div className="flex flex-col overflow-hidden">
-            <div className="space-y-4 overflow-y-auto flex-1 pr-1 sm:pr-2">
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain touch-pan-y [-webkit-overflow-scrolling:touch] pr-1 sm:pr-2">
               {getDialogContent()}
             </div>
+            {dialogAction === "send" && renderSendDialogFooter()}
           </div>
         </DialogContent>
       </Dialog>

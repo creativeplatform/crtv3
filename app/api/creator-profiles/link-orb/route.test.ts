@@ -4,9 +4,13 @@ import { NextRequest } from 'next/server';
 const TOKEN_LENS = '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 const OTHER_LENS = '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
 const OWNER = '0xcccccccccccccccccccccccccccccccccccccccc';
+const STALE_OWNER = '0xdddddddddddddddddddddddddddddddddddddddd';
+const ORB_AUTH_ID = 'orb-auth-123';
 
 const mockGetAccountFromAccessToken = vi.fn();
 const mockRequireWalletAuthFor = vi.fn();
+const mockMaybeSingle = vi.fn();
+const mockUpdateIn = vi.fn();
 const mockUpsert = vi.fn();
 
 vi.mock('botid/server', () => ({
@@ -15,7 +19,7 @@ vi.mock('botid/server', () => ({
 
 vi.mock('@/lib/middleware/rateLimit', () => ({
   rateLimiters: {
-    standard: vi.fn(async () => null),
+    generous: vi.fn(async () => null),
   },
 }));
 
@@ -41,6 +45,14 @@ vi.mock('@/lib/auth/require-wallet', () => ({
 vi.mock('@/lib/sdk/supabase/service', () => ({
   supabaseService: {
     from: () => ({
+      select: () => ({
+        eq: () => ({
+          maybeSingle: mockMaybeSingle,
+        }),
+      }),
+      update: () => ({
+        in: mockUpdateIn,
+      }),
       upsert: mockUpsert,
     }),
   },
@@ -51,6 +63,7 @@ vi.mock('@/lib/utils/logger', () => ({
 }));
 
 import { POST } from './route';
+import { WalletAuthError } from '@/lib/auth/require-wallet';
 
 function linkOrbRequest(body: Record<string, unknown>) {
   return new NextRequest('http://localhost/api/creator-profiles/link-orb', {
@@ -64,6 +77,8 @@ describe('link-orb POST security', () => {
   beforeEach(() => {
     mockGetAccountFromAccessToken.mockReturnValue(TOKEN_LENS);
     mockRequireWalletAuthFor.mockResolvedValue({ address: OWNER });
+    mockMaybeSingle.mockResolvedValue({ data: null, error: null });
+    mockUpdateIn.mockResolvedValue({ error: null });
     mockUpsert.mockReturnValue({
       select: () => ({
         single: async () => ({
@@ -143,5 +158,79 @@ describe('link-orb POST security', () => {
       }),
       { onConflict: 'owner_address' },
     );
+  });
+
+  it('clears stale orb link on another profile before upserting', async () => {
+    mockMaybeSingle
+      .mockResolvedValueOnce({
+        data: { owner_address: STALE_OWNER },
+        error: null,
+      })
+      .mockResolvedValueOnce({ data: null, error: null });
+
+    const response = await POST(
+      linkOrbRequest({
+        accessToken: 'valid-token',
+        authenticationId: ORB_AUTH_ID,
+        owner_address: OWNER,
+      }),
+    );
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json.success).toBe(true);
+    expect(mockUpdateIn).toHaveBeenCalledWith('owner_address', [STALE_OWNER]);
+    expect(mockUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        owner_address: OWNER,
+        orb_account_id: ORB_AUTH_ID,
+      }),
+      { onConflict: 'owner_address' },
+    );
+  });
+
+  it('returns 401 when wallet signature verification fails', async () => {
+    mockRequireWalletAuthFor.mockRejectedValue(
+      new WalletAuthError(401, 'Invalid wallet signature'),
+    );
+
+    const response = await POST(
+      linkOrbRequest({
+        accessToken: 'valid-token',
+        owner_address: OWNER,
+      }),
+    );
+    const json = await response.json();
+
+    expect(response.status).toBe(401);
+    expect(json.success).toBe(false);
+    expect(json.error).toBe('Invalid wallet signature');
+  });
+
+  it('returns 409 with friendly message on duplicate orb_account_id upsert', async () => {
+    mockUpsert.mockReturnValue({
+      select: () => ({
+        single: async () => ({
+          data: null,
+          error: {
+            code: '23505',
+            message:
+              'duplicate key value violates unique constraint "creator_profiles_orb_account_id_key"',
+          },
+        }),
+      }),
+    });
+
+    const response = await POST(
+      linkOrbRequest({
+        accessToken: 'valid-token',
+        owner_address: OWNER,
+      }),
+    );
+    const json = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(json.success).toBe(false);
+    expect(json.error).toContain('already linked');
   });
 });

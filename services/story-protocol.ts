@@ -16,6 +16,10 @@ import { getOrCreateCreatorCollection } from "@/lib/sdk/story/collection-service
 import { buildAndUploadIpaMetadata } from "@/lib/sdk/story/ipa-metadata";
 import { updateVideoAssetStoryIPStatus } from "./video-assets";
 import type { VideoAsset } from "@/lib/types/video-asset";
+import {
+  mintingFeeToWei,
+  STORY_LICENSE_FEE_CURRENCY,
+} from "@/lib/sdk/story/minting-fee";
 import type {
   StoryIPRegistrationOptions,
   StoryIPRegistrationResult,
@@ -354,9 +358,9 @@ export async function mintAndRegisterVideoIP(
               derivativesAttribution: licenseTerms.derivativesAttribution ?? false,
               derivativesApproval: licenseTerms.derivativesApproval ?? false,
               derivativesReciprocal: licenseTerms.derivativesReciprocal ?? false,
-              currency: "0x0000000000000000000000000000000000000000" as Address,
+              currency: STORY_LICENSE_FEE_CURRENCY,
               uri: sourceVideoUrl, // License terms URI points back to source video
-              defaultMintingFee: 0, // Required by SDK
+              defaultMintingFee: mintingFeeToWei(licenseTerms.defaultMintingFee),
               expiration: 0, // Required by SDK (0 = never expires)
               commercialRevCeiling: 0, // Required by SDK
               derivativeRevCeiling: 0, // Required by SDK

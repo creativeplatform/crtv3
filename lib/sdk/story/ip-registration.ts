@@ -11,6 +11,10 @@ import type {
   StoryIPRegistrationResult,
   StoryLicenseTerms,
 } from "@/lib/types/story-protocol";
+import {
+  mintingFeeToWei,
+  STORY_LICENSE_FEE_CURRENCY,
+} from "@/lib/sdk/story/minting-fee";
 
 /**
  * Register an NFT as an IP Asset on Story Protocol
@@ -104,10 +108,10 @@ export async function attachLicenseTerms(
             derivativesAttribution: licenseTerms.derivativesAttribution ?? false,
             derivativesApproval: licenseTerms.derivativesApproval ?? false,
             derivativesReciprocal: licenseTerms.derivativesReciprocal ?? false,
-            currency: "0x0000000000000000000000000000000000000000" as `0x${string}`, // Native token (ETH)
+            currency: STORY_LICENSE_FEE_CURRENCY,
             uri: licenseTerms.licenseTermsUri ?? "", // License terms URI (e.g. app video page) links IP back to source media
             // Required fields with sensible defaults
-            defaultMintingFee: BigInt(0), // Free minting by default (in wei)
+            defaultMintingFee: mintingFeeToWei(licenseTerms.defaultMintingFee),
             expiration: BigInt(0), // No expiration (0 = never expires)
             commercialRevCeiling: BigInt(0), // No ceiling (0 = unlimited)
             derivativeRevCeiling: BigInt(0), // No ceiling (0 = unlimited)

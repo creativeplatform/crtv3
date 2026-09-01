@@ -1,6 +1,6 @@
 "use client";
 import { useEffect } from "react";
-import { useUser, useSmartAccountClient } from "@account-kit/react";
+import { useUser, useSmartAccountClient } from "@/lib/wallet/react";
 import { useRouter } from "next/navigation";
 import { Skeleton } from "@/components/ui/skeleton";
 

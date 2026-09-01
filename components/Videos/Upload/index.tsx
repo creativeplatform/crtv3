@@ -22,7 +22,7 @@ import type { VideoAsset } from "@/lib/types/video-asset";
 import { useUniversalAccount } from "@/lib/hooks/accountkit/useUniversalAccount";
 import { getLivepeerAsset } from "@/app/api/livepeer/assetUploadActions";
 import { useAutoDeployContentCoin } from "@/lib/hooks/marketplace/useAutoDeployContentCoin";
-import { useSmartAccountClient } from "@account-kit/react";
+import { useSmartAccountClient } from "@/lib/wallet/react";
 import { createSplitForVideo } from "@/services/splits";
 import { logger } from "@/lib/utils/logger";
 
@@ -302,9 +302,15 @@ const HookMultiStepForm = () => {
 
             toast.success("Video uploaded and published successfully!");
 
-            // Navigate to Discover so the user can see their published video
+            // Navigate to Discover so the user can see their published video.
+            // Wrapped defensively: the video is already live, so a navigation
+            // hiccup must not surface a false "Failed to publish" toast.
             logger.debug("Redirecting to discover page...");
-            router.replace("/discover");
+            try {
+              router.replace("/discover");
+            } catch (navError) {
+              logger.error("Navigation to /discover failed:", navError);
+            }
 
             // --- STORY PROTOCOL IP REGISTRATION ---
             if (data.storyConfig?.registerIP && address) {
@@ -457,11 +463,11 @@ const HookMultiStepForm = () => {
               // but usually user wants to see the result. The timeout provides the safety.
             }
 
-            // --- AUTO DEPLOY CONTENT COIN ---
-            // Fire-and-forget so navigation to /discover isn't blocked by the deploy transaction.
-            // handleUploadSuccess swallows its own errors; .catch is a safety net.
+            // --- AUTO DEPLOY CONTENT COIN (optional, non-blocking) ---
+            // Publish already succeeded above. Content Coin is experimental post-publish
+            // work — failures must only soft-warn, never look like publish failed.
             if (finalMeTokenId && address && metadata?.ticker) {
-              toast.info("Deploying Content Coin Market...");
+              toast.info("Setting up Content Coin market in the background…");
               handleUploadSuccess(
                 metadata.title,
                 metadata.ticker,
@@ -470,6 +476,9 @@ const HookMultiStepForm = () => {
                 livepeerAsset.playbackId
               ).catch((ccError) => {
                 logger.error("Content Coin deployment error:", ccError);
+                toast.warning("Video published — Content Coin market can be finished later", {
+                  description: "Your video is live. Market deploy is optional and did not block publish.",
+                });
               });
             }
           }}

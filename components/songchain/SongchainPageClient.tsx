@@ -1,29 +1,21 @@
 "use client";
 
 import Link from "next/link";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import Image from "next/image";
 import { SongchainOrbConnect } from "@/components/songchain/SongchainOrbConnect";
-import { SongchainFeedSection } from "@/components/songchain/SongchainFeedSection";
-import { SongchainGroupPanel } from "@/components/songchain/SongchainGroupPanel";
-import { SongchainGraphPanel } from "@/components/songchain/SongchainGraphPanel";
-import { SongchainComposePost } from "@/components/songchain/SongchainComposePost";
-import { SongchainBookmarksSection } from "@/components/songchain/SongchainBookmarksSection";
-import { SongchainLensAdvancedPanel } from "@/components/songchain/SongchainLensAdvancedPanel";
-import { HallidayOnramp } from "@/components/songchain/HallidayOnramp";
+import { SongchainLensAdvancedTooltip } from "@/components/songchain/SongchainLensAdvancedTooltip";
+import { LensRewardsCard } from "@/components/songchain/LensRewardsCard";
+// import { HallidayOnramp } from "@/components/songchain/HallidayOnramp";
 import type { SongchainConfig } from "@/lib/songchain/config";
-import { Music2 } from "lucide-react";
-import { useCallback, useState } from "react";
+import { SONGCHAIN_EVENTS } from "@/lib/songchain/events";
+import { Music2, Trophy } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 type SongchainPageClientProps = {
   config: SongchainConfig;
 };
 
 export function SongchainPageClient({ config }: SongchainPageClientProps) {
-  const [feedRefreshKey, setFeedRefreshKey] = useState(0);
-  const bumpFeedRefresh = useCallback(() => {
-    setFeedRefreshKey((k) => k + 1);
-  }, []);
-
   return (
     <div className="mx-auto w-full max-w-7xl py-10 px-4 sm:px-6">
       <nav className="mb-6 text-sm text-muted-foreground">
@@ -38,92 +30,127 @@ export function SongchainPageClient({ config }: SongchainPageClientProps) {
         <div className="relative z-10 max-w-2xl">
           <p className="mb-2 flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-violet-300">
             <Music2 className="h-4 w-4" aria-hidden />
-            Lens · Orb
+            Channel · Lens · Orb
           </p>
           <h1 className="text-3xl font-extrabold tracking-tight text-white sm:text-4xl">
             Songchain
           </h1>
-          <p className="mt-3 text-violet-100/80">
-            Music on Lens Chain — public and exclusive feeds, community group, and
-            onramp via Halliday. Interactions require a linked Orb account.
+          <p className="mt-3 text-violet-50/95">
+            A music channel on Creative TV — join events, explore feeds, and connect
+            your Orb account to participate.
           </p>
+          <div className="mt-3">
+            <SongchainLensAdvancedTooltip />
+          </div>
         </div>
       </header>
 
-      <div className="mb-8 space-y-6">
+      <div className="mb-10 space-y-6">
         <SongchainOrbConnect />
+        <LensRewardsCard />
+        {/* TODO: Re-enable when Halliday supports Lens GHO on production
         <HallidayOnramp
           hallidayApiKey={config.hallidayApiKey}
           hallidayOutputAsset={config.hallidayOutputAsset}
           hallidayInputAssets={config.hallidayInputAssets}
           hallidaySandbox={config.hallidaySandbox}
         />
+        */}
       </div>
 
-      <Tabs defaultValue="feed" className="space-y-8">
-        <TabsList className="flex flex-wrap h-auto gap-1">
-          <TabsTrigger value="feed">Feed</TabsTrigger>
-          <TabsTrigger value="exclusive">Exclusive</TabsTrigger>
-          <TabsTrigger value="group">Group</TabsTrigger>
-          <TabsTrigger value="graph">Graph</TabsTrigger>
-          <TabsTrigger value="bookmarks">Bookmarks</TabsTrigger>
-        </TabsList>
+      <section aria-labelledby="songchain-events-heading">
+        <h2
+          id="songchain-events-heading"
+          className="mb-4 flex items-center gap-2 text-xl font-bold text-foreground"
+        >
+          <Trophy className="h-5 w-5 text-violet-400" aria-hidden />
+          Events
+        </h2>
+        <ul className="grid gap-4 sm:grid-cols-2">
+          {SONGCHAIN_EVENTS.map((event) => {
+            const isActive = event.status === "active";
+            const cardContent = (
+              <>
+                <span className="text-xs font-semibold uppercase tracking-wider text-violet-300">
+                  {isActive ? "Live now" : "Coming soon"}
+                </span>
+                {event.slug === "song-cup" ? (
+                  <div className="mt-2">
+                    <Image
+                      src="/songchain/song-cup/logo.svg"
+                      alt="Song Cup"
+                      width={260}
+                      height={44}
+                      className="h-auto w-[min(55%,220px)]"
+                      priority
+                    />
+                  </div>
+                ) : (
+                  <span className="mt-1 block text-lg font-bold text-white">{event.title}</span>
+                )}
+                {event.description && (
+                  <span className="mt-1 block text-sm text-violet-100/90">{event.description}</span>
+                )}
+                {isActive && (
+                  <span className="mt-3 inline-block rounded-md bg-gradient-to-r from-[#E82594] to-[#FF66CC] px-3 py-1.5 text-sm font-semibold text-white">
+                    Enter event
+                  </span>
+                )}
+              </>
+            );
 
-        <TabsContent value="feed" className="space-y-6">
-          <SongchainComposePost
-            feedId={config.publicFeedId}
-            onPosted={bumpFeedRefresh}
-          />
-          <SongchainFeedSection
-            key={`public-${feedRefreshKey}`}
-            title="Songchain feed"
-            description="Posts from the main Songchain Lens feed (Orb)."
-            feedId={config.publicFeedId}
-            graphId={config.graphId}
-            emptyDescription="Lens custom feeds only show posts published to that feed contract. Existing Orb profile or global posts are not backfilled, so publish a new post directly to this feed if it should appear here."
-          />
-        </TabsContent>
+            if (isActive) {
+              return (
+                <li key={event.slug}>
+                  <Link
+                    href={event.href}
+                    className={cn(
+                      "group relative block overflow-hidden rounded-xl border border-violet-500/30 p-6",
+                      "transition hover:border-violet-400/50 hover:shadow-md",
+                      event.slug === "song-cup" && "min-h-[220px]",
+                    )}
+                  >
+                    {event.slug === "song-cup" && (
+                      <div
+                        className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 -z-10 w-[150%] h-[150%] aspect-square"
+                        aria-hidden
+                      >
+                        <Image
+                          src="/songchain/song-cup-banner-charts.png"
+                          alt=""
+                          fill
+                          className="object-cover object-left opacity-60 transition duration-500 group-hover:opacity-75"
+                          sizes="(max-width: 640px) 100vw, 50vw"
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-r from-violet-950/90 via-fuchsia-950/70 to-slate-950/80" />
+                      </div>
+                    )}
+                    {event.slug !== "song-cup" && (
+                      <div className="absolute inset-0 -z-10 rounded-xl bg-gradient-to-br from-violet-950/80 to-fuchsia-950/60" aria-hidden />
+                    )}
+                    {cardContent}
+                  </Link>
+                </li>
+              );
+            }
 
-        <TabsContent value="exclusive" className="space-y-6">
-          <SongchainComposePost
-            feedId={config.exclusiveFeedId}
-            onPosted={bumpFeedRefresh}
-          />
-          <SongchainFeedSection
-            key={`exclusive-${feedRefreshKey}`}
-            title="Exclusive feed"
-            description="Members-only drops and announcements on Lens."
-            feedId={config.exclusiveFeedId}
-            graphId={config.graphId}
-            emptyDescription="Exclusive feeds can require an Orb-linked Lens session, and posts still need to be published directly to the exclusive feed contract before they appear here."
-          />
-        </TabsContent>
-
-        <TabsContent value="group">
-          <SongchainGroupPanel groupId={config.groupId} />
-        </TabsContent>
-
-        <TabsContent value="graph">
-          <SongchainGraphPanel graphId={config.graphId} groupId={config.groupId} />
-        </TabsContent>
-
-        <TabsContent value="bookmarks">
-          <SongchainBookmarksSection graphId={config.graphId} />
-        </TabsContent>
-      </Tabs>
-
-      <SongchainLensAdvancedPanel className="mt-10" />
+            return (
+              <li key={event.slug}>
+                <div
+                  className="block cursor-not-allowed rounded-xl border border-violet-500/15 bg-violet-100 p-6 opacity-80"
+                  aria-disabled="true"
+                >
+                  {cardContent}
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      </section>
 
       {!config.enabled && (
         <p className="mt-10 text-center text-sm text-muted-foreground">
-          Configure{" "}
-          <code className="text-xs">NEXT_PUBLIC_SONGCHAIN_APP_ID</code> (Lens app),{" "}
-          <code className="text-xs">NEXT_PUBLIC_SONGCHAIN_FEED_ID</code> /{" "}
-          <code className="text-xs">NEXT_PUBLIC_SONGCHAIN_EXCLUSIVE_FEED_ID</code> (feed
-          contracts), and{" "}
-          <code className="text-xs">NEXT_PUBLIC_SONGCHAIN_GROUP_ID</code>,{" "}
-          <code className="text-xs">NEXT_PUBLIC_SONGCHAIN_GRAPH_ID</code> with your Lens
-          primitives, then redeploy if you added them after the last build. See{" "}
+          Configure Songchain env vars and redeploy to enable Lens feeds. See{" "}
           <code className="text-xs">env.example</code> in the repo.
         </p>
       )}

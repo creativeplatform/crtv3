@@ -7,14 +7,15 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Loader2, Send, ExternalLink, AlertCircle, RefreshCw, Wallet } from 'lucide-react';
-import { useSmartAccountClient } from '@account-kit/react';
-import { type Address, parseUnits, formatUnits, erc20Abi, encodeFunctionData } from 'viem';
+import { useSmartAccountClient } from '@/lib/wallet/react';
+import { type Address, parseUnits, formatUnits, encodeFunctionData, erc20Abi } from 'viem';
 import { BASE_TOKENS } from '@/lib/sdk/alchemy/swap-service';
 import { useGasSponsorship } from '@/lib/hooks/wallet/useGasSponsorship';
 import { AlchemySwapWidget } from '@/components/wallet/swap/AlchemySwapWidget';
 import { Dialog, DialogContent, DialogTrigger, DialogTitle } from '@/components/ui/dialog';
 import { logger } from '@/lib/utils/logger';
 import { appendBuilderCode } from "@/lib/utils/builder-code";
+import { getErc20Balance } from '@/lib/viem';
 
 
 export function CreativeBankTab() {
@@ -39,11 +40,9 @@ export function CreativeBankTab() {
 
         try {
             setIsLoadingBalance(true);
-            const balance = await client.readContract({
-                address: BASE_TOKENS.USDC as Address,
-                abi: erc20Abi,
-                functionName: 'balanceOf',
-                args: [userAddress as Address],
+            const balance = await getErc20Balance({
+                token: BASE_TOKENS.USDC as Address,
+                owner: userAddress as Address,
             });
             setUsdcBalance(balance);
             setIsLoadingBalance(false);

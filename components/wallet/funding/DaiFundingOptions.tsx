@@ -4,10 +4,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Loader2, AlertCircle, CheckCircle, CreditCard, ArrowRightLeft } from 'lucide-react';
-import { useSmartAccountClient } from '@account-kit/react';
-import { formatEther } from 'viem';
-import { erc20Abi } from 'viem';
+import { useSmartAccountClient } from '@/lib/wallet/react';
+import { formatEther, type Address } from 'viem';
 import { DAI_TOKEN_ADDRESSES } from '@/lib/contracts/DAIToken';
+import { getErc20Balance } from '@/lib/viem';
 import { DaiFundButton } from '@/components/wallet/buy/dai-fund-button';
 import { DaiSwapButton } from '@/components/wallet/swap/DaiSwapButton';
 import { logger } from '@/lib/utils/logger';
@@ -33,17 +33,10 @@ export function DaiFundingOptions({ requiredAmount, onBalanceUpdate, className }
     setError(null);
 
     try {
-      const daiContract = {
-        address: DAI_TOKEN_ADDRESSES.base as `0x${string}`,
-        abi: erc20Abi,
-      };
-
-      const balance = await client.readContract({
-        address: daiContract.address,
-        abi: daiContract.abi,
-        functionName: 'balanceOf',
-        args: [client.account?.address as `0x${string}`],
-      }) as bigint;
+      const balance = await getErc20Balance({
+        token: DAI_TOKEN_ADDRESSES.base as Address,
+        owner: client.account?.address as Address,
+      });
 
       setDaiBalance(balance);
       onBalanceUpdate?.(balance);

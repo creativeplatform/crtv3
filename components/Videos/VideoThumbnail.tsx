@@ -19,6 +19,8 @@ interface VideoThumbnailProps {
   /** When provided (e.g. from list response), used immediately to avoid extra fetch and improve display */
   initialThumbnailUrl?: string;
   onPlay?: () => void;
+  /** Prefetch Livepeer playback sources (hover / intent) when parent defers fetch */
+  onRequestPlayback?: () => void;
   className?: string;
   enablePreview?: boolean;
   priority?: boolean; // If true, uses loading="eager" for above-the-fold images (LCP optimization)
@@ -32,6 +34,7 @@ const VideoThumbnail: React.FC<VideoThumbnailProps> = ({
   assetId,
   initialThumbnailUrl,
   onPlay,
+  onRequestPlayback,
   className = "",
   enablePreview = false,
   priority = false,
@@ -45,7 +48,7 @@ const VideoThumbnail: React.FC<VideoThumbnailProps> = ({
   const [showPlayer, setShowPlayer] = useState(false);
   const [isPreviewing, setIsPreviewing] = useState(false);
   const [imageLoading, setImageLoading] = useState(true);
-  const [isMuted, setIsMuted] = useState(false); // Start unmuted as requested
+  const [isMuted, setIsMuted] = useState(true);
   const [retryCount, setRetryCount] = useState(0);
   const showPlayerRef = React.useRef(showPlayer);
   const observerRef = React.useRef<IntersectionObserver | null>(null);
@@ -198,36 +201,15 @@ const VideoThumbnail: React.FC<VideoThumbnailProps> = ({
 
       vid.addEventListener('timeupdate', handleTimeUpdate);
 
-      // Attempt to play unmuted
-      vid.play().catch(err => {
-        // AbortError is expected when video is removed/unmounted
+      vid.muted = true;
+      vid.play().catch((err) => {
         if (err instanceof Error && err.name === 'AbortError') {
           return;
         }
         if (!isMounted || !previewVideoRef.current) return;
-
-        // NotAllowedError is expected when autoplay is blocked by browser policy
-        // This is normal browser behavior - we handle it by falling back to muted playback
-        const isAutoplayBlocked = err instanceof Error &&
-          (err.name === 'NotAllowedError' ||
-            err.message?.includes('user didn\'t interact') ||
-            err.message?.includes('play() failed'));
-
-        if (!isAutoplayBlocked) {
-          // Only log unexpected errors
-          logger.warn("Autoplay unmuted failed with unexpected error, trying muted", err);
+        if (err instanceof Error && err.name !== 'NotAllowedError') {
+          logger.error("Autoplay muted preview failed", err);
         }
-
-        // Fallback to muted playback (browsers allow muted autoplay)
-        vid.muted = true;
-        setIsMuted(true);
-        vid.play().catch(e => {
-          // AbortError is expected when video is removed/unmounted
-          // NotAllowedError on muted playback is also possible but less common
-          if (e instanceof Error && e.name !== 'AbortError' && e.name !== 'NotAllowedError') {
-            logger.error("Autoplay muted failed with unexpected error", e);
-          }
-        });
       });
 
       return () => {
@@ -245,6 +227,13 @@ const VideoThumbnail: React.FC<VideoThumbnailProps> = ({
       };
     }
   }, [isPreviewing]);
+
+  // Keep preview video muted state in sync with toggle
+  useEffect(() => {
+    if (previewVideoRef.current) {
+      previewVideoRef.current.muted = isMuted;
+    }
+  }, [isMuted, isPreviewing]);
 
   // Intersection Observer to reset states when out of view
   const setupObserver = React.useCallback((element: HTMLDivElement | null) => {
@@ -291,6 +280,7 @@ const VideoThumbnail: React.FC<VideoThumbnailProps> = ({
   );
 
   const handleThumbnailClick = (e: React.MouseEvent) => {
+    onRequestPlayback?.();
     if (enablePreview) {
       // If preview is enabled, we don't want to expand the player inline.
       // The parent Link component will handle navigation.
@@ -302,7 +292,9 @@ const VideoThumbnail: React.FC<VideoThumbnailProps> = ({
   };
 
   const handleMouseEnter = () => {
+    onRequestPlayback?.();
     if (enablePreview && !showPlayer) {
+      setIsMuted(true);
       setIsPreviewing(true);
     }
   };
@@ -310,7 +302,14 @@ const VideoThumbnail: React.FC<VideoThumbnailProps> = ({
   const handleMouseLeave = () => {
     if (enablePreview && !showPlayer) {
       setIsPreviewing(false);
+      setIsMuted(true);
     }
+  };
+
+  const handleToggleMute = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsMuted((prev) => !prev);
   };
 
   // Find MP4 source for preview
@@ -361,9 +360,14 @@ const VideoThumbnail: React.FC<VideoThumbnailProps> = ({
             muted={isMuted} // Controlled by state
             loop={false} // Managed manually for 10s loop
           />
-          <div className="absolute bottom-2 right-2 p-1 bg-black/50 rounded-full">
+          <button
+            type="button"
+            className="absolute bottom-2 right-2 z-20 rounded-full bg-black/50 p-1 transition-colors hover:bg-black/70"
+            onClick={handleToggleMute}
+            aria-label={isMuted ? 'Unmute preview' : 'Mute preview'}
+          >
             {isMuted ? <VolumeX className="w-4 h-4 text-white" /> : <Volume2 className="w-4 h-4 text-white" />}
-          </div>
+          </button>
         </div>
       ) : null}
 

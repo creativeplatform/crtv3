@@ -17,7 +17,7 @@
  * - Uses Account Kit React hooks for smart account interactions
  * 
  * Dependencies:
- * - @account-kit/react: Provides hooks for smart account interactions
+ * - @/lib/wallet/react: Provides hooks for smart account interactions
  * - useWalletStatus: Custom hook that manages wallet connection and smart account status
  * - UI components from shadcn/ui library (Button, Input, Label, Tabs)
  * - toast from sonner for notifications
@@ -39,7 +39,7 @@ import {
   useSendUserOperation,
   useSignMessage,
   useSignTypedData,
-} from "@account-kit/react";
+} from "@/lib/wallet/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";

@@ -1,8 +1,10 @@
 "use client";
 
 import { useState, useEffect, useCallback } from 'react';
-import { useUser } from '@account-kit/react';
+import { useUser } from '@/lib/wallet/react';
 import { logger } from '@/lib/utils/logger';
+import { useWalletAuth } from '@/lib/auth/useWalletAuth';
+import { formatWalletAuthError } from '@/lib/auth/format-wallet-auth-error';
 
 import { 
   creatorProfileSupabaseService, 
@@ -24,12 +26,14 @@ export interface UseCreatorProfileResult {
 
 export function useCreatorProfile(targetAddress?: string): UseCreatorProfileResult {
   const user = useUser();
+  const { getAuthHeaders, address: authAddress } = useWalletAuth();
   const [profile, setProfile] = useState<CreatorProfile | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Use targetAddress if provided, otherwise use user's address
+  // Reads use the requested owner; mutations sign with the connected wallet.
   const address = targetAddress || user?.address;
+  const mutationOwnerAddress = authAddress || address;
 
   // Fetch creator profile
   const fetchProfile = useCallback(async () => {
@@ -75,9 +79,20 @@ export function useCreatorProfile(targetAddress?: string): UseCreatorProfileResu
     }
   }, [address]);
 
+  const requireMutationAuth = useCallback(async () => {
+    if (!mutationOwnerAddress) {
+      throw new Error('No address available');
+    }
+    try {
+      return await getAuthHeaders();
+    } catch (err) {
+      throw new Error(formatWalletAuthError(err));
+    }
+  }, [mutationOwnerAddress, getAuthHeaders]);
+
   // Update creator profile
   const updateProfile = useCallback(async (data: UpdateCreatorProfileData) => {
-    if (!address) {
+    if (!mutationOwnerAddress) {
       throw new Error('No address available');
     }
 
@@ -85,7 +100,12 @@ export function useCreatorProfile(targetAddress?: string): UseCreatorProfileResu
     setError(null);
 
     try {
-      const profileData = await creatorProfileSupabaseService.updateCreatorProfile(address, data);
+      const authHeaders = await requireMutationAuth();
+      const profileData = await creatorProfileSupabaseService.updateCreatorProfile(
+        mutationOwnerAddress,
+        data,
+        authHeaders,
+      );
       setProfile(profileData);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update creator profile');
@@ -93,11 +113,11 @@ export function useCreatorProfile(targetAddress?: string): UseCreatorProfileResu
     } finally {
       setLoading(false);
     }
-  }, [address]);
+  }, [mutationOwnerAddress, requireMutationAuth]);
 
   // Upsert creator profile (create or update)
   const upsertProfile = useCallback(async (data: CreateCreatorProfileData) => {
-    if (!address) {
+    if (!mutationOwnerAddress) {
       throw new Error('No address available');
     }
 
@@ -105,10 +125,14 @@ export function useCreatorProfile(targetAddress?: string): UseCreatorProfileResu
     setError(null);
 
     try {
-      const profileData = await creatorProfileSupabaseService.upsertCreatorProfile({
-        ...data,
-        owner_address: address,
-      });
+      const authHeaders = await requireMutationAuth();
+      const profileData = await creatorProfileSupabaseService.upsertCreatorProfile(
+        {
+          ...data,
+          owner_address: mutationOwnerAddress,
+        },
+        authHeaders,
+      );
       setProfile(profileData);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to upsert creator profile');
@@ -116,7 +140,7 @@ export function useCreatorProfile(targetAddress?: string): UseCreatorProfileResu
     } finally {
       setLoading(false);
     }
-  }, [address]);
+  }, [mutationOwnerAddress, requireMutationAuth]);
 
   // Delete creator profile
   const deleteProfile = useCallback(async () => {

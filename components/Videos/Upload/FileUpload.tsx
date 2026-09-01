@@ -1,7 +1,7 @@
 "use client";
 import React, { useState, useRef, useEffect } from "react";
 import { toast } from "sonner";
-import { CopyIcon } from "lucide-react";
+import { Clapperboard, CopyIcon, ExternalLink } from "lucide-react";
 import {
   getLivepeerUploadUrl,
   getLivepeerAsset,
@@ -15,6 +15,37 @@ import { updateVideoAsset } from "@/services/video-assets";
 import { useUniversalAccount } from "@/lib/hooks/accountkit/useUniversalAccount";
 // import { useTranscoder } from "@/lib/hooks/useTranscoder";
 import { logger } from "@/lib/utils/logger";
+
+const CREATIVE_PIXELS_URL =
+  process.env.NEXT_PUBLIC_CREATIVE_PIXELS_URL ||
+  "https://create.creativeplatform.xyz";
+
+function EditInPixelsCta() {
+  return (
+    <div className="space-y-2 pb-4 mb-2 border-b border-border">
+      <p className="text-xs text-muted-foreground">
+        Need to edit first? Open Pixels, export your MP4, then upload it here.
+      </p>
+      <Button
+        variant="outline"
+        className="w-full sm:w-auto"
+        asChild
+      >
+        <a
+          href={CREATIVE_PIXELS_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="Edit video in Creative Pixels"
+          data-testid="edit-in-pixels-button"
+        >
+          <Clapperboard className="h-4 w-4" aria-hidden />
+          Edit in Pixels
+          <ExternalLink className="h-3.5 w-3.5 opacity-70" />
+        </a>
+      </Button>
+    </div>
+  );
+}
 
 const truncateUri = (uri: string): string => {
   if (uri.length <= 30) return uri;
@@ -296,16 +327,22 @@ const FileUpload: React.FC<FileUploadProps> = ({
   // Show loading state while fetching account
   if (loading) {
     return (
-      <div className="text-center p-8">
-        <p className="text-foreground">Loading your wallet...</p>
+      <div className="w-full" id="upload-video-form">
+        <EditInPixelsCta />
+        <div className="text-center p-8">
+          <p className="text-foreground">Loading your wallet...</p>
+        </div>
       </div>
     );
   }
 
   if (!address) {
     return (
-      <div className="text-center p-8">
-        <p className="text-foreground">Please connect your wallet to upload videos</p>
+      <div className="w-full" id="upload-video-form">
+        <EditInPixelsCta />
+        <div className="text-center p-8">
+          <p className="text-foreground">Please connect your wallet to upload videos</p>
+        </div>
       </div>
     );
   }
@@ -313,6 +350,7 @@ const FileUpload: React.FC<FileUploadProps> = ({
   return (
     <div className="w-full" id="upload-video-form">
       <div className="flex flex-col space-y-6">
+        <EditInPixelsCta />
         <div className="space-y-6 sm:space-y-8">
           {/* File Input */}
           <div className="space-y-2">

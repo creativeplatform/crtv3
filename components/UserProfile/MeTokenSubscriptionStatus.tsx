@@ -15,7 +15,8 @@ import {
   RefreshCw,
   Info
 } from 'lucide-react';
-import { formatEther } from 'viem';
+import { formatEther, formatUnits } from 'viem';
+import { resolveHubAsset } from '@/lib/utils/hubAssetUtils';
 
 interface MeTokenSubscriptionStatusProps {
   meToken: MeTokenData;
@@ -28,6 +29,7 @@ export function MeTokenSubscriptionStatus({
   onSubscribe, 
   onRefresh 
 }: MeTokenSubscriptionStatusProps) {
+  const collateral = resolveHubAsset(Number(meToken.info?.hubId ?? meToken.hubId));
   const {
     subscriptionState,
     isLoading,
@@ -139,13 +141,13 @@ export function MeTokenSubscriptionStatus({
               <div>
                 <span className="text-muted-foreground">Pooled:</span>
                 <span className="ml-2 font-mono">
-                  {formatEther(BigInt(subscriptionState.balancePooled))} DAI
+                  {formatUnits(BigInt(subscriptionState.balancePooled), collateral.decimals)} {collateral.symbol}
                 </span>
               </div>
               <div>
                 <span className="text-muted-foreground">Locked:</span>
                 <span className="ml-2 font-mono">
-                  {formatEther(BigInt(subscriptionState.balanceLocked))} DAI
+                  {formatUnits(BigInt(subscriptionState.balanceLocked), collateral.decimals)} {collateral.symbol}
                 </span>
               </div>
             </div>
@@ -153,7 +155,7 @@ export function MeTokenSubscriptionStatus({
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Total Locked:</span>
                 <span className="font-mono font-medium">
-                  {formatEther(subscriptionState.totalLocked)} DAI
+                  {formatUnits(BigInt(subscriptionState.totalLocked), collateral.decimals)} {collateral.symbol}
                 </span>
               </div>
             </div>
@@ -181,7 +183,7 @@ export function MeTokenSubscriptionStatus({
             <p><strong>Why subscribe?</strong></p>
             <ul className="list-disc list-inside space-y-1 ml-4">
               <li>Enables trading of your MeToken</li>
-              <li>Locks DAI as collateral for price stability</li>
+              <li>Locks {collateral.symbol} as collateral for price stability</li>
               <li>Allows community to buy/sell your MeToken</li>
               <li>Creates a bonding curve for price discovery</li>
             </ul>

@@ -4,7 +4,7 @@
  * minted as derivative IPs with automatic royalty routing to the broadcaster.
  */
 import { NextRequest, NextResponse } from "next/server";
-import { checkBotId } from "botid/server";
+import { checkBotIdDeep } from "@/lib/middleware/botIdGuard";
 import { PILFlavor } from "@story-protocol/core-sdk";
 import { parseEther, type Address } from "viem";
 import { rateLimiters } from "@/lib/middleware/rateLimit";
@@ -15,12 +15,13 @@ import { getStreamByCreator, updateStreamStoryIp } from "@/services/streams";
 import { groveService } from "@/lib/sdk/grove/service";
 import { WIP_TOKEN_ADDRESS } from "@/lib/sdk/story/constants";
 import { serverLogger } from "@/lib/utils/logger";
+import { requireWalletAuthFor, WalletAuthError } from "@/lib/auth/require-wallet";
 
 const ADDRESS_REGEX = /^0x[a-fA-F0-9]{40}$/;
 const DEFAULT_REV_SHARE = 10;
 
 export async function POST(request: NextRequest) {
-  const verification = await checkBotId();
+  const verification = await checkBotIdDeep();
   if (verification.isBot) {
     return NextResponse.json({ error: "Access denied" }, { status: 403 });
   }
@@ -42,6 +43,17 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid creatorAddress format" }, { status: 400 });
   }
 
+  const normalizedCreator = creatorAddress.toLowerCase();
+
+  try {
+    await requireWalletAuthFor(request, normalizedCreator);
+  } catch (authErr) {
+    if (authErr instanceof WalletAuthError) {
+      return NextResponse.json({ error: authErr.message }, { status: authErr.status });
+    }
+    throw authErr;
+  }
+
   const revShare = commercialRevShare == null ? DEFAULT_REV_SHARE : Number(commercialRevShare);
   if (!Number.isFinite(revShare) || revShare < 0 || revShare > 100) {
     return NextResponse.json(
@@ -50,7 +62,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const stream = await getStreamByCreator(creatorAddress);
+  const stream = await getStreamByCreator(normalizedCreator);
   if (!stream) {
     return NextResponse.json({ error: "Stream not found for creator" }, { status: 404 });
   }
@@ -85,13 +97,13 @@ export async function POST(request: NextRequest) {
 
     const metadata = {
       name: resolvedName,
-      description: `Livestream channel by creator ${creatorAddress}. Viewers can create and mint derivative clip NFTs.`,
+      description: `Livestream channel by creator ${normalizedCreator}. Viewers can create and mint derivative clip NFTs.`,
       image: thumbnailUrl || stream.thumbnail_url || undefined,
       animation_url: streamPlaybackUrl,
       attributes: [
         { trait_type: "source_type", value: "Livestream" },
         { trait_type: "playback_id", value: stream.playback_id },
-        { trait_type: "creator", value: creatorAddress },
+        { trait_type: "creator", value: normalizedCreator },
         { trait_type: "commercial_rev_share", value: revShare },
       ],
     };
@@ -107,14 +119,14 @@ export async function POST(request: NextRequest) {
     const client = createStoryClient(fundingAddress, privateKey);
     const collectionAddress = await getOrCreateCreatorCollection(
       client,
-      creatorAddress as Address,
+      normalizedCreator as Address,
       `${resolvedName} Streams`,
       "STREAM"
     );
 
     const result = await mintAndRegisterIpAndAttachPilTerms(client, {
       collectionAddress,
-      recipient: creatorAddress as Address,
+      recipient: normalizedCreator as Address,
       metadataURI: metadataUpload.url,
       allowDuplicates: true,
       licenseTermsData: [
@@ -130,7 +142,7 @@ export async function POST(request: NextRequest) {
 
     const licenseTermsId = result.licenseTermsIds?.[0] ?? null;
 
-    await updateStreamStoryIp(creatorAddress, {
+    await updateStreamStoryIp(normalizedCreator, {
       story_ip_id: result.ipId,
       story_license_terms_id: licenseTermsId,
       story_ip_registration_tx: result.txHash,

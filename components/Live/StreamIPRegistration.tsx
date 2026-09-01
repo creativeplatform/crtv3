@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useWalletAuth } from "@/lib/auth/useWalletAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -35,6 +36,7 @@ export function StreamIPRegistration({
   commercialRevShare,
   onRegistered,
 }: StreamIPRegistrationProps) {
+  const { getAuthHeaders } = useWalletAuth();
   const [revShare, setRevShare] = useState<string>("10");
   const [isRegistering, setIsRegistering] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -50,9 +52,10 @@ export function StreamIPRegistration({
     setIsRegistering(true);
     setError(null);
     try {
+      const authHeaders = await getAuthHeaders();
       const res = await fetch("/api/story/register-stream", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders },
         body: JSON.stringify({
           creatorAddress,
           commercialRevShare: share,

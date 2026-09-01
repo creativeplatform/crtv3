@@ -28,6 +28,8 @@ async function main() {
     subscribes(first: 20) { id }
     mints(first: 20) { id }
     burns(first: 20) { id }
+    hubs(first: 20) { id }
+    meTokenBalances(first: 20) { id }
   }`;
 
   const realityQuery = `{
@@ -36,8 +38,8 @@ async function main() {
   }`;
 
   const [goldskyMeTokens, studioMeTokens, goldskyReality, studioReality] = await Promise.all([
-    query<{ subscribes: Array<{ id: string }>; mints: Array<{ id: string }>; burns: Array<{ id: string }> }>(goldskyMeTokensUrl, meTokenQuery),
-    query<{ subscribes: Array<{ id: string }>; mints: Array<{ id: string }>; burns: Array<{ id: string }> }>(studioUrl, meTokenQuery),
+    query<{ subscribes: Array<{ id: string }>; mints: Array<{ id: string }>; burns: Array<{ id: string }>; hubs: Array<{ id: string }>; meTokenBalances: Array<{ id: string }> }>(goldskyMeTokensUrl, meTokenQuery),
+    query<{ subscribes: Array<{ id: string }>; mints: Array<{ id: string }>; burns: Array<{ id: string }>; hubs: Array<{ id: string }>; meTokenBalances: Array<{ id: string }> }>(studioUrl, meTokenQuery),
     query<{ questions: Array<{ id: string }>; answers: Array<{ id: string }> }>(goldskyRealityUrl, realityQuery),
     query<{ questions: Array<{ id: string }>; answers: Array<{ id: string }> }>(studioUrl, realityQuery)
   ]);
@@ -55,6 +57,12 @@ async function main() {
   compareCounts("subscribes", goldskyMeTokens.data?.subscribes.length ?? 0, studioMeTokens.data?.subscribes.length ?? 0);
   compareCounts("mints", goldskyMeTokens.data?.mints.length ?? 0, studioMeTokens.data?.mints.length ?? 0);
   compareCounts("burns", goldskyMeTokens.data?.burns.length ?? 0, studioMeTokens.data?.burns.length ?? 0);
+  compareCounts("hubs", goldskyMeTokens.data?.hubs?.length ?? 0, studioMeTokens.data?.hubs?.length ?? 0);
+  compareCounts(
+    "meTokenBalances",
+    goldskyMeTokens.data?.meTokenBalances?.length ?? 0,
+    studioMeTokens.data?.meTokenBalances?.length ?? 0
+  );
   compareCounts("questions", goldskyReality.data?.questions.length ?? 0, studioReality.data?.questions.length ?? 0);
   compareCounts("answers", goldskyReality.data?.answers.length ?? 0, studioReality.data?.answers.length ?? 0);
 }

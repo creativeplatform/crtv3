@@ -215,6 +215,60 @@ describe('Livepeer view metrics helpers', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
+  it('falls back to viewership query when total endpoint errors', async () => {
+    vi.stubEnv('LIVEPEER_FULL_API_KEY', 'full-key');
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.includes('/query/total/')) {
+        return new Response(null, { status: 500 });
+      }
+      if (url.includes('/query?')) {
+        return Response.json([
+          { playbackId: 'playback-1', viewCount: 11, playtimeMins: 4 },
+        ]);
+      }
+      return new Response(null, { status: 404 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(fetchAllViews('playback-1')).resolves.toEqual({
+      ok: true,
+      metrics: {
+        playbackId: 'playback-1',
+        viewCount: 11,
+        playtimeMins: 4,
+        legacyViewCount: 0,
+      },
+    });
+  });
+
+  it('uses query fallback with a standard API key when /total is zero', async () => {
+    vi.stubEnv('LIVEPEER_FULL_API_KEY', '');
+    vi.stubEnv('LIVEPEER_API_KEY', 'standard-key');
+    vi.mocked(getFullLivepeer).mockReturnValue(null);
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.includes('/query/total/')) {
+        return Response.json({ playbackId: 'playback-1', viewCount: 0, playtimeMins: 0 });
+      }
+      if (url.includes('/query?')) {
+        return Response.json([
+          { playbackId: 'playback-1', viewCount: 8, playtimeMins: 2 },
+        ]);
+      }
+      return new Response(null, { status: 404 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(fetchAllViews('playback-1')).resolves.toEqual({
+      ok: true,
+      metrics: {
+        playbackId: 'playback-1',
+        viewCount: 8,
+        playtimeMins: 2,
+        legacyViewCount: 0,
+      },
+    });
+  });
+
   it('returns upstream_error when Livepeer responds with errors in JSON body', async () => {
     vi.stubEnv('LIVEPEER_FULL_API_KEY', 'full-key');
     vi.stubGlobal(

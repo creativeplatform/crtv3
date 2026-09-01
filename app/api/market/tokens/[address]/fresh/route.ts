@@ -4,6 +4,7 @@ import { baseMainnet } from '@/lib/utils/chains/base';
 import { meTokensSubgraph } from '@/lib/sdk/metokens/subgraph';
 import { getMeTokenInfoFromBlockchain, getMeTokenProtocolInfo } from '@/lib/utils/metokenUtils';
 import { serverLogger } from '@/lib/utils/logger';
+import { calculateMeTokenVaultTvlUsd, formatHubAssetAmount, resolveHubAsset } from '@/lib/utils/hubAssetUtils';
 
 // ERC20 ABI for totalSupply
 const ERC20_ABI = [
@@ -71,13 +72,14 @@ export async function GET(
       );
     }
 
-    // Calculate TVL
+    // Calculate TVL using hub collateral decimals (USDC=6; DAI/USDS/GHO=18)
     const balancePooled = BigInt(protocolInfo.balancePooled || 0);
     const balanceLocked = BigInt(protocolInfo.balanceLocked || 0);
-    const totalBalance = balancePooled + balanceLocked;
-    const tvl = parseFloat(formatEther(totalBalance));
+    const hubId = Number(protocolInfo.hubId);
+    const hubAsset = resolveHubAsset(hubId);
+    const tvl = calculateMeTokenVaultTvlUsd(balancePooled, balanceLocked, hubId);
 
-    // Calculate price
+    // MeToken ERC-20 supply is always 18 decimals
     const supply = parseFloat(formatEther(totalSupply));
     const price = supply > 0 ? tvl / supply : 0;
 
@@ -104,9 +106,9 @@ export async function GET(
         total_supply: totalSupply.toString(),
         tvl,
         price,
-        balance_pooled: parseFloat(formatEther(balancePooled)),
-        balance_locked: parseFloat(formatEther(balanceLocked)),
-        hub_id: Number(protocolInfo.hubId),
+        balance_pooled: parseFloat(formatHubAssetAmount(balancePooled, hubAsset)),
+        balance_locked: parseFloat(formatHubAssetAmount(balanceLocked, hubAsset)),
+        hub_id: hubId,
         start_time: protocolInfo.startTime > 0 ? new Date(Number(protocolInfo.startTime) * 1000).toISOString() : null,
         end_time: protocolInfo.endTime > 0 ? new Date(Number(protocolInfo.endTime) * 1000).toISOString() : null,
         end_cooldown: protocolInfo.endCooldown > 0 ? new Date(Number(protocolInfo.endCooldown) * 1000).toISOString() : null,

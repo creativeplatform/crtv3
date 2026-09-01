@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useChain, useAuthModal, useSmartAccountClient } from "@account-kit/react";
+import { useChain, useAuthModal, useSmartAccountClient } from "@/lib/wallet/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { base } from "@account-kit/infra";
@@ -20,8 +20,9 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { Info, Loader2 } from "lucide-react";
+import { Info, Loader2, Sparkles } from "lucide-react";
 import { useWalletStatus } from "@/lib/hooks/accountkit/useWalletStatus";
+import { useWalletAuth } from "@/lib/auth/useWalletAuth";
 import { toast } from "sonner";
 import {
   Select,
@@ -32,9 +33,42 @@ import {
 } from "@/components/ui/select";
 import { createQuestionWithData } from "@/lib/sdk/reality-eth/reality-eth-question-wrapper";
 import { getCanonicalRealityEthArbitratorAddress } from "@/lib/sdk/reality-eth/reality-eth-client";
-import type { QuestionData } from "@/lib/sdk/reality-eth/reality-eth-utils";
+import type { QuestionType, QuestionData } from "@/lib/sdk/reality-eth/reality-eth-utils";
 import { logger } from "@/lib/utils/logger";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { usePredictionAccess } from "@/lib/hooks/predictions/usePredictionAccess";
+import { ShareDialog } from "@/components/Videos/ShareDialog";
+import { useSongchainPost } from "@/hooks/useSongchainPost";
+import { getSongchainConfig } from "@/lib/songchain/config";
+import { getTemplateIdForQuestionType } from "@/lib/predictions/reality-template";
+import {
+  PREDICTION_CATEGORIES,
+  type PredictionCategoryValue,
+} from "@/lib/predictions/categories";
+import {
+  REALITY_QUESTION_TYPES,
+  getRealityQuestionTypeOption,
+} from "@/lib/predictions/reality-question-types";
+import { cn } from "@/lib/utils/utils";
+
+export type CreatePredictionProps = {
+  /** Tighter layout for embedding (e.g. Song Cup Predict panel). */
+  embedded?: boolean;
+  /** Prefill category; defaults to general on the standalone create page. */
+  defaultCategory?: PredictionCategoryValue;
+  /** Where to send the user after create/share closes. */
+  successHref?: string;
+  /** Optional video asset UUID so the prediction is linked to a video page. */
+  videoAssetId?: string;
+  /**
+   * Called once the on-chain create + record POST complete (before the share
+   * dialog). VideoPredictButton uses it to router.refresh() so the strip's
+   * server component re-renders with the new link.
+   */
+  onCreated?: () => void;
+  /** If true, show one-tap preset suggestions above the form. */
+  showPresets?: boolean;
+};
 
 const predictionSchema = z.object({
   title: z.string().min(3, "Title is required"),
@@ -54,7 +88,7 @@ const predictionSchema = z.object({
   }
   // For select types, outcomes are required and must have at least 2 non-empty values
   if (data.type === "single-select" || data.type === "multiple-select") {
-    return data.outcomes && data.outcomes.length >= 2 && 
+    return data.outcomes && data.outcomes.length >= 2 &&
            data.outcomes.every(o => o.value && o.value.trim().length > 0);
   }
   return true;
@@ -83,7 +117,83 @@ type PredictionQuota = {
   remaining: number | null;
 };
 
-function CreatePrediction() {
+/** Human-facing seed label. */
+export type PredictionPreset = {
+  id: string;
+  label: string;
+  /** bool or uint; bool always yields Yes/No outcomes. */
+  type: QuestionType;
+  /** Factory: receives a video title if available, returns the seed title. */
+  makeTitle: (videoTitle?: string | null) => string;
+  /** Days from now for the default close date. */
+  closeDays: number;
+  /** Category the preset should land in. */
+  category: PredictionCategoryValue;
+  /** Optional description seeded into the form. */
+  description?: string;
+};
+
+/**
+ * Resolvable-from-local-data presets for video pages.
+ * Avoids view counts, likes, trending, mixtapes, and off-platform remixes,
+ * all of which lack a write ledger today.
+ */
+export const VIDEO_PREDICTION_PRESETS: PredictionPreset[] = [
+  {
+    id: "5-comments",
+    label: "5 comments",
+    type: "bool",
+    makeTitle: (videoTitle) =>
+      `Will "${shortVideoTitle(videoTitle)}" get 5 comments?`,
+    closeDays: 14,
+    category: "general",
+    description: "Resolves Yes once the video has 5 top-level comments.",
+  },
+  {
+    id: "first-tip",
+    label: "First sticker tip",
+    type: "bool",
+    makeTitle: (videoTitle) =>
+      `Will "${shortVideoTitle(videoTitle)}" earn its first sticker tip?`,
+    closeDays: 30,
+    category: "general",
+    description: "Resolves Yes once someone sends a sticker tip on this video.",
+  },
+  {
+    id: "10-tips",
+    label: "10 sticker tips",
+    type: "bool",
+    makeTitle: (videoTitle) =>
+      `Will "${shortVideoTitle(videoTitle)}" earn 10 sticker tips?`,
+    closeDays: 30,
+    category: "general",
+    description: "Resolves Yes once the video has received 10 sticker tips.",
+  },
+];
+
+function shortVideoTitle(videoTitle?: string | null): string {
+  if (!videoTitle) return "this video";
+  const clean = videoTitle.trim();
+  if (!clean) return "this video";
+  if (clean.length <= 40) return clean;
+  return `${clean.slice(0, 37).trim()}...`;
+}
+
+function formatLocalDateInput(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function CreatePrediction({
+  embedded = false,
+  defaultCategory = "general",
+  successHref = "/predict",
+  videoAssetId,
+  onCreated,
+  showPresets = false,
+}: CreatePredictionProps) {
   const { chain } = useChain();
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -99,20 +209,29 @@ function CreatePrediction() {
     walletAddress,
     smartAccountAddress: address,
   } = useWalletStatus();
+  const { getAuthHeaders } = useWalletAuth();
 
   const { openAuthModal } = useAuthModal();
   const { client: accountKitClient } = useSmartAccountClient({});
+  const { canCreatePrediction, blockReason, isBlockedTier, isAdmin } = usePredictionAccess();
+  const { createPost, isPosting: isSongchainPosting } = useSongchainPost();
+  const songchainConfig = getSongchainConfig();
+  const [shareOpen, setShareOpen] = useState(false);
+  const [createdMeta, setCreatedMeta] = useState<{
+    title: string;
+    category: string;
+  } | null>(null);
 
   const form = useForm<PredictionForm>({
     resolver: zodResolver(predictionSchema),
     defaultValues: {
       title: "",
       type: "bool",
-      outcomes: [{ value: "Yes" }, { value: "No" }], // Default to Yes/No for bool type
-      category: "general",
+      outcomes: [{ value: "Yes" }, { value: "No" }],
+      category: defaultCategory,
       description: "",
       closeDate: "",
-      closeTime: "",
+      closeTime: "23:59",
       bond: "0",
     },
   });
@@ -127,6 +246,18 @@ function CreatePrediction() {
   useEffect(() => {
     if (!address || typeof window === "undefined") {
       setQuota(null);
+      return;
+    }
+    if (isAdmin) {
+      setQuota({
+        unlimited: true,
+        premiumTier: null,
+        usedThisMonth: 0,
+        monthlyLimit: 3,
+        remaining: null,
+      });
+      setQuotaLoading(false);
+      setQuotaError(null);
       return;
     }
     let cancelled = false;
@@ -157,7 +288,7 @@ function CreatePrediction() {
     return () => {
       cancelled = true;
     };
-  }, [address]);
+  }, [address, isAdmin]);
 
   // Auto-populate outcomes when type changes to bool
   useEffect(() => {
@@ -172,6 +303,21 @@ function CreatePrediction() {
     }
   }, [questionType, form]);
 
+  const applyPreset = (preset: PredictionPreset, videoTitle?: string | null) => {
+    const close = new Date();
+    close.setDate(close.getDate() + preset.closeDays);
+
+    form.setValue("type", preset.type);
+    form.setValue("title", preset.makeTitle(videoTitle));
+    form.setValue("category", preset.category);
+    form.setValue("description", preset.description ?? "");
+    form.setValue("closeDate", formatLocalDateInput(close));
+    form.setValue("closeTime", "23:59");
+    if (preset.type === "bool") {
+      form.setValue("outcomes", [{ value: "Yes" }, { value: "No" }]);
+    }
+  };
+
   async function onSubmit(values: PredictionForm) {
     setFormError(null);
 
@@ -182,6 +328,11 @@ function CreatePrediction() {
 
     if (!accountKitClient) {
       setFormError("Wallet client not ready. Please try again.");
+      return;
+    }
+
+    if (!canCreatePrediction) {
+      setFormError(blockReason ?? "You cannot create predictions with this account.");
       return;
     }
 
@@ -228,7 +379,7 @@ function CreatePrediction() {
           fresh.remaining <= 0
         ) {
           setFormError(
-            "You've reached your limit of 3 prediction markets this month (UTC). Investor or Brand members can create unlimited markets."
+            "You've reached your limit of 3 prediction markets this month (UTC). Investor members can create unlimited markets."
           );
           setIsSubmitting(false);
           return;
@@ -250,7 +401,7 @@ function CreatePrediction() {
 
       // Ensure outcomes are set for bool type
       let finalOutcomes: string[] | undefined = undefined;
-      
+
       if (values.type === "bool") {
         // For bool type, always use Yes/No
         finalOutcomes = ["Yes", "No"];
@@ -259,7 +410,7 @@ function CreatePrediction() {
         finalOutcomes = values.outcomes
           ?.map((o) => o?.value)
           .filter((o): o is string => !!o && typeof o === 'string' && o.trim().length > 0);
-        
+
         if (!finalOutcomes || finalOutcomes.length === 0) {
           setFormError("At least 2 outcomes are required for select questions.");
           setIsSubmitting(false);
@@ -319,9 +470,7 @@ function CreatePrediction() {
       // Must match Kleros proxy used for disputes / submitEvidence (see getCanonicalRealityEthArbitratorAddress).
       const arbitrator = getCanonicalRealityEthArbitratorAddress();
 
-      // Template ID 0 is typically used for custom questions
-      // You may need to register a template first for production use
-      const templateId = 0;
+      const templateId = getTemplateIdForQuestionType(questionData.type);
 
       logger.debug("📝 Creating question with params:", {
         templateId,
@@ -354,21 +503,34 @@ function CreatePrediction() {
 
       logger.debug("✅ Transaction hash:", hash);
 
+      let recData: { duplicate?: boolean; linked?: boolean | null } | null = null;
       try {
+        const authHeaders = await getAuthHeaders();
         const rec = await fetch("/api/predictions/record", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", ...authHeaders },
           body: JSON.stringify({
             address,
             transactionHash: hash,
+            title: values.title,
+            category: values.category || "general",
+            questionType: values.type,
+            outcomes: finalOutcomes,
+            videoAssetId,
           }),
         });
-        const recData = await rec.json();
-        if (!rec.ok && !recData.duplicate) {
-          logger.warn("Prediction quota record failed:", recData);
-          toast.warning(
-            "Prediction submitted, but usage could not be synced. If your monthly count looks wrong, contact support."
-          );
+        recData = await rec.json();
+        if (!rec.ok) {
+          if (recData?.duplicate) {
+            toast.warning(
+              "Prediction submitted, but usage could not be synced. If your monthly count looks wrong, contact support."
+            );
+          } else {
+            logger.warn("Prediction quota record failed:", recData);
+            toast.warning(
+              "Prediction submitted, but usage could not be synced. If your monthly count looks wrong, contact support."
+            );
+          }
         }
       } catch (recErr) {
         logger.warn("Prediction quota record error:", recErr);
@@ -378,13 +540,23 @@ function CreatePrediction() {
       }
 
       toast.success("Prediction created successfully! Transaction submitted.");
-      router.push("/predict");
+      if (recData?.linked === false && videoAssetId) {
+        toast.warning("Prediction created, but it may not appear on the video page.");
+      }
+      setCreatedMeta({
+        title: values.title,
+        category: values.category || "general",
+      });
+      setShareOpen(true);
+      // Let the host page (video strip) refresh its server data now, while
+      // the user is still in the share dialog.
+      onCreated?.();
     } catch (error: any) {
       logger.error("❌ Error creating prediction:", error);
-      
+
       // Provide more detailed error messages
       let errorMessage = "Failed to create prediction. Please try again.";
-      
+
       if (error?.message) {
         errorMessage = error.message;
       } else if (error?.cause?.message) {
@@ -415,26 +587,99 @@ function CreatePrediction() {
       values: form.getValues(),
       errors: form.formState.errors,
     });
-    
+
     // Check form validation
     const isValid = await form.trigger();
     logger.debug("Form is valid:", isValid);
-    
+
     if (!isValid) {
       logger.debug("❌ Form validation failed:", form.formState.errors);
       return;
     }
-    
+
     await form.handleSubmit(onSubmit)(e);
   };
 
   return (
-    <div className="flex flex-wrap items-start justify-center p-2">
+    <div
+      className={cn(
+        "flex flex-wrap items-start justify-center",
+        embedded ? "w-full p-0" : "p-2",
+      )}
+    >
+      {embedded && !isConnected ? (
+        <div className="mb-4 w-full rounded-xl border border-border/60 bg-muted/40 px-4 py-3 dark:bg-white/[0.06]">
+          <p className="text-sm text-muted-foreground">
+            Connect your wallet to create a prediction market.
+          </p>
+          <Button
+            type="button"
+            size="sm"
+            className="mt-2"
+            onClick={() => openAuthModal()}
+          >
+            Connect wallet
+          </Button>
+        </div>
+      ) : null}
       <Form {...form}>
         <form
           onSubmit={handleFormSubmit}
-          className="w-full p-5 md:w-2/5 space-y-6"
+          className={cn(
+            "w-full",
+            embedded ? "space-y-4 p-0" : "space-y-6 p-5 md:w-2/5",
+          )}
         >
+          {embedded && showPresets && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <Sparkles className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm font-medium text-muted-foreground">
+                  Quick predictions
+                </span>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {VIDEO_PREDICTION_PRESETS.map((preset) => (
+                  <Button
+                    key={preset.id}
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={isSubmitting || !canCreatePrediction}
+                    onClick={() => applyPreset(preset, createdMeta?.title ?? undefined)}
+                    className="text-xs"
+                  >
+                    {preset.label}
+                  </Button>
+                ))}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  disabled={isSubmitting || !canCreatePrediction}
+                  onClick={() => {
+                    form.setValue("type", "bool");
+                    form.setValue("title", "");
+                    form.setValue("description", "");
+                    form.setValue("category", defaultCategory);
+                  }}
+                  className="text-xs"
+                >
+                  Custom
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Tap a preset to auto-fill, then edit the title or close date before submitting.
+              </p>
+            </div>
+          )}
+
+          {isBlockedTier && blockReason && (
+            <Alert variant="destructive">
+              <AlertTitle>Cannot create predictions</AlertTitle>
+              <AlertDescription>{blockReason}</AlertDescription>
+            </Alert>
+          )}
           {!isConnected || !address ? null : quotaLoading ? (
             <Alert>
               <Info className="h-4 w-4" />
@@ -512,28 +757,35 @@ function CreatePrediction() {
           <FormField
             name="type"
             control={form.control}
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Question Type</FormLabel>
-                <Select
-                  onValueChange={field.onChange}
-                  defaultValue={field.value}
-                >
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select question type" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    <SelectItem value="bool">Yes/No</SelectItem>
-                    <SelectItem value="single-select">Single Choice</SelectItem>
-                    <SelectItem value="multiple-select">Multiple Choice</SelectItem>
-                    <SelectItem value="uint">Number</SelectItem>
-                  </SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
-            )}
+            render={({ field }) => {
+              const selected = getRealityQuestionTypeOption(field.value);
+              return (
+                <FormItem>
+                  <FormLabel>Question type</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select question type" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {REALITY_QUESTION_TYPES.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {selected && (
+                    <p className="text-xs text-muted-foreground mt-1.5">
+                      {selected.description} (Reality.eth template{" "}
+                      {selected.templateId})
+                    </p>
+                  )}
+                  <FormMessage />
+                </FormItem>
+              );
+            }}
           />
 
           {(questionType === "single-select" || questionType === "multiple-select") && (
@@ -580,10 +832,21 @@ function CreatePrediction() {
             control={form.control}
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Category (optional)</FormLabel>
-                <FormControl>
-                  <Input placeholder="general" {...field} />
-                </FormControl>
+                <FormLabel>Category</FormLabel>
+                <Select onValueChange={field.onChange} value={field.value}>
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select category" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {PREDICTION_CATEGORIES.map((cat) => (
+                      <SelectItem key={cat.value} value={cat.value}>
+                        {cat.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
                 <FormMessage />
               </FormItem>
             )}
@@ -662,6 +925,7 @@ function CreatePrediction() {
               isSubmitting ||
               !isConnected ||
               isLoadingClient ||
+              !canCreatePrediction ||
               (quota !== null &&
                 !quota.unlimited &&
                 quota.remaining !== null &&
@@ -684,8 +948,60 @@ function CreatePrediction() {
           </Button>
         </form>
       </Form>
+
+      {createdMeta && (
+        <div
+          className={cn(
+            "w-full space-y-3",
+            embedded ? "p-0 pt-3" : "p-5 md:w-2/5",
+          )}
+        >
+          <Button
+            type="button"
+            variant="secondary"
+            className="w-full"
+            disabled={isSongchainPosting || !songchainConfig.publicFeedId}
+            onClick={() => {
+              const origin =
+                typeof window !== "undefined" ? window.location.origin : "";
+              void createPost({
+                feedId: songchainConfig.publicFeedId!,
+                content: `New prediction: ${createdMeta.title}\n\n${origin}${successHref}`,
+                title: createdMeta.title,
+              });
+            }}
+          >
+            {isSongchainPosting ? "Posting to Songchain…" : "Post to Songchain"}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full"
+            onClick={() => router.push(successHref)}
+          >
+            View all predictions
+          </Button>
+        </div>
+      )}
+
+      <ShareDialog
+        open={shareOpen}
+        onOpenChange={(open) => {
+          setShareOpen(open);
+          if (!open && createdMeta) {
+            router.push(successHref);
+          }
+        }}
+        videoTitle={createdMeta?.title ?? "Prediction"}
+        videoId="new"
+        shareUrlOverride={successHref}
+        titleOverride={createdMeta?.title}
+        dialogTitle="Share Prediction"
+        shareNoun="prediction"
+      />
     </div>
   );
 }
 
 export { CreatePrediction };
+export default CreatePrediction;

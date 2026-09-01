@@ -17,7 +17,7 @@ export interface ThumbnailInfo {
 export async function getThumbnailInfo(playbackId: string): Promise<ThumbnailInfo | null> {
   try {
     // Fetch playback info to get the VTT URL
-    const response = await fetch(`/api/livepeer/playback-info?playbackId=${playbackId}`);
+    const response = await fetch(`/api/internal/playback-info?playbackId=${playbackId}`);
     
     if (!response.ok) {
       logger.warn(`Failed to fetch playback info for ${playbackId}:`, response.status);

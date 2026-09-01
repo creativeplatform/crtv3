@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect, useMemo } from "react";
 import { useLiveChatModerated } from "@/lib/hooks/xmtp/useLiveChatModerated";
-import { useUser } from "@account-kit/react";
+import { useUser } from "@/lib/wallet/react";
 import useModularAccount from "@/lib/hooks/accountkit/useModularAccount";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,12 +16,17 @@ import {
   ChevronDown,
   EyeOff,
   UserX,
+  Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatAddress } from "@/lib/helpers";
 import { toast } from "sonner";
-import { VideoTipButton } from "../Videos/VideoTipButton";
-import { getExplorerUrl } from "@/lib/utils/video-tip";
+import { HeartBitProvider } from "@/components/heartbit/HeartBitProvider";
+import { HeartBitTipButton } from "@/components/heartbit/HeartBitTipButton";
+import { getExplorerUrl, formatTipToken } from "@/lib/utils/video-tip";
+import { priceService, PriceService } from "@/lib/sdk/alchemy/price-service";
+import { TokenSymbol } from "@/lib/hooks/video/useVideoTip";
+import { TokenSymbol as SwapTokenSymbol } from "@/lib/sdk/alchemy/swap-service";
 import { logger } from '@/lib/utils/logger';
 
 
@@ -34,6 +39,9 @@ interface LiveChatProps {
   /** Enable moderation overlay (poll for hidden/banned + show mod controls). */
   enableModeration?: boolean;
   headerActions?: React.ReactNode;
+  /** Host/streamer view: hides the message input and flattens messages so the
+   *  broadcaster can read inbound audience chat without feeling like a viewer. */
+  variant?: "participant" | "host";
 }
 
 /**
@@ -45,6 +53,7 @@ interface LiveChatProps {
  * - Message rate limiting
  * - Auto-cleanup of old messages
  * - Optimized performance for high message volume
+ * - Participant (viewer) and host (streamer) layouts
  */
 export function LiveChat({
   streamId,
@@ -54,6 +63,7 @@ export function LiveChat({
   className,
   enableModeration = true,
   headerActions,
+  variant = "participant",
 }: LiveChatProps) {
   const [message, setMessage] = useState("");
   const [isExpanded, setIsExpanded] = useState(true);
@@ -61,6 +71,7 @@ export function LiveChat({
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const user = useUser();
   const { address: smartAccountAddress } = useModularAccount();
+  const isHost = variant === "host";
 
   const {
     messages,
@@ -80,13 +91,48 @@ export function LiveChat({
     enabled: enableModeration,
   });
 
-  // Scroll tracking
   const shouldAutoScroll = useRef(true);
+  const [tipUsdValues, setTipUsdValues] = useState<Record<string, string>>({});
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const prevMessagesLen = useRef(messages.length);
 
-  // Track new messages arriving while scrolled up
+  // Compute USD value for each tip message when messages change
+  useEffect(() => {
+    let cancelled = false;
+    const compute = async () => {
+      const newValues: Record<string, string> = {};
+      const tipMessages = messages.filter(
+        (msg) => msg.type === "tip" && msg.tipData && !tipUsdValues[msg.id]
+      );
+      if (tipMessages.length === 0) return;
+      await Promise.all(
+        tipMessages.map(async (msg) => {
+          try {
+            const tipData = msg.tipData!;
+            const amountNum = parseFloat(tipData.amount);
+            if (isNaN(amountNum) || amountNum <= 0) return;
+            let value: number;
+            if (tipData.token.startsWith("metoken:")) {
+              value = amountNum;
+            } else {
+              value = amountNum * (await priceService.getTokenPrice(tipData.token as SwapTokenSymbol));
+            }
+            newValues[msg.id] = PriceService.formatUSD(value);
+          } catch (err) {
+            logger.error(`Failed to compute USD value for message ${msg.id}:`, err);
+          }
+        })
+      );
+      if (!cancelled && Object.keys(newValues).length > 0) {
+        setTipUsdValues((prev) => ({ ...prev, ...newValues }));
+      }
+    };
+    compute();
+    return () => {
+      cancelled = true;
+    };
+  }, [messages]);
   useEffect(() => {
     const newCount = messages.length - prevMessagesLen.current;
     prevMessagesLen.current = messages.length;
@@ -162,16 +208,26 @@ export function LiveChat({
         <div className="flex items-center gap-2">
           <MessageCircle className="h-4 w-4 text-red-500" />
           <h3 className="font-semibold text-sm">Live Chat</h3>
+          {viewerCount !== undefined && (
+            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+              <Users className="h-3 w-3" />
+              <span>{viewerCount.toLocaleString()}</span>
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-2">
           {headerActions}
-          {creatorAddress && user && user.address?.toLowerCase() !== creatorAddress.toLowerCase() && (
-            <VideoTipButton
-              creatorAddress={creatorAddress}
-              onTipSuccess={(txHash, amount, token) => {
-                sendTipMessage(amount, token, txHash);
-              }}
-            />
+          {!isHost && creatorAddress && user && user.address?.toLowerCase() !== creatorAddress.toLowerCase() && (
+            <HeartBitProvider chain="0x2105">
+              <HeartBitTipButton
+                videoId={`stream:${streamId}`}
+                creatorAddress={creatorAddress}
+                showStickerPicker={false}
+                onTipSuccess={(txHash, amount, token) => {
+                  void sendTipMessage(amount, token, txHash);
+                }}
+              />
+            </HeartBitProvider>
           )}
         </div>
       </div>
@@ -219,7 +275,7 @@ export function LiveChat({
                   const userEOA = user?.address?.toLowerCase();
                   const userSCA = smartAccountAddress?.toLowerCase();
                   const msgAddress = msg.senderAddress?.toLowerCase();
-                  const isOwnMessage = msgAddress && (
+                  const isOwnMessage = !isHost && msgAddress && (
                     (userEOA && msgAddress === userEOA) ||
                     (userSCA && msgAddress === userSCA)
                   );
@@ -274,7 +330,7 @@ export function LiveChat({
                       <div
                         className={cn(
                           "flex-1 min-w-0",
-                          isOwnMessage && "text-right"
+                          isOwnMessage && !isHost && "text-right"
                         )}
                       >
                         <div className="flex items-center gap-1.5 mb-0.5">
@@ -318,13 +374,14 @@ export function LiveChat({
                             className={cn(
                               "rounded-md p-2 text-xs border border-yellow-500/50 bg-yellow-500/10",
                               "max-w-[85%]",
-                              isOwnMessage && "ml-auto"
+                              isOwnMessage && !isHost && "ml-auto"
                             )}
                           >
                             <div className="flex items-center gap-1.5">
                               <Coins className="h-3 w-3 text-yellow-600 dark:text-yellow-400" />
                               <span className="font-semibold text-yellow-700 dark:text-yellow-300">
-                                {formatAddress(msg.senderAddress)} tipped {msg.tipData?.amount} {msg.tipData?.token}!
+                                {formatAddress(msg.senderAddress)} tipped {msg.tipData?.amount} {formatTipToken(msg.tipData?.token ?? ("UNKNOWN" as TokenSymbol))}
+                                {tipUsdValues[msg.id] ? ` (~${tipUsdValues[msg.id]})` : ""}!
                               </span>
                             </div>
                             <a
@@ -340,7 +397,7 @@ export function LiveChat({
                           <div
                             className={cn(
                               "rounded-md px-2.5 py-1.5 text-xs",
-                              isOwnMessage
+                              isOwnMessage && !isHost
                                 ? "bg-primary text-primary-foreground ml-auto max-w-[85%]"
                                 : "bg-muted max-w-[85%]"
                             )}
@@ -359,32 +416,42 @@ export function LiveChat({
           </div>
 
           {/* Input Area */}
-          <form onSubmit={handleSend} className="p-3 border-t bg-muted/30">
-            <div className="flex gap-2">
-              <Input
-                value={message}
-                onChange={(e) => setMessage(e.target.value)}
-                placeholder="Type a message..."
-                disabled={isSending || isLoading}
-                className="flex-1 text-sm h-9"
-                maxLength={500}
-              />
-              <Button 
-                type="submit" 
-                size="sm"
-                disabled={!message.trim() || isSending || isLoading}
-                title={isLoading ? "Chat is initializing..." : undefined}
-              >
-                <Send className="h-3.5 w-3.5" />
-              </Button>
+          {!isHost && (
+            <form onSubmit={handleSend} className="p-3 border-t bg-muted/30">
+              <div className="flex gap-2">
+                <Input
+                  value={message}
+                  onChange={(e) => setMessage(e.target.value)}
+                  placeholder="Type a message..."
+                  disabled={isSending || isLoading}
+                  className="flex-1 text-sm h-9"
+                  maxLength={500}
+                />
+                <Button
+                  type="submit"
+                  size="sm"
+                  disabled={!message.trim() || isSending || isLoading}
+                  title={isLoading ? "Chat is initializing..." : undefined}
+                >
+                  <Send className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+              {error && !isLoading && error.message.includes("Rate limit") && (
+                <Alert variant="destructive" className="mt-2 py-1.5">
+                  <AlertCircle className="h-3 w-3" />
+                  <AlertDescription className="text-xs">{error.message}</AlertDescription>
+                </Alert>
+              )}
+            </form>
+          )}
+
+          {/* Host-only status footer when input is hidden */}
+          {isHost && (
+            <div className="p-3 border-t bg-muted/30 text-xs text-muted-foreground text-center">
+              Streamer view · {sortedMessages.length} message{sortedMessages.length !== 1 ? 's' : ''}
+              {viewerCount !== undefined && ` · ${viewerCount} viewer${viewerCount !== 1 ? 's' : ''}`}
             </div>
-            {error && !isLoading && error.message.includes("Rate limit") && (
-              <Alert variant="destructive" className="mt-2 py-1.5">
-                <AlertCircle className="h-3 w-3" />
-                <AlertDescription className="text-xs">{error.message}</AlertDescription>
-              </Alert>
-            )}
-          </form>
+          )}
         </>
       )}
     </div>

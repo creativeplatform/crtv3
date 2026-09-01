@@ -6,7 +6,7 @@ import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { Proposal } from "@/components/proposal-list/ProposalList";
 import { VotingForm } from "@/components/proposal-list/ProposalList";
-import ClaimPoap from "@/components/vote/ClaimPoap";
+import { ClaimStickerButton } from "@/components/stickers/ClaimStickerButton";
 import { shortenAddress } from "@/lib/utils/utils";
 import { LinkedIdentityDisplay } from "@/components/vote/LinkedIdentityDisplay";
 import { SNAPSHOT_SPACE } from "@/context/context";
@@ -14,6 +14,7 @@ import Link from "next/link";
 import { ExternalLink, Slash } from "lucide-react";
 import { Metadata, ResolvingMetadata } from "next";
 import { CampaignShareButton } from "@/components/vote/CampaignShareButton";
+import { CampaignPredictButton } from "@/components/vote/CampaignPredictButton";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -217,7 +218,11 @@ export default async function ProposalDetailsPage({
               <h1 className="text-2xl font-bold break-words flex-1">
                 {proposal.title}
               </h1>
-              <div className="flex-shrink-0">
+              <div className="flex-shrink-0 flex items-center gap-2">
+                <CampaignPredictButton
+                  campaignId={proposal.id}
+                  campaignTitle={proposal.title}
+                />
                 <CampaignShareButton
                   campaignId={proposal.id}
                   campaignTitle={proposal.title}
@@ -308,17 +313,7 @@ export default async function ProposalDetailsPage({
               Total votes: {proposal.scores_total ?? 0}
             </div>
           </Card>
-          <Card className="p-6 mb-6">
-            <h2 className="text-lg font-bold mb-2">Claim POAP</h2>
-            {/* TODO: POAP claim component goes here */}
-            <div className="text-gray-400">
-              <ClaimPoap
-                address={proposal.author}
-                proposalId={proposal.id}
-                snapshot={proposal.snapshot}
-              />
-            </div>
-          </Card>
+          <ClaimStickerButton proposalId={proposal.id} />
         </div >
       </div >
     </Suspense >

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useUser } from "@account-kit/react";
+import { useUser } from "@/lib/wallet/react";
 import useModularAccount from "@/lib/hooks/accountkit/useModularAccount";
 import type { VideoComment, CreateCommentInput } from "@/lib/types/video-comments";
 import { logger } from '@/lib/utils/logger';

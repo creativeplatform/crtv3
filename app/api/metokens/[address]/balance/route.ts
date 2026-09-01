@@ -1,15 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { checkBotId } from 'botid/server';
+import { checkBotIdDeep } from '@/lib/middleware/botIdGuard';
 import { meTokenSupabaseService } from '@/lib/sdk/supabase/metokens';
 import { serverLogger } from '@/lib/utils/logger';
 import { rateLimiters } from '@/lib/middleware/rateLimit';
+import { requireWalletAuthFor, WalletAuthError } from '@/lib/auth/require-wallet';
+import { isValidEthAddress } from '@/lib/auth/validate-address';
+import { verifyMeTokenBalance } from '@/lib/metokens/verifyMeTokenBalance';
+import { TransactionVerificationError } from '@/lib/chain/verifyTransactionReceipt';
 
 // PUT /api/metokens/[address]/balance - Update user's MeToken balance
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ address: string }> }
 ) {
-  const verification = await checkBotId();
+  const verification = await checkBotIdDeep();
   if (verification.isBot) {
     return NextResponse.json({ error: 'Access denied' }, { status: 403 });
   }
@@ -36,6 +40,13 @@ export async function PUT(
     if (!address) {
       return NextResponse.json(
         { error: 'MeToken address is required' },
+        { status: 400 }
+      );
+    }
+
+    if (!isValidEthAddress(address)) {
+      return NextResponse.json(
+        { error: 'Invalid MeToken address format' },
         { status: 400 }
       );
     }
@@ -72,10 +83,10 @@ export async function PUT(
         { status: 400 }
       );
     }
-    
-    // Validate user_address format
-    const addressRegex = /^0x[a-fA-F0-9]{40}$/;
-    if (!addressRegex.test(user_address)) {
+
+    const normalizedUserAddress = user_address.trim().toLowerCase();
+
+    if (!isValidEthAddress(normalizedUserAddress)) {
       return NextResponse.json(
         { 
           error: 'Invalid user_address format',
@@ -85,10 +96,33 @@ export async function PUT(
       );
     }
 
+    try {
+      await requireWalletAuthFor(request, normalizedUserAddress);
+    } catch (authErr) {
+      if (authErr instanceof WalletAuthError) {
+        return NextResponse.json({ error: authErr.message }, { status: authErr.status });
+      }
+      throw authErr;
+    }
+
+    let verifiedBalance: number;
+    try {
+      verifiedBalance = await verifyMeTokenBalance({
+        meTokenAddress: address,
+        userAddress: normalizedUserAddress,
+        claimedBalance: balanceNum,
+      });
+    } catch (verifyErr) {
+      if (verifyErr instanceof TransactionVerificationError) {
+        return NextResponse.json({ error: verifyErr.message }, { status: 400 });
+      }
+      throw verifyErr;
+    }
+
     const result = await meTokenSupabaseService.updateUserBalance(
       address,
-      user_address,
-      balance
+      normalizedUserAddress,
+      verifiedBalance
     );
     
     return NextResponse.json({ data: result }, { status: 200 });

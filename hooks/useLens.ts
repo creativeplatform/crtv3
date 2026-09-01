@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
-import { useSmartAccountClient, useUser } from "@account-kit/react";
+import { useSmartAccountClient, useUser } from "@/lib/wallet/react";
 import { signLensChallenge } from "@/lib/sdk/lens/account-kit-adapter";
 import { publicClient } from "@/lib/sdk/lens/client";
 import { useOrbSession } from "@/context/OrbSessionContext";
@@ -32,9 +32,7 @@ export interface UseLensReturn {
 export function useLens(): UseLensReturn {
   const [sessionClient, setSessionClient] = useState<SessionClient | null>(null);
   const [isPosting, setIsPosting] = useState(false);
-  const { client } = useSmartAccountClient({
-    accountParams: { mode: "7702" },
-  });
+  const { client } = useSmartAccountClient({});
   const user = useUser();
   const accountAddress = user?.address;
   const orb = useOrbSession();

@@ -35,7 +35,7 @@ export const HERO_NAME = {
  */
 export const HERO_DESCRIPTION =
   `${SITE_NAME} is a decentralized live-streaming platform that puts you in control of your content and earnings. ` +
-  `Get paid 100% of streaming revenue, have access to your own token, and monetize your content into NFTs.`;
+  `Get paid 100% of streaming revenue, have access to your own token, and monetize your content.`;
 
 /**
  * Primary call to action buttons on the hero section
@@ -73,13 +73,12 @@ export const LIVEPEER_FEATURED_PLAYBACK_ID = "5c2bzf537qbq0r7o";
  * Livepeer integration constants
  * These IDs connect to specific assets hosted on Livepeer's platform
  * CAUTION: Changing these values will affect what media is displayed to users
+ *
+ * Hero video uses LIVEPEER_HERO_PLAYBACK_ID directly (not the app video library)
+ * so the homepage hero keeps working even if the asset is removed from Supabase.
  */
-export const LIVEPEER_HERO_PLAYBACK_ID = "cb8ekf9y8kaatrpu"; // Default playback ID for hero section video (fallback)
-export const HERO_VIDEO_ASSET_ID = "cb8eabe3-ed26-4a9a-91a5-949712f85030"; // Asset ID for hero section video
-
-// URLS
-export const API_BASE_URL = "https://api.poap.tech";
-export const APP_BASE_URL = "https://app.poap.xyz";
+export const LIVEPEER_HERO_PLAYBACK_ID = "15ebvaxzii695zae"; // Creative intro — static hero playback ID
+export const HERO_VIDEO_ASSET_ID = "15eb360c-698f-48f2-aabe-d46cd5f8d181"; // Livepeer asset ID (discover/trending exclusion)
 
 // SPACE
 export const SNAPSHOT_SPACE = "vote.thecreative.eth";
@@ -89,48 +88,3 @@ export const REALITY_ETH_CHAIN_ID = 8453; // Base network
 export const REALITY_ETH_TOKEN = "ETH"; // Native token for Base
 export const REALITY_ETH_VERSION = "3.0"; // Reality.eth v3
 export const REALITY_ETH_DAPP_URL = "https://reality.eth.link/app/index.html";
-
-// STATES
-export const NO_POAP = "NO_POAP";
-export const NOT_VOTED = "NOT_VOTED";
-export const LOADING = "LOADING";
-export const UNCLAIMED = "UNCLAIMED";
-export const CLAIMED = "CLAIMED";
-
-type State =
-  | typeof NO_POAP
-  | typeof NOT_VOTED
-  | typeof LOADING
-  | typeof UNCLAIMED
-  | typeof CLAIMED;
-type States = { [S in State]: Record<string, any> };
-export const STATES: States = {
-  NO_POAP: {
-    header: "A POAP hasn't been setup for this proposal yet 😢",
-    headerImage: "https://snapshotsplugin.s3.us-west-2.amazonaws.com/empty.svg",
-    mainImage:
-      "https://snapshotsplugin.s3.us-west-2.amazonaws.com/placeholder.png",
-  },
-  NOT_VOTED: {
-    headerImage: "https://snapshotsplugin.s3.us-west-2.amazonaws.com/vote.svg",
-    header: "Vote to get this POAP",
-    buttonText: "Mint",
-  },
-  UNCLAIMED: {
-    headerImage: "https://snapshotsplugin.s3.us-west-2.amazonaws.com/claim.svg",
-    header: "Mint your I voted POAP",
-    buttonText: "Mint",
-  },
-  CLAIMED: {
-    headerImage:
-      "https://snapshotsplugin.s3.us-west-2.amazonaws.com/succes.svg",
-    header: "Congratulations! The POAP has been minted to your collection",
-    buttonText: "Browse collection",
-  },
-  LOADING: {
-    headerImage:
-      "https://snapshotsplugin.s3.us-west-2.amazonaws.com/succes.svg",
-    header: "The POAP is being minted to your collection",
-    buttonText: "",
-  },
-};

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { stack } from "@/lib/sdk/stack/stackClient";
-import { useUser } from "@account-kit/react";
+import { useUser } from "@/lib/wallet/react";
 import LeaderboardItem from "@/components/leaderboard/LeaderboardItem";
 import { FaSpinner } from "react-icons/fa";
 import { Button } from "@/components/ui/button";

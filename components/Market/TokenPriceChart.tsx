@@ -88,7 +88,7 @@ export function TokenPriceChart({
     fetchData();
   }, [tokenAddress, period]);
 
-  // Calculate price change for display
+  // Calculate price change for display (neutral when flat)
   const priceInfo = useMemo(() => {
     logger.debug('🔍 Calculating priceInfo:', {
       dataLength: data.length,
@@ -98,12 +98,14 @@ export function TokenPriceChart({
     });
 
     if (data.length === 0) {
-      // If no data but we have currentPrice from API, use it
+      // If no data but we have currentPrice from API, use it (no period change)
       if (currentPrice !== null && currentPrice > 0) {
         return {
           lastPrice: currentPrice,
           priceChange: 0,
-          isPositive: true,
+          isPositive: false,
+          isNeutral: true,
+          basePrice: currentPrice,
         };
       }
       return null;
@@ -118,12 +120,15 @@ export function TokenPriceChart({
     const displayPrice = (lastPrice > 0) ? lastPrice : (currentPrice || 0);
 
     const priceChange = firstPrice > 0 ? ((displayPrice - firstPrice) / firstPrice) * 100 : 0;
-    const isPositive = priceChange >= 0;
+    const isNeutral = priceChange === 0;
+    const isPositive = priceChange > 0;
 
     return {
       lastPrice: displayPrice,
       priceChange,
       isPositive,
+      isNeutral,
+      basePrice: firstPrice,
     };
   }, [data, currentPrice]);
 
@@ -260,7 +265,11 @@ export function TokenPriceChart({
               <span
                 className={cn(
                   'text-sm font-medium',
-                  priceInfo.isPositive ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
+                  priceInfo.isNeutral
+                    ? 'text-muted-foreground'
+                    : priceInfo.isPositive
+                      ? 'text-green-600 dark:text-green-400'
+                      : 'text-red-600 dark:text-red-400'
                 )}
               >
                 {priceInfo.isPositive ? '+' : ''}
@@ -269,12 +278,14 @@ export function TokenPriceChart({
             </div>
           )}
 
-          {/* TradingView Chart */}
+          {/* TradingView Chart — baseline shows green above / red below period open */}
           <div className="relative" style={{ width: '100%', height }}>
             <TradingViewChart
               data={data}
-              chartType="area"
+              chartType="baseline"
               showVolume={true}
+              basePrice={priceInfo?.basePrice}
+              isPositive={priceInfo?.isNeutral ? undefined : priceInfo?.isPositive}
               height={height}
               className="w-full"
             />

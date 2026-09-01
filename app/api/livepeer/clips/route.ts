@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { checkBotId } from "botid/server";
+import { requireHumanOrVerifiedBot } from "@/lib/middleware/botIdGuard";
 import { createClip } from "@/services/livepeer-clips";
 import { getStreamByPlaybackId } from "@/services/streams";
 import { serverLogger } from "@/lib/utils/logger";
@@ -9,9 +9,9 @@ const ADDRESS_REGEX = /^0x[a-fA-F0-9]{40}$/;
 const MAX_CLIP_SPAN_MS = 120_000;
 
 export async function POST(request: NextRequest) {
-  const verification = await checkBotId();
-  if (verification.isBot) {
-    return NextResponse.json({ error: "Access denied" }, { status: 403 });
+  const botCheck = await requireHumanOrVerifiedBot("livepeer-clips");
+  if (!botCheck.allowed) {
+    return botCheck.response;
   }
 
   const rl = await rateLimiters.strict(request);

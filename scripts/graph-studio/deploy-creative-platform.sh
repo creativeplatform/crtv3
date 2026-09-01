@@ -30,6 +30,18 @@ pnpm exec graph auth "$GRAPH_STUDIO_DEPLOY_KEY"
 pnpm exec graph codegen
 pnpm exec graph build
 # Use deploy key from ~/.graph-cli.json (written by graph auth) to avoid header/env mismatch.
-pnpm exec graph deploy "$SUBGRAPH_SLUG" subgraph.yaml --version-label "$VERSION_LABEL"
+pnpm exec graph deploy "$SUBGRAPH_SLUG" subgraph.yaml --version-label "$VERSION_LABEL" || {
+  echo ""
+  echo "Deploy failed. Common fixes:"
+  echo "  1. Copy Deploy key from Subgraph Studio → Settings (rotate if unsure)"
+  echo "  2. Set GRAPH_STUDIO_SUBGRAPH_SLUG to the exact slug from Studio → Deploy"
+  echo "     (e.g. myaccount/creative-platform; default is creative-platform)"
+  echo "  3. Re-run: GRAPH_STUDIO_DEPLOY_KEY=... VERSION_LABEL=$VERSION_LABEL ./scripts/graph-studio/deploy-creative-platform.sh"
+  exit 1
+}
 
 echo "Deployed $SUBGRAPH_SLUG with version label: $VERSION_LABEL"
+echo ""
+echo "Next: In Subgraph Studio → Query tab, copy the query URL and set:"
+echo "  GRAPH_STUDIO_CREATIVE_PLATFORM_URL=<query-url>"
+echo "  SUBGRAPH_PROVIDER_MODE=studio"

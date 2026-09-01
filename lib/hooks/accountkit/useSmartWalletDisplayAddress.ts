@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { useUser } from "@account-kit/react";
+import { useUser } from "@/lib/wallet/react";
 import useModularAccount from "./useModularAccount";
 import { shortenAddress } from "@/lib/utils/utils";
 

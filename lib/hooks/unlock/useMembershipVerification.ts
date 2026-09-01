@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useUser } from "@account-kit/react";
+import { useUser } from "@/lib/wallet/react";
 
 import {
   unlockService,
@@ -29,6 +29,7 @@ export interface MembershipStatus {
   membershipDetails?: MembershipDetails[];
   walletType?: "eoa" | "sca";
   walletAddress?: string;
+  refetch: () => Promise<void>;
 }
 
 export function useMembershipVerification() {
@@ -39,7 +40,7 @@ export function useMembershipVerification() {
     loading: isModularLoading,
   } = useModularAccount();
 
-  const [status, setStatus] = useState<MembershipStatus>({
+  const [status, setStatus] = useState<Omit<MembershipStatus, "refetch">>({
     isVerified: false,
     hasMembership: false,
     isLoading: true,
@@ -77,62 +78,61 @@ export function useMembershipVerification() {
     []
   );
 
-  useEffect(() => {
-    const checkMembership = async () => {
-      const userAddress = user?.address;
+  const refetch = useCallback(async () => {
+    const userAddress = user?.address;
 
-      if (!userAddress) {
+    if (!userAddress) {
+      setStatus({
+        isVerified: false,
+        hasMembership: false,
+        isLoading: false,
+        error: null,
+      });
+      return;
+    }
+
+    setStatus((prev) => ({ ...prev, isLoading: true }));
+
+    try {
+      if (user?.type === "eoa") {
+        await verifyMembership(userAddress, "eoa");
+        return;
+      }
+
+      const scaAddress = client?.account?.address ?? modularAddress ?? null;
+      const waitingForClient = isModularLoading;
+
+      if (!scaAddress) {
+        if (waitingForClient) {
+          setStatus((prev) =>
+            prev.isLoading ? prev : { ...prev, isLoading: true },
+          );
+          return;
+        }
+
         setStatus({
           isVerified: false,
           hasMembership: false,
           isLoading: false,
-          error: null,
+          error: {
+            name: "Error",
+            message: "No valid address found for verification",
+            code: "NO_VALID_ADDRESS",
+          } as MembershipError,
         });
         return;
       }
 
-      try {
-        if (user?.type === "eoa") {
-          await verifyMembership(userAddress, "eoa");
-          return;
-        }
-
-        const scaAddress =
-          client?.account?.address ?? modularAddress ?? null;
-        const waitingForClient = isModularLoading;
-
-        if (!scaAddress) {
-          if (waitingForClient) {
-            setStatus((prev) => ({ ...prev, isLoading: true }));
-            return;
-          }
-
-          setStatus({
-            isVerified: false,
-            hasMembership: false,
-            isLoading: false,
-            error: {
-              name: "Error",
-              message: "No valid address found for verification",
-              code: "NO_VALID_ADDRESS",
-            } as MembershipError,
-          });
-          return;
-        }
-
-        await verifyMembership(scaAddress, "sca");
-      } catch (error) {
-        const membershipError = error as MembershipError;
-        setStatus({
-          isVerified: false,
-          hasMembership: false,
-          isLoading: false,
-          error: membershipError,
-        });
-      }
-    };
-
-    void checkMembership();
+      await verifyMembership(scaAddress, "sca");
+    } catch (error) {
+      const membershipError = error as MembershipError;
+      setStatus({
+        isVerified: false,
+        hasMembership: false,
+        isLoading: false,
+        error: membershipError,
+      });
+    }
   }, [
     user?.address,
     user?.type,
@@ -142,7 +142,11 @@ export function useMembershipVerification() {
     verifyMembership,
   ]);
 
-  return status;
+  useEffect(() => {
+    void refetch();
+  }, [refetch]);
+
+  return { ...status, refetch };
 }
 
 export interface UseUnlockNFTParams {

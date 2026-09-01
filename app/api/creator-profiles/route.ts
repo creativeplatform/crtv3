@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { checkBotId } from 'botid/server';
+import { checkBotIdDeep } from '@/lib/middleware/botIdGuard';
 import { supabaseService } from '@/lib/sdk/supabase/service';
 import { createClient } from '@/lib/sdk/supabase/server';
 import { serverLogger } from '@/lib/utils/logger';
@@ -130,7 +130,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const verification = await checkBotId();
+  const verification = await checkBotIdDeep();
   if (verification.isBot) {
     return NextResponse.json({ error: 'Access denied' }, { status: 403 });
   }
@@ -216,7 +216,7 @@ export async function POST(request: NextRequest) {
 }
 
 export async function PUT(request: NextRequest) {
-  const verification = await checkBotId();
+  const verification = await checkBotIdDeep();
   if (verification.isBot) {
     return NextResponse.json({ error: 'Access denied' }, { status: 403 });
   }
@@ -308,7 +308,7 @@ export async function PUT(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
-  const verification = await checkBotId();
+  const verification = await checkBotIdDeep();
   if (verification.isBot) {
     return NextResponse.json({ error: 'Access denied' }, { status: 403 });
   }

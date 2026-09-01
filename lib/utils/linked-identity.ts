@@ -1,99 +1,121 @@
-import { Address, createPublicClient, getAddress } from "viem";
-import { alchemy, base } from "@account-kit/infra";
+import { predictModularAccountV2Address } from "@account-kit/smart-contracts";
+import { Address, getAddress } from "viem";
+import { base } from "@account-kit/infra";
+import {
+  modularAccountFactoryAddresses,
+  smaBytecodeImplementationAddresses,
+} from "@/lib/utils/modularAccount";
 import { logger } from '@/lib/utils/logger';
-
 
 /**
  * Linked Identity Utilities
- * 
+ *
  * Creative TV uses a "Linked Identity" approach:
  * - Primary Display: Smart Wallet address (or ENS/Basename if available)
  * - Background: EOA address for signing operations (Snapshot, approvals, etc.)
- * 
- * This allows users to have a secure Smart Wallet as their public identity
- * while using their EOA for signing operations that require ECDSA signatures.
  */
 
+function predictSmaAddress(ownerAddress: string): string | null {
+  const factory = modularAccountFactoryAddresses[base.id];
+  const implementation = smaBytecodeImplementationAddresses[base.id];
+  if (!factory || !implementation) return null;
+
+  try {
+    return predictModularAccountV2Address({
+      factoryAddress: factory as Address,
+      implementationAddress: implementation as Address,
+      salt: 0n,
+      type: "SMA",
+      ownerAddress: getAddress(ownerAddress),
+    }).toLowerCase();
+  } catch (error) {
+    logger.warn("Failed to predict SMA address:", error);
+    return null;
+  }
+}
+
 /**
- * Check if an EOA is a permitted signer/owner of a Smart Wallet
- * 
- * For ModularAccountV2, we check if the EOA is the owner by:
- * 1. Checking if the Smart Wallet is deployed
- * 2. Reading the owner from the account contract
- * 
- * @param eoaAddress - The EOA address to verify
- * @param smartWalletAddress - The Smart Wallet address to check against
- * @returns Promise<boolean> - True if EOA is a permitted signer
+ * Returns true when `companionAddress` is the EOA owner of `smartWalletAddress`
+ * (counterfactual or deployed SMA), verified via CREATE2 prediction — not
+ * client trust alone.
  */
 export async function isPermittedSigner(
   eoaAddress: string,
   smartWalletAddress: string
 ): Promise<boolean> {
   try {
-    // Normalize addresses
-    const normalizedEOA = getAddress(eoaAddress);
-    const normalizedSmartWallet = getAddress(smartWalletAddress);
+    const normalizedEOA = getAddress(eoaAddress).toLowerCase();
+    const normalizedSmartWallet = getAddress(smartWalletAddress).toLowerCase();
 
-    // If addresses are the same, it's an EOA account (not a smart wallet)
-    if (normalizedEOA.toLowerCase() === normalizedSmartWallet.toLowerCase()) {
+    if (normalizedEOA === normalizedSmartWallet) {
       return true;
     }
 
-    // Create public client to read from chain
-    const publicClient = createPublicClient({
-      chain: base,
-      transport: alchemy({
-        apiKey: process.env.NEXT_PUBLIC_ALCHEMY_API_KEY as string,
-      }),
-    });
-
-    // Check if Smart Wallet is deployed
-    const code = await publicClient.getCode({
-      address: normalizedSmartWallet,
-    });
-
-    if (!code || code === "0x") {
-      // Smart Wallet not deployed, so EOA is the account
-      return normalizedEOA.toLowerCase() === normalizedSmartWallet.toLowerCase();
-    }
-
-    // For ModularAccountV2, we need to check the owner
-    // The owner is stored in the account's storage
-    // We can use the factory's getAddress function or read directly from the account
-    
-    // Try to read owner from the account contract
-    // ModularAccountV2 uses a specific storage slot for the owner
-    // This is a simplified check - in production you might want to use the account's ABI
-    
-    // For now, we'll assume if the Smart Wallet is deployed and the EOA matches
-    // the user's connected EOA, it's a permitted signer
-    // In a full implementation, you'd read the owner from the account contract
-    
-    // TODO: Implement proper owner check using ModularAccountV2 ABI
-    // For now, return true if addresses are different (indicating Smart Wallet exists)
-    // This is a safe assumption for Account Kit's ModularAccountV2
-    
-    return true; // Simplified: assume EOA is permitted if Smart Wallet exists
+    const predicted = predictSmaAddress(normalizedEOA);
+    return Boolean(predicted && predicted === normalizedSmartWallet);
   } catch (error) {
     logger.error("Error checking permitted signer:", error);
-    // On error, assume not permitted for security
     return false;
   }
 }
 
 /**
- * Get linked identity information
- * 
- * @param smartWalletAddress - The Smart Wallet address (primary identity)
- * @param eoaAddress - The EOA address (signing identity)
- * @returns Linked identity object with display information
+ * Verifies that `companionAddress` is linked to `verifiedAddress` (EOA↔SMA pair).
+ * Used server-side after wallet auth to safely include a second balance holder.
  */
+export async function isLinkedWalletCompanion(
+  verifiedAddress: string,
+  companionAddress: string,
+): Promise<boolean> {
+  try {
+    const verified = getAddress(verifiedAddress).toLowerCase();
+    const companion = getAddress(companionAddress).toLowerCase();
+    if (verified === companion) {
+      return false;
+    }
+
+    return (
+      (await isPermittedSigner(companion, verified)) ||
+      (await isPermittedSigner(verified, companion))
+    );
+  } catch (error) {
+    logger.error("Error checking linked wallet companion:", error);
+    return false;
+  }
+}
+
+/**
+ * Build the viewer address list for MeToken gate checks: always include the
+ * cryptographically verified address, plus a linked companion when provable.
+ */
+export async function resolveVerifiedViewerAddresses(
+  verifiedAddress: string,
+  companionAddress?: string | null,
+): Promise<string[]> {
+  const viewers = [getAddress(verifiedAddress).toLowerCase()];
+
+  if (!companionAddress) {
+    return viewers;
+  }
+
+  const companion = getAddress(companionAddress).toLowerCase();
+  if (companion === viewers[0]) {
+    return viewers;
+  }
+
+  if (await isLinkedWalletCompanion(verifiedAddress, companionAddress)) {
+    viewers.push(companion);
+  }
+
+  return viewers;
+}
+
 export interface LinkedIdentity {
-  primaryAddress: string; // Smart Wallet address
-  signingAddress: string; // EOA address
-  primaryName: string | null; // ENS/Basename if available
-  displayText: string; // Formatted display text
-  isLinked: boolean; // Whether addresses are linked (different)
+  primaryAddress: string;
+  signingAddress: string;
+  primaryName: string | null;
+  displayText: string;
+  isLinked: boolean;
 }
 
 export async function getLinkedIdentity(
@@ -109,9 +131,7 @@ export async function getLinkedIdentity(
     smartWalletAddress.toLowerCase() !== eoaAddress.toLowerCase()
   );
 
-  // TODO: Add ENS/Basename resolution when CCIP issues are resolved
-  // For now, we'll just use addresses
-  const primaryName = null; // ENS/Basename would go here
+  const primaryName = null;
 
   let displayText = "";
   if (isLinked) {
@@ -131,32 +151,19 @@ export async function getLinkedIdentity(
   };
 }
 
-/**
- * Format proposal author display with linked identity
- * 
- * @param smartWalletAddress - The Smart Wallet address (primary identity)
- * @param eoaAddress - The EOA address that signed (from Snapshot)
- * @param primaryName - Optional ENS/Basename for Smart Wallet
- * @returns Formatted author string
- */
 export function formatProposalAuthor(
   smartWalletAddress: string | null,
   eoaAddress: string,
   primaryName?: string | null
 ): string {
   if (!smartWalletAddress || smartWalletAddress.toLowerCase() === eoaAddress.toLowerCase()) {
-    // No Smart Wallet or they're the same - just show EOA
     return primaryName || shortenAddress(eoaAddress);
   }
 
-  // Linked identity - show Smart Wallet as primary, EOA as signer
   const primaryDisplay = primaryName || shortenAddress(smartWalletAddress);
   return `${primaryDisplay} (via ${shortenAddress(eoaAddress)})`;
 }
 
-/**
- * Helper to shorten address
- */
 function shortenAddress(address: string): string {
   if (!address) return "";
   return `${address.slice(0, 6)}...${address.slice(-4)}`;

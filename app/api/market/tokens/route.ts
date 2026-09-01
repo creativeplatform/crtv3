@@ -3,6 +3,7 @@ import { createClient } from '@/lib/sdk/supabase/server';
 import { meTokenSupabaseService } from '@/lib/sdk/supabase/metokens';
 import { formatEther } from 'viem';
 import { getMeTokenProtocolInfo, getMeTokenInfoFromBlockchain, getBulkMeTokenInfo } from '@/lib/utils/metokenUtils';
+import { isActiveMarketToken } from '@/lib/metokens/syncMeTokenMarketData';
 import { serverLogger } from '@/lib/utils/logger';
 
 export interface MarketToken {
@@ -12,6 +13,8 @@ export interface MarketToken {
   symbol: string;
   owner_address: string;
   type: 'metoken' | 'content_coin';
+  /** MeToken collateral hub (1=DAI, 2=USDC, 3=USDS, 4=GHO) */
+  hubId?: number;
   price: number;
   tvl: number;
   total_supply: string;
@@ -221,6 +224,7 @@ export async function GET(request: NextRequest) {
 
     // Transform MeTokens with Supabase data first
     for (const meToken of meTokens) {
+      const hubId = Number(meToken.hub_id);
       allTokens.push({
         id: meToken.id,
         address: meToken.address,
@@ -228,6 +232,7 @@ export async function GET(request: NextRequest) {
         symbol: meToken.symbol,
         owner_address: meToken.owner_address,
         type: 'metoken' as const,
+        hubId: Number.isFinite(hubId) && hubId > 0 ? hubId : undefined,
         price: 0, // Will update below
         tvl: meToken.tvl,
         total_supply: meToken.total_supply?.toString() || '0',
@@ -238,6 +243,7 @@ export async function GET(request: NextRequest) {
 
     // Transform Content Coins with Supabase data first
     for (const contentCoin of contentCoins) {
+      const hubId = Number(contentCoin.hub_id);
       allTokens.push({
         id: contentCoin.id,
         address: contentCoin.address,
@@ -245,6 +251,7 @@ export async function GET(request: NextRequest) {
         symbol: contentCoin.symbol,
         owner_address: contentCoin.owner_address,
         type: 'content_coin' as const,
+        hubId: Number.isFinite(hubId) && hubId > 0 ? hubId : undefined,
         price: 0, // Will update below
         tvl: contentCoin.tvl,
         total_supply: contentCoin.total_supply?.toString() || '0',
@@ -257,17 +264,13 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Identify tokens that need fresh data
-    const tokensToRefresh = allTokens.filter(t => useFreshData || t.total_supply === '0' || t.tvl === 0);
-
-    // Refresh data if needed
-    if (tokensToRefresh.length > 0) {
-      const addresses = tokensToRefresh.map(t => t.address);
+    // Always refresh TVL/price from blockchain so stats reflect recent trades
+    if (allTokens.length > 0) {
+      const addresses = allTokens.map((t) => t.address);
       const bulkData = await getBulkMeTokenInfo(addresses);
 
-      // Update tokens with fresh data and calculate prices
-      allTokens = allTokens.map(token => {
-        const fresh = bulkData[token.address];
+      allTokens = allTokens.map((token) => {
+        const fresh = bulkData ? bulkData[token.address] : undefined;
 
         if (fresh) {
           return {
@@ -275,33 +278,22 @@ export async function GET(request: NextRequest) {
             tvl: fresh.tvl,
             price: fresh.price,
             total_supply: fresh.totalSupply,
-            market_cap: fresh.tvl
+            market_cap: fresh.tvl,
           };
         }
 
-        // If no fresh data found (or not successfully fetched), fall back to calculating price from existing data
         const totalSupply = BigInt(token.total_supply || 0);
         const price = totalSupply > 0n ? token.tvl / parseFloat(formatEther(totalSupply)) : 0;
 
         return {
           ...token,
-          price
+          price,
         };
-      });
-    } else {
-      // Just calculate prices for all tokens based on Supabase data
-      allTokens = allTokens.map(token => {
-        const totalSupply = BigInt(token.total_supply || 0);
-        const price = totalSupply > 0n ? token.tvl / parseFloat(formatEther(totalSupply)) : 0;
-        return { ...token, price };
       });
     }
 
-    // Filter out tokens with negligible value (Price < 0.01 AND TVL < 0.01 AND Market Cap < 0.01)
-    allTokens = allTokens.filter(token => {
-      // Keep token if ANY of these metrics is at least 0.01
-      return token.price >= 0.01 || token.tvl >= 0.01 || token.market_cap >= 0.01;
-    });
+    // Hide liquidated / zero-liquidity tokens from the market
+    allTokens = allTokens.filter((token) => isActiveMarketToken(token.tvl));
 
     // Apply search filter if provided
     if (search) {
@@ -566,12 +558,17 @@ export async function GET(request: NextRequest) {
       const totalTvl = allTokens.reduce((sum, token) => sum + token.tvl, 0);
       const totalVolume24h = allTokens.reduce((sum, token) => sum + (token.volume_24h || 0), 0);
 
-      // Top gainers and losers (by price change)
-      const sortedByChange = [...allTokens].sort(
-        (a, b) => (b.price_change_24h || 0) - (a.price_change_24h || 0)
-      );
-      const topGainers = sortedByChange.slice(0, 5);
-      const topLosers = sortedByChange.slice(-5).reverse();
+      // Top gainers: positive changes only (floor at 0%)
+      const topGainers = [...allTokens]
+        .filter((t) => (t.price_change_24h ?? 0) > 0)
+        .sort((a, b) => (b.price_change_24h ?? 0) - (a.price_change_24h ?? 0))
+        .slice(0, 5);
+
+      // Top losers: negative changes only (ceiling at 0%)
+      const topLosers = [...allTokens]
+        .filter((t) => (t.price_change_24h ?? 0) < 0)
+        .sort((a, b) => (a.price_change_24h ?? 0) - (b.price_change_24h ?? 0))
+        .slice(0, 5);
 
       stats = {
         total_tokens: total,
@@ -596,8 +593,8 @@ export async function GET(request: NextRequest) {
     // Add caching headers for Vercel Edge Cache
     // Shorter cache for search queries or fresh data requests, longer for standard queries
     const cacheDuration = search || useFreshData
-      ? "public, s-maxage=10, stale-while-revalidate=30" // Short cache for dynamic queries
-      : "public, s-maxage=60, stale-while-revalidate=300"; // Longer cache for standard queries
+      ? "no-store, no-cache, must-revalidate"
+      : "public, s-maxage=30, stale-while-revalidate=60";
 
     response.headers.set("Cache-Control", cacheDuration);
 

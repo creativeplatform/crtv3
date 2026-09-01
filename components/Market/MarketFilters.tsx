@@ -1,6 +1,6 @@
 "use client";
 
-import { Input } from '@/components/ui/input';
+import { useCallback, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Select,
@@ -9,8 +9,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Search, X, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { X, ArrowUp, ArrowDown } from 'lucide-react';
 import { MarketFilters as MarketFiltersType } from '@/lib/hooks/market/useMarketData';
+import { PredictiveSearchInput } from '@/components/search/PredictiveSearchInput';
 
 interface MarketFiltersProps {
   filters: MarketFiltersType;
@@ -18,9 +19,14 @@ interface MarketFiltersProps {
 }
 
 export function MarketFilters({ filters, onFiltersChange }: MarketFiltersProps) {
-  const handleSearchChange = (value: string) => {
-    onFiltersChange({ search: value });
-  };
+  const [searchResetKey, setSearchResetKey] = useState(0);
+
+  const handleSearchChange = useCallback(
+    (searchValue: string) => {
+      onFiltersChange({ search: searchValue });
+    },
+    [onFiltersChange]
+  );
 
   const handleTypeChange = (value: string) => {
     onFiltersChange({ type: value as MarketFiltersType['type'] });
@@ -35,6 +41,7 @@ export function MarketFilters({ filters, onFiltersChange }: MarketFiltersProps) 
   };
 
   const clearFilters = () => {
+    setSearchResetKey((k) => k + 1);
     onFiltersChange({
       type: 'all',
       search: '',
@@ -47,30 +54,16 @@ export function MarketFilters({ filters, onFiltersChange }: MarketFiltersProps) 
 
   return (
     <div className="space-y-4">
-      {/* Search and Type Filter Row */}
       <div className="flex flex-col sm:flex-row gap-4">
-        {/* Search Input */}
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
+          <PredictiveSearchInput
+            scope="market"
             placeholder="Search tokens, symbols, or creators..."
-            value={filters.search}
-            onChange={(e) => handleSearchChange(e.target.value)}
-            className="pl-9"
+            resetKey={searchResetKey}
+            onQueryChange={handleSearchChange}
           />
-          {filters.search && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7"
-              onClick={() => handleSearchChange('')}
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          )}
         </div>
 
-        {/* Type Filter */}
         <Select value={filters.type} onValueChange={handleTypeChange}>
           <SelectTrigger className="w-full sm:w-[180px]">
             <SelectValue placeholder="Token Type" />
@@ -83,7 +76,6 @@ export function MarketFilters({ filters, onFiltersChange }: MarketFiltersProps) 
         </Select>
       </div>
 
-      {/* Sort Controls Row */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-sm text-muted-foreground">Sort by:</span>
@@ -116,7 +108,6 @@ export function MarketFilters({ filters, onFiltersChange }: MarketFiltersProps) 
           </Button>
         </div>
 
-        {/* Clear Filters */}
         {hasActiveFilters && (
           <Button
             variant="ghost"
@@ -130,7 +121,6 @@ export function MarketFilters({ filters, onFiltersChange }: MarketFiltersProps) 
         )}
       </div>
 
-      {/* Active Filters Display */}
       {hasActiveFilters && (
         <div className="flex flex-wrap items-center gap-2 text-sm">
           <span className="text-muted-foreground">Active filters:</span>
@@ -149,4 +139,3 @@ export function MarketFilters({ filters, onFiltersChange }: MarketFiltersProps) 
     </div>
   );
 }
-

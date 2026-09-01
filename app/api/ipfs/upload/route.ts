@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { checkBotId } from 'botid/server';
+import { checkBotIdDeep } from '@/lib/middleware/botIdGuard';
 import { groveService } from '@/lib/sdk/grove/service';
 import { serverLogger } from '@/lib/utils/logger';
 import { rateLimiters } from '@/lib/middleware/rateLimit';
 
 export async function POST(request: NextRequest) {
-    const verification = await checkBotId();
+    const verification = await checkBotIdDeep();
     if (verification.isBot) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }

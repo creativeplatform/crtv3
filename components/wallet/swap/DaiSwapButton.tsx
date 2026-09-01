@@ -6,7 +6,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader2, ArrowRightLeft, CheckCircle, XCircle, ExternalLink } from 'lucide-react';
-import { useSmartAccountClient } from '@account-kit/react';
+import { useSmartAccountClient } from '@/lib/wallet/react';
 import { type Address, type Hex } from 'viem';
 import { alchemySwapService, AlchemySwapService, type TokenSymbol } from '@/lib/sdk/alchemy/swap-service';
 import { logger } from '@/lib/utils/logger';

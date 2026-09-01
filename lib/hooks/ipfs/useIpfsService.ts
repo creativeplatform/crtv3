@@ -14,7 +14,7 @@ import { logger } from '@/lib/utils/logger';
  * from the HeliaProvider context, making it the primary method
  * for IPFS operations.
  * 
- * @param config - Optional IPFS configuration (Lighthouse mirror, Filecoin archival, gateway)
+ * @param config - Optional IPFS configuration (Filecoin archival, gateway)
  *                 Note: For optimal performance, memoize this object with useMemo if passing config.
  * @returns IPFSService instance configured with Helia from context
  * 
@@ -36,7 +36,7 @@ import { logger } from '@/lib/utils/logger';
  * // With config (memoize for performance):
  * function UploadComponentWithConfig() {
  *   const config = useMemo(() => ({
- *     lighthouseApiKey: process.env.NEXT_PUBLIC_LIGHTHOUSE_API_KEY,
+ *     gateway: process.env.NEXT_PUBLIC_IPFS_GATEWAY,
  *   }), []);
  *   
  *   const { ipfsService } = useIpfsService(config);
@@ -53,13 +53,11 @@ export function useIpfsService(config?: Omit<IPFSConfig, 'helia' | 'fs'>) {
     if (!config) return undefined;
     
     return {
-      lighthouseApiKey: config.lighthouseApiKey,
       filecoinFirstApiKey: config.filecoinFirstApiKey,
       gateway: config.gateway,
       enableFilecoinArchival: config.enableFilecoinArchival,
     };
   }, [
-    config?.lighthouseApiKey,
     config?.filecoinFirstApiKey,
     config?.gateway,
     config?.enableFilecoinArchival,

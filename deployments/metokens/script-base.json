@@ -1,0 +1,18 @@
+{
+  "network": "base",
+  "Diamond Contract Address:": "0xba5502db2aC2cBff189965e991C07109B14eB3f5",
+  "MeToken Factory Contract Address": "0xb31Ae2583d983faa7D8C8304e6A16E414721A0B",
+  "Diamond Cut Facet Contract Address:": "0x2256CF92163748AF1B30bb0a477C68672Fb14432",
+  "Diamond Loupe Facet Contract Address:": "0x5A7861D29088B67Cc03d85c4D89B855201e030EB",
+  "Hub Facet Contract Address": "0x0bb01A58802eC340069C68698726A7cB358195F8",
+  "Foundry Facet Contract Address": "0xA360aeb1C0915E1ebb5F83c533d94ae2EB827Ea8",
+  "Curve Facet": "0x52e813d7738a430188a0515Dfe7b8177240CCb9B",
+  "Fee Facet Contract Address": "0x4431a3AEb5610FB7082d4Cb0D6b100C288C443b8",
+  "MeToken Registry Facet Contract Address": "0xCb44364CCdb30fc79e7852e778bEc20033a69b8B",
+  "Ownership Facet Contract Address": "0xACef1f621DA7a4814696c73EA33F9bD639e15FC9",
+  "SingleAsset Vault Contract Address (Hub 1)": "0xff6Eb470bf0D817B17DFD596F1B2b3110682a40f",
+  "Hub 1 Asset (DAI)": "0x50c5725949A6F0c72E6C4a641F24049A917DB0Cb",
+  "VaultRegistry Contract Address": null,
+  "Migration Registry Contract Address": null,
+  "manifest": "base.json"
+}

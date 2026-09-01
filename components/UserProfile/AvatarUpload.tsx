@@ -7,7 +7,7 @@ import { Progress } from '@/components/ui/progress';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useAvatarUpload } from '@/lib/hooks/metokens/useAvatarUpload';
 import { useCreatorProfile } from '@/lib/hooks/metokens/useCreatorProfile';
-import { useUser } from '@account-kit/react';
+import { useUser } from '@/lib/wallet/react';
 import { useWalletStatus } from '@/lib/hooks/accountkit/useWalletStatus';
 import { Upload, X, User, AlertCircle, CheckCircle } from 'lucide-react';
 import { convertFailingGateway } from '@/lib/utils/image-gateway';

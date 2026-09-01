@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useMemo } from 'react';
-import { useAuthModal } from '@account-kit/react';
+import { useAuthModal } from '@/lib/wallet/react';
 import { useOrbSession } from '@/context/OrbSessionContext';
 import { resumeLensSessionFromOrb } from '@/lib/sdk/lens/orb-session-client';
 import {

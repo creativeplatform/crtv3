@@ -1,59 +1,44 @@
 "use client";
 
-import { useState } from "react";
-import { MembershipHome } from "@/components/memberships/MembershipHome";
-import { MembershipFeatures } from "@/components/memberships/MembershipFeatures";
-
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { useUser, useSmartAccountClient } from "@/lib/wallet/react";
+import useModularAccount from "@/lib/hooks/accountkit/useModularAccount";
+import { Skeleton } from "@/components/ui/skeleton";
+import { LoginWithEthereumButton } from "@/components/auth/LoginWithEthereumButton";
+import { getProfileMembershipUrl } from "@/lib/utils/profile-urls";
 
 export default function MembershipsPage() {
-    const [activeTab, setActiveTab] = useState("home");
+  const router = useRouter();
+  const user = useUser();
+  const { address: scaAddress } = useSmartAccountClient({});
+  const { account } = useModularAccount();
+  const smartAccountAddress = account?.address || scaAddress;
+  const primaryAddress = smartAccountAddress || user?.address;
 
-    const renderContent = () => {
-        switch (activeTab) {
-            case "home":
-                return <MembershipHome setActiveTab={setActiveTab} />;
-            case "features":
-                return <MembershipFeatures setActiveTab={setActiveTab} />;
-            default:
-                return <MembershipHome setActiveTab={setActiveTab} />;
-        }
-    };
+  useEffect(() => {
+    if (primaryAddress) {
+      router.replace(getProfileMembershipUrl(primaryAddress));
+    }
+  }, [primaryAddress, router]);
 
+  if (primaryAddress) {
     return (
-        <div className="container mx-auto px-4 py-8 max-w-md">
-            <header className="mb-8 text-center">
-                <h1 className="text-3xl font-bold tracking-tight mb-2">
-                    Memberships
-                </h1>
-                <p className="text-muted-foreground">
-                    Unlock exclusive content and features.
-                </p>
-            </header>
-
-            {/* Custom Tab Navigation */}
-            <div className="flex p-1 bg-secondary/50 rounded-xl mb-8">
-                {["home", "features"].map((tab) => (
-                    <button
-                        key={tab}
-                        onClick={() => setActiveTab(tab)}
-                        className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${activeTab === tab
-                            ? "bg-background text-foreground shadow-sm"
-                            : "text-muted-foreground hover:text-foreground hover:bg-background/50"
-                            } capitalize`}
-                    >
-                        {tab}
-                    </button>
-                ))}
-            </div>
-
-            {/* Content Area */}
-            <div className="min-h-[400px]">
-                {renderContent()}
-            </div>
-
-            <footer className="mt-12 text-center text-xs text-muted-foreground pb-8">
-                <p>Powered by Creative TV & Unlock Protocol</p>
-            </footer>
-        </div>
+      <div className="container mx-auto px-4 py-16 max-w-md text-center space-y-4">
+        <Skeleton className="h-8 w-48 mx-auto" />
+        <Skeleton className="h-4 w-64 mx-auto" />
+      </div>
     );
+  }
+
+  return (
+    <div className="container mx-auto px-4 py-16 max-w-md text-center space-y-6">
+      <h1 className="text-2xl font-bold">Memberships</h1>
+      <p className="text-muted-foreground">
+        Connect your wallet to view pricing, purchase, and manage your membership
+        from your profile.
+      </p>
+      <LoginWithEthereumButton />
+    </div>
+  );
 }

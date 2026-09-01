@@ -1,8 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { checkBotId } from 'botid/server';
+import { checkBotIdDeep } from '@/lib/middleware/botIdGuard';
 import { meTokenSupabaseService } from '@/lib/sdk/supabase/metokens';
 import { serverLogger } from '@/lib/utils/logger';
 import { rateLimiters } from '@/lib/middleware/rateLimit';
+import { requireWalletAuthFor, WalletAuthError } from '@/lib/auth/require-wallet';
+import { isValidEthAddress } from '@/lib/auth/validate-address';
+import { verifyMeTokenTransaction } from '@/lib/metokens/verifyMeTokenTransaction';
+import { TransactionVerificationError } from '@/lib/chain/verifyTransactionReceipt';
+import { syncMeTokenMarketData } from '@/lib/metokens/syncMeTokenMarketData';
 
 // GET /api/metokens/[address]/transactions - Get MeToken transactions
 export async function GET(
@@ -63,7 +68,7 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ address: string }> }
 ) {
-  const verification = await checkBotId();
+  const verification = await checkBotIdDeep();
   if (verification.isBot) {
     return NextResponse.json({ error: 'Access denied' }, { status: 403 });
   }
@@ -94,6 +99,13 @@ export async function POST(
       );
     }
 
+    if (!isValidEthAddress(address)) {
+      return NextResponse.json(
+        { error: 'Invalid MeToken address format' },
+        { status: 400 }
+      );
+    }
+
     const {
       user_address,
       transaction_type,
@@ -106,20 +118,49 @@ export async function POST(
     } = body;
 
     // Validate required fields
-    if (!user_address || !transaction_type || amount === undefined) {
+    if (!user_address || !transaction_type || amount === undefined || !transaction_hash) {
       const missingFields = [];
       if (!user_address) missingFields.push('user_address');
       if (!transaction_type) missingFields.push('transaction_type');
       if (amount === undefined) missingFields.push('amount');
+      if (!transaction_hash) missingFields.push('transaction_hash');
 
       return NextResponse.json(
         {
           error: 'Missing required fields',
           missingFields,
-          hint: 'All of the following fields are required: user_address, transaction_type, amount'
+          hint: 'All of the following fields are required: user_address, transaction_type, amount, transaction_hash'
         },
         { status: 400 }
       );
+    }
+
+    const normalizedUserAddress = user_address.trim().toLowerCase();
+
+    if (!isValidEthAddress(normalizedUserAddress)) {
+      return NextResponse.json(
+        {
+          error: 'Invalid user_address format',
+          details: 'user_address must be a valid Ethereum address (0x followed by 40 hex characters)'
+        },
+        { status: 400 }
+      );
+    }
+
+    if (!/^0x[a-fA-F0-9]{64}$/.test(String(transaction_hash).trim())) {
+      return NextResponse.json(
+        { error: 'Invalid transaction_hash format' },
+        { status: 400 }
+      );
+    }
+
+    try {
+      await requireWalletAuthFor(request, normalizedUserAddress);
+    } catch (authErr) {
+      if (authErr instanceof WalletAuthError) {
+        return NextResponse.json({ error: authErr.message }, { status: authErr.status });
+      }
+      throw authErr;
     }
 
     // Validate transaction_type is valid
@@ -147,18 +188,6 @@ export async function POST(
       );
     }
 
-    // Validate user_address format
-    const addressRegex = /^0x[a-fA-F0-9]{40}$/;
-    if (!addressRegex.test(user_address)) {
-      return NextResponse.json(
-        {
-          error: 'Invalid user_address format',
-          details: 'user_address must be a valid Ethereum address (0x followed by 40 hex characters)'
-        },
-        { status: 400 }
-      );
-    }
-
     // Get the MeToken to get its ID
     const meToken = await meTokenSupabaseService.getMeTokenByAddress(address);
     if (!meToken) {
@@ -168,19 +197,48 @@ export async function POST(
       );
     }
 
+    let verified;
+    try {
+      verified = await verifyMeTokenTransaction({
+        meTokenAddress: address,
+        userAddress: normalizedUserAddress,
+        transactionHash: transaction_hash,
+        transactionType: transaction_type,
+        claimedAmount: amount,
+      });
+    } catch (verifyErr) {
+      if (verifyErr instanceof TransactionVerificationError) {
+        return NextResponse.json(
+          { error: verifyErr.message },
+          { status: 400 },
+        );
+      }
+      throw verifyErr;
+    }
+
     const transactionData = {
       metoken_id: meToken.id,
-      user_address,
+      user_address: normalizedUserAddress,
       transaction_type,
-      amount,
+      amount: verified.amount,
       collateral_amount,
-      transaction_hash,
-      block_number,
+      transaction_hash: verified.transactionHash,
+      block_number: Number(verified.blockNumber),
       video_id,
       playback_id,
     };
 
     const result = await meTokenSupabaseService.recordTransaction(transactionData);
+
+    // Keep TVL/supply in sync after trades so market stats and charts update
+    const tradeTypes = ['mint', 'burn', 'buy', 'sell'];
+    if (tradeTypes.includes(transaction_type)) {
+      try {
+        await syncMeTokenMarketData(address);
+      } catch (syncErr) {
+        serverLogger.warn('Post-trade market sync failed (non-critical):', syncErr);
+      }
+    }
 
     return NextResponse.json({ data: result }, { status: 201 });
   } catch (error) {

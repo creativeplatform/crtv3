@@ -6,6 +6,8 @@ import {
   type WalletAuthArgs,
 } from "../lib/auth/require-wallet";
 
+import { TokenSymbol } from "@/lib/hooks/video/useVideoTip";
+
 export interface StoredChatMessage {
   stream_id: string;
   message_id: string;
@@ -15,7 +17,7 @@ export interface StoredChatMessage {
   message_type: "text" | "tip";
   tip_data?: {
     amount: string;
-    token: "ETH" | "USDC" | "DAI";
+    token: TokenSymbol;
     txHash: string;
   } | null;
 }

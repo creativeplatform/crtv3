@@ -247,8 +247,8 @@ export async function getCreatorCollectionAddress(
       .from("creator_collections")
       .select("collection_address")
       .eq("creator_id", creatorAddress)
-      .single();
-    return data?.collection_address as Address | null;
+      .maybeSingle();
+    return (data?.collection_address as Address) ?? null;
   }
 
   try {
@@ -274,8 +274,8 @@ export async function getCreatorCollectionAddress(
       .from("creator_collections")
       .select("collection_address")
       .eq("creator_id", creatorAddress)
-      .single();
-    return data?.collection_address as Address | null;
+      .maybeSingle();
+    return (data?.collection_address as Address) ?? null;
   }
 }
 

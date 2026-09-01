@@ -10,7 +10,7 @@ import {
 import { Slash } from "lucide-react";
 import Link from "next/link";
 import { Create } from "@/components/vote/Create";
-import { MembershipGuard } from "@/components/auth/MembershipGuard";
+import { CampaignCreateGuard } from "@/components/vote/CampaignCreateGuard";
 
 const CreateVotePage = () => {
   return (
@@ -45,9 +45,9 @@ const CreateVotePage = () => {
           </BreadcrumbList>
         </Breadcrumb>
       </div>
-      <MembershipGuard>
+      <CampaignCreateGuard>
         <Create />
-      </MembershipGuard>
+      </CampaignCreateGuard>
     </div>
   );
 };

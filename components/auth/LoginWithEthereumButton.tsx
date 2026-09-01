@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useAuthModal, useUser } from "@account-kit/react";
+import { useAuthModal, useUser } from "@/lib/wallet/react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 

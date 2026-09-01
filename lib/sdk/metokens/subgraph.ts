@@ -39,6 +39,25 @@ export interface SubscribeEvent {
   assetsDeposited: string;
 }
 
+export interface IndexedMeTokenBalance {
+  id: string;
+  user: string;
+  meToken: string;
+  balance: string;
+  updatedAt: string;
+}
+
+export interface IndexedHub {
+  id: string;
+  owner: string;
+  asset: string;
+  vault: string;
+  refundRatio: string;
+  baseY: string;
+  reserveWeight: string;
+  active: boolean;
+}
+
 export interface MeTokenWithHub extends MeToken {
   hub: Hub;
 }
@@ -90,12 +109,16 @@ const GET_ALL_METOKEN_ADDRESSES = gql`
 
 // GraphQL query to get hub information
 const GET_HUB = gql`
-  query GetHub($id: String!) {
+  query GetHub($id: ID!) {
     hub(id: $id) {
       id
       asset
       vault
       owner
+      active
+      refundRatio
+      baseY
+      reserveWeight
     }
   }
 `;
@@ -126,6 +149,41 @@ const GET_RECENT_BURNS = gql`
       meTokensBurned
       assetsReturned
       timestamp_
+    }
+  }
+`;
+
+// GraphQL query to get user MeToken balances (indexed from Mint/Burn/Transfer)
+const GET_METOKEN_BALANCES_BY_USER = gql`
+  query GetMeTokenBalancesByUser($user: Bytes!, $first: Int = 100, $skip: Int = 0) {
+    meTokenBalances(
+      where: { user: $user, balance_gt: 0 }
+      first: $first
+      skip: $skip
+      orderBy: balance
+      orderDirection: desc
+    ) {
+      id
+      user
+      meToken
+      balance
+      updatedAt
+    }
+  }
+`;
+
+// GraphQL query to get active collateral hubs
+const GET_ACTIVE_HUBS = gql`
+  query GetActiveHubs($first: Int = 20) {
+    hubs(where: { active: true }, first: $first, orderBy: id, orderDirection: asc) {
+      id
+      owner
+      asset
+      vault
+      refundRatio
+      baseY
+      reserveWeight
+      active
     }
   }
 `;
@@ -401,6 +459,48 @@ export class MeTokensSubgraphClient {
     } catch (error) {
       logger.error('Failed to fetch MeToken with Hub:', error);
       return null; // Return null instead of throwing to allow fallback to other data sources
+    }
+  }
+
+  async getMeTokenBalancesByUser(
+    userAddress: string,
+    first: number = 100,
+    skip: number = 0
+  ): Promise<IndexedMeTokenBalance[]> {
+    if (typeof window === 'undefined') {
+      return [];
+    }
+
+    try {
+      const data = await request(this.getEndpoint(), GET_METOKEN_BALANCES_BY_USER, {
+        user: userAddress.toLowerCase(),
+        first,
+        skip,
+      }) as { meTokenBalances?: IndexedMeTokenBalance[] };
+
+      return data.meTokenBalances ?? [];
+    } catch (error: any) {
+      logger.error('Failed to fetch MeToken balances by user:', error);
+      if (this.isIndexingError(error)) {
+        return [];
+      }
+      throw new Error('Failed to fetch MeToken balances from subgraph');
+    }
+  }
+
+  async getActiveHubs(first: number = 20): Promise<IndexedHub[]> {
+    if (typeof window === 'undefined') {
+      return [];
+    }
+
+    try {
+      const data = await request(this.getEndpoint(), GET_ACTIVE_HUBS, { first }) as {
+        hubs?: IndexedHub[];
+      };
+      return data.hubs ?? [];
+    } catch (error: any) {
+      logger.warn('Failed to fetch active hubs from subgraph:', error);
+      return [];
     }
   }
 

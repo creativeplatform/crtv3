@@ -74,19 +74,22 @@ interface ConnectionStatus {
   agentSnapshotCid?: string | null;
 }
 
-const PINATA_MARKETPLACE_URL = "https://agents.pinata.cloud/marketplace";
+/** Org template page (template ID tmernpdi) — not a deployed agent URL. */
+const PINATA_TWIN_TEMPLATE_URL =
+  "https://agents.pinata.cloud/org_3Ar9vPhBBqDLVh1GlNO9kFTsGlS/templates/tmernpdi";
 const PINATA_API_KEYS_URL = "https://app.pinata.cloud/developers/api-keys";
 
 /**
  * Profile-page section for connecting an external Creative AI Digital Twin
- * deployed on Pinata. Two paths:
+ * deployed on Pinata (bring-your-own). Two paths:
  *
- *  1) Onboarding: shows the live template card, a Deploy CTA pointing at the
- *     Pinata marketplace, and a checklist of secrets the creator will need.
- *  2) Connect: agent ID + Pinata JWT one-shot exchange. The JWT is sent once
- *     to /api/twin/connect, traded for the per-agent gateway token + URLs,
- *     then forgotten. After that the proxy at /api/twin/chat uses the stored
- *     token directly, with no further creator action needed.
+ *  1) Onboarding: shows the live *template* card, a Deploy CTA pointing at
+ *     the org template page (purchase/deploy on Pinata), and a checklist of
+ *     secrets the creator will need.
+ *  2) Connect: the creator's *agent* ID + Pinata JWT one-shot exchange. The
+ *     JWT is sent once to /api/twin/connect, traded for the per-agent gateway
+ *     token + URLs, then forgotten. After that the proxy at /api/twin/chat
+ *     uses the stored token directly, with no further creator action needed.
  *
  * The avatar GLB URL is independent of the Pinata connection — a creator can
  * upload a custom GLB without connecting an agent (chat panel just won't
@@ -107,6 +110,7 @@ export function DigitalTwinSection({
 
   const [template, setTemplate] = useState<TemplateState | null>(null);
   const [templateError, setTemplateError] = useState<string | null>(null);
+  const [deployUrl, setDeployUrl] = useState(PINATA_TWIN_TEMPLATE_URL);
 
   const [status, setStatus] = useState<ConnectionStatus | null>(null);
   const [statusLoading, setStatusLoading] = useState(true);
@@ -153,7 +157,7 @@ export function DigitalTwinSection({
     };
   }, [ownerAddress, initialProfile]);
 
-  // Live template metadata from Pinata.
+  // Live template metadata from Pinata (template ID, not agent ID).
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -161,6 +165,9 @@ export function DigitalTwinSection({
         const res = await fetch("/api/twin/template");
         const json = await res.json();
         if (cancelled) return;
+        if (typeof json.deployUrl === "string" && json.deployUrl) {
+          setDeployUrl(json.deployUrl);
+        }
         if (!json.success) {
           setTemplateError(json.error || "Template fetch failed");
           return;
@@ -345,8 +352,8 @@ export function DigitalTwinSection({
           Creative AI Digital Twin
         </CardTitle>
         <CardDescription>
-          Deploy your own AI agent on Pinata, then connect it here so viewers
-          can chat with your twin during streams.
+          Purchase and deploy your own AI agent on Pinata, then connect it here
+          so viewers can chat with your twin during streams.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -378,7 +385,6 @@ export function DigitalTwinSection({
               />
             </div>
 
-            {/* Marketplace template card */}
             {twinEnabled && (
               <div className="rounded-md border p-3 bg-muted/30">
                 {template ? (
@@ -434,19 +440,31 @@ export function DigitalTwinSection({
 
                     {!status?.connected && (
                       <a
-                        href={PINATA_MARKETPLACE_URL}
+                        href={deployUrl}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="inline-flex items-center gap-1.5 text-xs text-primary hover:underline"
                       >
-                        <ExternalLink className="h-3 w-3" /> Deploy this template on Pinata
+                        <ExternalLink className="h-3 w-3" /> Get this template on Pinata
                       </a>
                     )}
                   </div>
                 ) : templateError ? (
-                  <p className="text-xs text-muted-foreground">
-                    Couldn't load template metadata: {templateError}
-                  </p>
+                  <div className="space-y-2">
+                    <p className="text-xs text-muted-foreground">
+                      Couldn't load template metadata: {templateError}
+                    </p>
+                    {!status?.connected && (
+                      <a
+                        href={deployUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 text-xs text-primary hover:underline"
+                      >
+                        <ExternalLink className="h-3 w-3" /> Get this template on Pinata
+                      </a>
+                    )}
+                  </div>
                 ) : (
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
                     <Loader2 className="h-3 w-3 animate-spin" /> Loading template…
@@ -455,7 +473,6 @@ export function DigitalTwinSection({
               </div>
             )}
 
-            {/* Connection state */}
             {twinEnabled && (
               <div className="rounded-md border p-3">
                 {statusLoading ? (
@@ -504,6 +521,7 @@ export function DigitalTwinSection({
                         variant="outline"
                         size="sm"
                         onClick={() => setDisconnectOpen(true)}
+                        disabled={!isOwner}
                       >
                         Disconnect
                       </Button>
@@ -521,10 +539,10 @@ export function DigitalTwinSection({
                   <form onSubmit={handleConnect} className="space-y-2">
                     <div className="flex items-center gap-1.5">
                       <Plug className="h-4 w-4" />
-                      <p className="text-sm font-semibold">Connect your deployed agent</p>
+                      <p className="text-sm font-semibold">Connect your Pinata agent</p>
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      After deploying on Pinata, find your agent's{" "}
+                      After purchasing and deploying on Pinata, find your agent's{" "}
                       <strong>Agent ID</strong> in the agent header (e.g.{" "}
                       <code className="text-[10px]">xljs9fuy</code>) and create a Pinata
                       JWT at{" "}

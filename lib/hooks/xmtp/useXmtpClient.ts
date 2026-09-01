@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Client } from "@xmtp/browser-sdk";
-import { useUser, useSignMessage, useSmartAccountClient } from "@account-kit/react";
+import { useUser, useSignMessage, useSmartAccountClient } from "@/lib/wallet/react";
 import { createXmtpSigner } from "@/lib/utils/xmtp/signer";
 import useModularAccount from "@/lib/hooks/accountkit/useModularAccount";
 import { logger } from '@/lib/utils/logger';

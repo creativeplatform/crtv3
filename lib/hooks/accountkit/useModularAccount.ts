@@ -1,4 +1,4 @@
-import { useSmartAccountClient, useUser, useChain } from "@account-kit/react";
+import { useSmartAccountClient, useUser, useChain } from "@/lib/wallet/react";
 import { base } from "@account-kit/infra";
 import { modularAccountFactoryAddresses } from "@/lib/utils/modularAccount";
 import { Chain } from "viem";
@@ -36,9 +36,6 @@ export default function useModularAccount(props?: UseModularAccountProps) {
     error,
   } = useSmartAccountClient({
     type: "ModularAccountV2",
-    accountParams: {
-      mode: "default",
-    },
   });
 
   /**

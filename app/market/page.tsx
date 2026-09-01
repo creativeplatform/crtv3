@@ -104,12 +104,8 @@ export default function MarketPage() {
       {/* Quick Trade Dialog */}
       <QuickTradeDialog
         open={quickTradeOpen}
-        onOpenChange={(open) => {
-          setQuickTradeOpen(open);
-          if (!open) {
-            handleTradeComplete();
-          }
-        }}
+        onOpenChange={setQuickTradeOpen}
+        onTradeComplete={handleTradeComplete}
         token={selectedToken}
       />
     </div>

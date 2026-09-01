@@ -44,6 +44,16 @@ export function MarketStats({ stats, loading }: MarketStatsProps) {
     return `$${value.toFixed(2)}`;
   };
 
+  const formatGainerChange = (change?: number) => {
+    const value = Math.max(change ?? 0, 0);
+    return value > 0 ? `+${value.toFixed(2)}%` : '0.00%';
+  };
+
+  const formatLoserChange = (change?: number) => {
+    const value = Math.min(change ?? 0, 0);
+    return value < 0 ? `${value.toFixed(2)}%` : '0.00%';
+  };
+
   return (
     <div className="space-y-6">
       {/* Main Stats Grid */}
@@ -139,7 +149,7 @@ export function MarketStats({ stats, loading }: MarketStatsProps) {
                     </div>
                     <div className="text-right flex-shrink-0">
                       <p className="text-sm font-semibold text-green-600 dark:text-green-400">
-                        +{(token.price_change_24h || 0).toFixed(2)}%
+                        {formatGainerChange(token.price_change_24h)}
                       </p>
                       <p className="text-xs text-muted-foreground">
                         ${token.price.toFixed(4)}
@@ -196,7 +206,7 @@ export function MarketStats({ stats, loading }: MarketStatsProps) {
                     </div>
                     <div className="text-right flex-shrink-0">
                       <p className="text-sm font-semibold text-red-600 dark:text-red-400">
-                        {(token.price_change_24h || 0).toFixed(2)}%
+                        {formatLoserChange(token.price_change_24h)}
                       </p>
                       <p className="text-xs text-muted-foreground">
                         ${token.price.toFixed(4)}

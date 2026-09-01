@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { checkBotId } from 'botid/server';
+import { checkBotIdDeep } from '@/lib/middleware/botIdGuard';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createServiceClient } from '@/lib/sdk/supabase/service';
 import { fetchAllViews } from '@/app/api/livepeer/views';
@@ -119,7 +119,7 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ playbackId: string }> },
 ) {
-  const verification = await checkBotId();
+  const verification = await checkBotIdDeep();
   if (verification.isBot) {
     return NextResponse.json({ error: 'Access denied' }, { status: 403 });
   }

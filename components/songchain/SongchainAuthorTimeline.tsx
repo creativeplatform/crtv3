@@ -14,6 +14,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { SongchainPostCard } from "@/components/songchain/SongchainPostCard";
+import { normalizeFeedPosts } from "@/lib/songchain/post-utils";
 
 type SongchainAuthorTimelineProps = {
   authorAddress: string;
@@ -43,7 +44,7 @@ export function SongchainAuthorTimeline({
         },
       });
       if (result.isErr()) throw new Error(result.error.message);
-      setPosts([...result.value.items]);
+      setPosts(normalizeFeedPosts(result.value.items));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load timeline");
       setPosts([]);
@@ -73,7 +74,12 @@ export function SongchainAuthorTimeline({
         )}
         <div className="space-y-4">
           {posts.map((post) => (
-            <SongchainPostCard key={post.id} post={post} compact />
+            <SongchainPostCard
+              key={post.id}
+              post={post}
+              compact
+              onReactionChange={load}
+            />
           ))}
         </div>
         {posts.length > 0 && (

@@ -7,6 +7,7 @@ vi.mock("@/lib/middleware/rateLimit", () => ({
   rateLimiters: {
     apiKey: vi.fn(async () => null),
     generous: vi.fn(async () => null),
+    playbackInfo: vi.fn(async () => null),
   },
 }));
 

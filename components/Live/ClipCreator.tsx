@@ -1,10 +1,13 @@
 "use client";
 import { useCallback, useState } from "react";
-import { useUser } from "@account-kit/react";
+import { useUser } from "@/lib/wallet/react";
+import { useWalletAuth } from "@/lib/auth/useWalletAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Loader2, Scissors, Settings2 } from "lucide-react";
+import { Loader2, Scissors, Settings2, Share2 } from "lucide-react";
+import { SongchainShareClipDialog } from "@/components/songchain/SongchainShareClipDialog";
+import type { ClipLensShareInput } from "@/lib/songchain/clip-to-video-asset";
 
 interface ClipCreatorProps {
   playbackId: string;
@@ -21,6 +24,8 @@ interface ClipState {
   parentStoryIpId: string | null;
   parentCommercialRevShare: number | null;
   clipVideoAssetId?: number;
+  title: string;
+  thumbnailUrl?: string | null;
 }
 
 export function ClipCreator({
@@ -31,6 +36,7 @@ export function ClipCreator({
   parentCommercialRevShare,
 }: ClipCreatorProps) {
   const user = useUser();
+  const { getAuthHeaders } = useWalletAuth();
   const clipperAddress = user?.address;
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -41,6 +47,9 @@ export function ClipCreator({
   const [customEnd, setCustomEnd] = useState("");
   const [isMinting, setIsMinting] = useState(false);
   const [mintResult, setMintResult] = useState<{ ipId: string; txHash: string } | null>(null);
+  const [songchainShareOpen, setSongchainShareOpen] = useState(false);
+  const songchainFeedId =
+    process.env.NEXT_PUBLIC_SONGCHAIN_FEED_ID?.trim() || null;
 
   const runClip = useCallback(
     async (startMs: number, endMs: number) => {
@@ -88,6 +97,11 @@ export function ClipCreator({
         });
         const persist = await persistRes.json().catch(() => ({}));
 
+        const clipTitle =
+          name.trim() ||
+          persist?.clip?.title ||
+          `Clip of ${playbackId.slice(0, 8)}`;
+
         setClip({
           playbackUrl: data.playbackUrl,
           assetId: data.assetId,
@@ -96,6 +110,9 @@ export function ClipCreator({
           parentCommercialRevShare:
             data.parentCommercialRevShare ?? parentCommercialRevShare ?? null,
           clipVideoAssetId: persist?.clip?.id,
+          title: clipTitle,
+          thumbnailUrl:
+            persist?.clip?.thumbnail_url ?? persist?.clip?.thumbnailUri ?? null,
         });
       } catch (e: any) {
         setError(e?.message || "Failed to create clip");
@@ -126,9 +143,10 @@ export function ClipCreator({
     setIsMinting(true);
     setError(null);
     try {
+      const authHeaders = await getAuthHeaders();
       const res = await fetch("/api/story/mint-derivative", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders },
         body: JSON.stringify({
           clipVideoAssetId: clip.clipVideoAssetId,
           recipient: clipperAddress,
@@ -174,6 +192,18 @@ export function ClipCreator({
   }
 
   const canMint = !!clip?.parentStoryIpId && !!clip?.clipVideoAssetId;
+
+  const clipSharePayload: ClipLensShareInput | null =
+    clip && clipperAddress
+      ? {
+          assetId: clip.assetId,
+          playbackId: clip.newPlaybackId,
+          title: clip.title,
+          thumbnailUrl: clip.thumbnailUrl,
+          clipperAddress,
+          clipVideoAssetId: clip.clipVideoAssetId,
+        }
+      : null;
 
   return (
     <div className="w-full max-w-3xl mx-auto my-4 px-2 space-y-3">
@@ -256,6 +286,15 @@ export function ClipCreator({
             />
             <div className="flex flex-wrap items-center gap-2">
               <Button
+                type="button"
+                variant="secondary"
+                disabled={!clipSharePayload}
+                onClick={() => setSongchainShareOpen(true)}
+              >
+                <Share2 className="h-4 w-4 mr-1.5" />
+                Share to Songchain
+              </Button>
+              <Button
                 onClick={handleMint}
                 disabled={!canMint || isMinting}
                 title={
@@ -291,6 +330,15 @@ export function ClipCreator({
             )}
           </AlertDescription>
         </Alert>
+      )}
+
+      {clipSharePayload && (
+        <SongchainShareClipDialog
+          open={songchainShareOpen}
+          onOpenChange={setSongchainShareOpen}
+          clip={clipSharePayload}
+          feedId={songchainFeedId}
+        />
       )}
     </div>
   );

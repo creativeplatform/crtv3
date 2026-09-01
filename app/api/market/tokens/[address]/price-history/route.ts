@@ -4,8 +4,10 @@ import { formatEther, createPublicClient, http, fallback, parseAbi } from 'viem'
 import { baseMainnet } from '@/lib/utils/chains/base';
 import { METOKEN_ABI } from '@/lib/contracts/MeToken';
 import { serverLogger } from '@/lib/utils/logger';
+import { METOKEN_DIAMOND_BASE } from '@/lib/contracts/metokens/deployments';
+import { calculateMeTokenVaultTvlUsd } from '@/lib/utils/hubAssetUtils';
 
-const DIAMOND = '0xba5502db2aC2cBff189965e991C07109B14eB3f5';
+const DIAMOND = METOKEN_DIAMOND_BASE;
 
 export interface PriceHistoryPoint {
   timestamp: number;
@@ -38,7 +40,7 @@ export async function GET(
     // Get MeToken info
     const { data: meToken, error: meTokenError } = await supabase
       .from('metokens')
-      .select('id, address, total_supply, tvl')
+      .select('id, address, total_supply, tvl, hub_id')
       .eq('address', address.toLowerCase())
       .single();
 
@@ -141,7 +143,8 @@ export async function GET(
           // Based on useMeTokensSupabase, it seems to return an object property access compatible result
           const balancePooled = BigInt(infoData.balancePooled || infoData[2] || 0);
           const balanceLocked = BigInt(infoData.balanceLocked || infoData[3] || 0);
-          currentTvl = parseFloat(formatEther(balancePooled + balanceLocked));
+          const hubId = Number(infoData.hubId ?? infoData[1] ?? meToken.hub_id ?? 0);
+          currentTvl = calculateMeTokenVaultTvlUsd(balancePooled, balanceLocked, hubId);
         }
 
         serverLogger.debug('Fetched live data:', {

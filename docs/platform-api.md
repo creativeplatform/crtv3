@@ -126,3 +126,5 @@ Response:
   "fallbackUrl": "https://tv.creativeplatform.xyz/discover/{uuid}"
 }
 ```
+
+`requiresMetoken` applies to **VOD** assets (`video_assets`). Live stream gating uses the same MeToken semantics on the `streams` table — see [Live stream MeToken gate](./live-stream-metoken-gate.md).

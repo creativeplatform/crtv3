@@ -6,9 +6,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/components/ui/use-toast';
 import { useMeTokensSupabase, MeTokenData } from '@/lib/hooks/metokens/useMeTokensSupabase';
-import { useUser } from '@account-kit/react';
+import { useUser } from '@/lib/wallet/react';
 import { RobustMeTokenCreator } from './RobustMeTokenCreator';
 import { MeTokenTrading } from './MeTokenTrading';
 import { MeTokenInfo } from './MeTokenInfo';
@@ -345,26 +346,46 @@ export function MeTokensSection({ walletAddress }: MeTokensSectionProps) {
 
       {userMeToken ? (
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-5">
-            <TabsTrigger value="overview" className="flex items-center gap-2">
+          {/* Mobile: Select dropdown */}
+          <div className="sm:hidden mb-4">
+            <Select value={activeTab} onValueChange={setActiveTab}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select a tab" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="overview">Overview</SelectItem>
+                <SelectItem value="profile">Profile</SelectItem>
+                <SelectItem value="trading">Trading</SelectItem>
+                <SelectItem value="info">Details</SelectItem>
+                <SelectItem value="history">History</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          {/* Desktop: Tab grid */}
+          <TabsList className="hidden sm:grid h-auto w-full grid-cols-3 md:grid-cols-5 gap-1">
+            <TabsTrigger value="overview" className="flex items-center justify-center gap-2">
               <Info className="h-4 w-4" />
-              Overview
+              <span className="hidden sm:inline">Overview</span>
+              <span className="sm:hidden">View</span>
             </TabsTrigger>
-            <TabsTrigger value="profile" className="flex items-center gap-2">
+            <TabsTrigger value="profile" className="flex items-center justify-center gap-2">
               <User className="h-4 w-4" />
-              Profile
+              <span>Profile</span>
             </TabsTrigger>
-            <TabsTrigger value="trading" className="flex items-center gap-2">
+            <TabsTrigger value="trading" className="flex items-center justify-center gap-2">
               <TrendingUp className="h-4 w-4" />
-              Trading
+              <span className="hidden sm:inline">Trading</span>
+              <span className="sm:hidden">Trade</span>
             </TabsTrigger>
-            <TabsTrigger value="info" className="flex items-center gap-2">
+            <TabsTrigger value="info" className="flex items-center justify-center gap-2">
               <Info className="h-4 w-4" />
-              Details
+              <span className="hidden sm:inline">Details</span>
+              <span className="sm:hidden">Info</span>
             </TabsTrigger>
-            <TabsTrigger value="history" className="flex items-center gap-2">
+            <TabsTrigger value="history" className="flex items-center justify-center gap-2">
               <History className="h-4 w-4" />
-              History
+              <span className="hidden sm:inline">History</span>
+              <span className="sm:hidden">Log</span>
             </TabsTrigger>
           </TabsList>
 
@@ -465,12 +486,12 @@ export function MeTokensSection({ walletAddress }: MeTokensSectionProps) {
         </Tabs>
       ) : (
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="overview" className="flex items-center gap-2">
+          <TabsList className="grid h-auto w-full grid-cols-2 gap-1">
+            <TabsTrigger value="overview" className="flex items-center justify-center gap-2">
               <Info className="h-4 w-4" />
               Overview
             </TabsTrigger>
-            <TabsTrigger value="create" className="flex items-center gap-2">
+            <TabsTrigger value="create" className="flex items-center justify-center gap-2">
               <Plus className="h-4 w-4" />
               Create MeToken
             </TabsTrigger>

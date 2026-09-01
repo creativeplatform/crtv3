@@ -1,11 +1,15 @@
 import { type Hex, type Address } from "viem";
 import { serverLogger } from "@/lib/utils/logger";
+import { USDS_TOKEN_ADDRESSES } from "@/lib/contracts/USDSToken";
+import { GHO_TOKEN_ADDRESSES } from "@/lib/contracts/GHOToken";
 
 // Base chain token addresses
 export const BASE_TOKENS = {
   ETH: "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEee", // Native ETH
   USDC: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913", // USDC on Base
   DAI: "0x50c5725949a6f0c72e6c4a641f24049a917db0cb", // DAI on Base
+  USDS: USDS_TOKEN_ADDRESSES.base,
+  GHO: GHO_TOKEN_ADDRESSES.base,
 } as const;
 
 export type TokenSymbol = keyof typeof BASE_TOKENS;
@@ -15,7 +19,20 @@ export const TOKEN_INFO = {
   ETH: { decimals: 18, symbol: "ETH" },
   USDC: { decimals: 6, symbol: "USDC" },
   DAI: { decimals: 18, symbol: "DAI" },
+  USDS: { decimals: 18, symbol: "USDS" },
+  GHO: { decimals: 18, symbol: "GHO" },
 } as const;
+
+/** All tokens available in the wallet swap UI. */
+export const SWAP_UI_TOKENS: TokenSymbol[] = ['ETH', 'USDC', 'DAI', 'USDS', 'GHO'];
+
+export function emptyTokenBalances(): Record<TokenSymbol, string> {
+  return { ETH: '0', USDC: '0', DAI: '0', USDS: '0', GHO: '0' };
+}
+
+export function emptyTokenPrices(): Record<TokenSymbol, number> {
+  return { ETH: 0, USDC: 0, DAI: 0, USDS: 0, GHO: 0 };
+}
 
 interface SwapQuoteRequest {
   from: Address;
@@ -369,13 +386,13 @@ Original error: ${result.error.message}`;
   }
 
   /**
-   * Convert hex amount to readable format
+   * Convert SDK bigint or hex amount to readable format
    */
-  static parseAmount(hexAmount: Hex, token: TokenSymbol): string {
+  static parseAmount(amount: bigint | Hex | string, token: TokenSymbol): string {
     const decimals = TOKEN_INFO[token].decimals;
-    const amountBigInt = BigInt(hexAmount);
-    const amount = Number(amountBigInt) / Math.pow(10, decimals);
-    return amount.toFixed(6);
+    const amountBigInt = typeof amount === "bigint" ? amount : BigInt(amount);
+    const human = Number(amountBigInt) / 10 ** decimals;
+    return human.toFixed(6);
   }
 }
 

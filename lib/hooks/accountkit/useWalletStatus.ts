@@ -1,4 +1,4 @@
-import { useUser } from "@account-kit/react";
+import { useUser } from "@/lib/wallet/react";
 import useModularAccount from "./useModularAccount";
 import { isWalletConnected } from "@/lib/utils/wallet";
 

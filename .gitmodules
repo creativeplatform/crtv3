@@ -1,0 +1,13 @@
+[submodule "packages/metokens/core"]
+	path = packages/metokens/core
+	url = https://github.com/sirgawain0x/meTokens-core
+[submodule "packages/metokens/erc20"]
+	path = packages/metokens/erc20
+	url = https://github.com/sirgawain0x/meTokens-erc20
+[submodule "packages/metokens/vesting"]
+	path = packages/metokens/vesting
+	url = https://github.com/sirgawain0x/meTokens-vesting
+	branch = v2
+[submodule "packages/metokens/bancor"]
+	path = packages/metokens/bancor
+	url = https://github.com/sirgawain0x/bancor-zero-formula

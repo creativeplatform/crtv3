@@ -134,3 +134,17 @@ export interface UpdateCreatorProfileData {
   lens_handle?: string | null;
   lens_avatar_uri?: string | null;
 }
+
+// Types for Song Cup submissions
+export interface SongCupSubmissionRow {
+  id: string;
+  wallet_address: string;
+  grove_url: string;
+  grove_hash?: string | null;
+  title?: string | null;
+  description?: string | null;
+  post_id?: string | null;
+  status: 'pending' | 'approved' | 'rejected';
+  created_at: string;
+  updated_at?: string | null;
+}

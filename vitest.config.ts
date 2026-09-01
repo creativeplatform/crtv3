@@ -6,7 +6,13 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     include: ['**/*.test.ts', '**/*.test.tsx'],
-    exclude: ['node_modules', 'dist', '.next'],
+    exclude: [
+      'node_modules',
+      'dist',
+      '.next',
+      'packages/metokens/**',
+      'subgraphs/**',
+    ],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],

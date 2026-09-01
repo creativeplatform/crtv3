@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { checkBotId } from 'botid/server';
+import { checkBotIdDeep } from '@/lib/middleware/botIdGuard';
 import { createClient } from '@/lib/sdk/supabase/server';
 import { MeTokenCreationParams } from '@/lib/sdk/alchemy/metoken-service';
 import { serverLogger } from '@/lib/utils/logger';
 import { rateLimiters } from '@/lib/middleware/rateLimit';
+import { METOKEN_DIAMOND_BASE } from '@/lib/contracts/metokens/deployments';
 
 // Force dynamic route to avoid build-time evaluation
 export const dynamic = 'force-dynamic';
@@ -14,7 +15,7 @@ async function getAllchemyService() {
 }
 
 export async function POST(request: NextRequest) {
-  const verification = await checkBotId();
+  const verification = await checkBotIdDeep();
   if (verification.isBot) {
     return NextResponse.json({ error: 'Access denied' }, { status: 403 });
   }
@@ -328,7 +329,7 @@ async function waitForMeTokenCreation(transactionHash: string): Promise<string |
     serverLogger.debug('Transaction confirmed, extracting MeToken address...');
     
     // Parse logs to find the Subscribe event
-    const diamondAddress = '0xba5502db2aC2cBff189965e991C07109B14eB3f5';
+    const diamondAddress = METOKEN_DIAMOND_BASE;
     
     for (const log of receipt.logs) {
       if (log.address.toLowerCase() === diamondAddress.toLowerCase()) {

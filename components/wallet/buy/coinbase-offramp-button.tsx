@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { useSmartAccountClient, useUser } from "@account-kit/react";
+import { useSmartAccountClient, useUser } from "@/lib/wallet/react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertCircle } from "lucide-react";
 import { logger } from '@/lib/utils/logger';

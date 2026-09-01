@@ -12,7 +12,9 @@ export function createMockSmartAccountClient() {
   const mockClient = {
     sendUserOperation: vi.fn(),
     waitForUserOperationTransaction: vi.fn(),
+    sendTransaction: vi.fn(),
     getAddress: vi.fn(),
+    getAddresses: vi.fn(() => Promise.resolve([testData.creatorAddress])),
   };
 
   return mockClient;
@@ -22,19 +24,25 @@ export function createMockSmartAccountClient() {
  * Mock Supabase client
  */
 export function createMockSupabaseClient() {
-  const mockClient = {
-    from: vi.fn(() => ({
-      select: vi.fn(() => ({
-        eq: vi.fn(() => ({
-          single: vi.fn(),
-          maybeSingle: vi.fn(),
-        })),
-      })),
-      upsert: vi.fn(),
-      insert: vi.fn(),
-      update: vi.fn(),
-      delete: vi.fn(),
+  const singleMock = vi.fn(() => Promise.resolve({ data: null, error: null }));
+  const maybeSingleMock = vi.fn(() => Promise.resolve({ data: null, error: null }));
+  const eqMock = vi.fn(() => ({
+    single: singleMock,
+    maybeSingle: maybeSingleMock,
+  }));
+
+  const fromMock = {
+    select: vi.fn(() => ({
+      eq: eqMock,
     })),
+    upsert: vi.fn(() => Promise.resolve({ data: null, error: null })),
+    insert: vi.fn(() => Promise.resolve({ data: null, error: null })),
+    update: vi.fn(() => Promise.resolve({ data: null, error: null })),
+    delete: vi.fn(() => Promise.resolve({ data: null, error: null })),
+  };
+
+  const mockClient = {
+    from: vi.fn(() => fromMock),
   };
 
   return mockClient;
@@ -61,7 +69,7 @@ export const testData = {
   factoryAddress: '0x1234567890123456789012345678901234567890' as Address,
   creatorAddress: '0xabcdefabcdefabcdefabcdefabcdefabcdefabcd' as Address,
   platformMinter: '0x9876543210987654321098765432109876543210' as Address,
-  collectionAddress: '0xfedcba0987654321fedcba0987654321fedcba09' as Address,
+  collectionAddress: '0xfEDCBA0987654321FeDcbA0987654321fedCBA09' as Address,
   collectionName: 'Test Collection',
   collectionSymbol: 'TEST',
   metadataURI: 'ipfs://QmTest123456789012345678901234567890123456789012345678901234567890',
@@ -96,21 +104,35 @@ export function createMockTransactionReceipt(collectionAddress: Address) {
 }
 
 /**
- * Helper to mock environment variables
+ * Helper to mock environment variables.
+ *
+ * Call this at the top level of a `describe` block (NOT inside `beforeEach`).
+ * It captures a snapshot of the relevant env vars, sets defaults before each
+ * test, and restores them after each test so tests cannot permanently clobber
+ * `process.env` for the rest of the suite.
  */
 export function mockEnvVars(overrides: Record<string, string> = {}) {
-  const originalEnv = process.env;
+  const envKeys = [
+    'NEXT_PUBLIC_CREATOR_IP_FACTORY_ADDRESS',
+    ...Object.keys(overrides),
+  ];
+  const originalValues = new Map<string, string | undefined>();
+
+  for (const key of envKeys) {
+    originalValues.set(key, process.env[key]);
+  }
 
   beforeEach(() => {
-    process.env = {
-      ...originalEnv,
-      NEXT_PUBLIC_CREATOR_IP_FACTORY_ADDRESS: testData.factoryAddress,
-      ...overrides,
-    };
+    process.env.NEXT_PUBLIC_CREATOR_IP_FACTORY_ADDRESS = testData.factoryAddress;
+    for (const [key, value] of Object.entries(overrides)) {
+      process.env[key] = value;
+    }
   });
 
   afterEach(() => {
-    process.env = originalEnv;
+    for (const key of envKeys) {
+      process.env[key] = originalValues.get(key);
+    }
   });
 }
 

@@ -1,6 +1,6 @@
 "use client";
 import { useEffect } from "react";
-import { useUser, useSmartAccountClient } from "@account-kit/react";
+import { useUser, useSmartAccountClient } from "@/lib/wallet/react";
 import { useRouter } from "next/navigation";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -11,7 +11,8 @@ function LiveRedirect() {
   const eoaAddress = user?.address;
 
   useEffect(() => {
-    if (eoaAddress) router.replace(`/live/${eoaAddress || scaAddress}`);
+    const targetAddress = scaAddress || eoaAddress;
+    if (targetAddress) router.replace(`/live/${targetAddress}`);
   }, [eoaAddress, scaAddress, router]);
 
   return (

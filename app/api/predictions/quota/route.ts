@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { checkBotId } from "botid/server";
+import { checkBotIdDeep } from "@/lib/middleware/botIdGuard";
 import { isAddress } from "viem";
 import { rateLimiters } from "@/lib/middleware/rateLimit";
 import { supabaseService } from "@/lib/sdk/supabase/service";
@@ -10,9 +10,10 @@ import {
   PREDICTION_MARKETS_MONTHLY_LIMIT,
 } from "@/lib/predictions/prediction-quota";
 import { unlockService } from "@/lib/sdk/unlock/services";
+import { isPlatformAdmin } from "@/lib/access/platform-admin";
 
 export async function GET(request: NextRequest) {
-  const verification = await checkBotId();
+  const verification = await checkBotIdDeep();
   if (verification.isBot) {
     return NextResponse.json({ error: "Access denied" }, { status: 403 });
   }
@@ -36,6 +37,17 @@ export async function GET(request: NextRequest) {
 
   try {
     const normalized = normalizeCreatorAddress(address);
+
+    if (isPlatformAdmin(normalized)) {
+      return NextResponse.json({
+        unlimited: true,
+        premiumTier: null,
+        usedThisMonth: 0,
+        monthlyLimit: PREDICTION_MARKETS_MONTHLY_LIMIT,
+        remaining: null,
+      });
+    }
+
     const memberships = await unlockService.getAllMemberships(normalized);
     const { unlimited, tier } = getPremiumPredictionAccess(memberships);
 

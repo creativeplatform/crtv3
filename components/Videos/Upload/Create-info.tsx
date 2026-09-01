@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { FormControl, FormLabel } from "@/components/ui/form";
 import { FormEvent, useEffect } from "react";
 import { Form } from "@/components/ui/form";
+import { VIDEO_GENRES } from "@/lib/constants/video-genres";
 
 type TCreateInfoProps = {
   onPressNext: (formData: TVideoMetaForm) => void;
@@ -155,24 +156,11 @@ const CreateInfo = ({ onPressNext }: TCreateInfoProps) => {
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
-                    <SelectItem value="Pop">Pop</SelectItem>
-                    <SelectItem value="Rock">Rock</SelectItem>
-                    <SelectItem value="Hip-Hop/Rap">Hip-Hop/Rap</SelectItem>
-                    <SelectItem value="R&B/Soul">R&B/Soul</SelectItem>
-                    <SelectItem value="EDM">EDM</SelectItem>
-                    <SelectItem value="Country">Country</SelectItem>
-                    <SelectItem value="Jazz">
-                      Jazz
-                    </SelectItem>
-                    <SelectItem value="Blues">Blues</SelectItem>
-                    <SelectItem value="Classical">Classical</SelectItem>
-                    <SelectItem value="Folk">Folk</SelectItem>
-                    <SelectItem value="Reggae">Reggae</SelectItem>
-                    <SelectItem value="Latin">Latin</SelectItem>
-                    <SelectItem value="Metal">Metal</SelectItem>
-                    <SelectItem value="Original">Original</SelectItem>
-                    <SelectItem value="Podcast">Podcast</SelectItem>
-                    <SelectItem value="World">World Music</SelectItem>
+                    {VIDEO_GENRES.map((genre) => (
+                      <SelectItem key={genre.value} value={genre.value}>
+                        {genre.label}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               )}

@@ -6,7 +6,7 @@
       "NODE_OPTIONS": "--max-old-space-size=6144 --no-deprecation"
     }
   },
-  "installCommand": "yarn install --network-timeout 600000",
+  "installCommand": "yarn install --production=false --network-timeout 600000",
   "crons": [
     {
       "path": "/api/video-assets/sync-views/cron",

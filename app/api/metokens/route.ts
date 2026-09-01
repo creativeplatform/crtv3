@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { checkBotId } from 'botid/server';
+import { checkBotIdDeep } from '@/lib/middleware/botIdGuard';
 import { createClient } from '@/lib/sdk/supabase/server';
 import { meTokenSupabaseService } from '@/lib/sdk/supabase/metokens';
 import { serverLogger } from '@/lib/utils/logger';
@@ -64,7 +64,7 @@ export async function GET(request: NextRequest) {
 
 // POST /api/metokens - Create a new MeToken
 export async function POST(request: NextRequest) {
-  const verification = await checkBotId();
+  const verification = await checkBotIdDeep();
   if (verification.isBot) {
     return NextResponse.json({ error: 'Access denied' }, { status: 403 });
   }

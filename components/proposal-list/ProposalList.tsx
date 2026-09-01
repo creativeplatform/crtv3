@@ -21,7 +21,7 @@ import { Button } from "@/components/ui/button";
 import { Loader2, Clock, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
-import { useChain, useAuthModal, useSignTypedData } from "@account-kit/react";
+import { useChain, useAuthModal, useSignTypedData } from "@/lib/wallet/react";
 import { useWalletStatus } from "@/lib/hooks/accountkit/useWalletStatus";
 import { createVote } from "@/app/vote/[id]/actions";
 import { SNAPSHOT_SPACE } from "@/context/context";
@@ -283,7 +283,7 @@ function VotingForm({ proposal }: { proposal: Proposal }) {
 
     // Check membership first
     if (!canVote) {
-      setError("You need a Creative Pass membership (Creative Pass, Creative Pass Plus, or Creative Pass Pro) to vote. Please purchase a membership to participate in voting.");
+      setError("You need a Creative Platform membership (Creative Creator Pass, Creative Investor Pass, or Creative Brand Pass) to vote. Please purchase a membership to participate in voting.");
       return;
     }
 
@@ -357,12 +357,15 @@ function VotingForm({ proposal }: { proposal: Proposal }) {
       // comes from membership NFT stored in the smart account. The signature will
       // still be from the EOA (walletAddress), but Snapshot will check voting power
       // for the smart account address.
+      // Use plain numbers for uint fields — not BigInt.
+      // Privy's eth_signTypedData_v4 path JSON-serializes the payload and cannot
+      // handle BigInt ("Do not know how to serialize a BigInt").
       const typedMessage = {
         from: smartAccountAddress, // Smart account address (holds membership NFT for voting power)
         space: SNAPSHOT_SPACE,
-        timestamp: BigInt(now),
+        timestamp: now,
         proposal: proposal.id,
-        choice: BigInt(snapshotChoice),
+        choice: snapshotChoice,
         reason: "",
         app: "creative-tv",
         metadata: JSON.stringify({}),
@@ -512,7 +515,7 @@ function VotingForm({ proposal }: { proposal: Proposal }) {
             Membership Required to Vote
           </h3>
           <p className="text-sm text-yellow-700 dark:text-yellow-300 mb-3">
-            You need a Creative Pass membership to participate in voting. Choose from one of our three tiers:
+            You need a Creative Platform membership to participate in voting. Choose from one of our three tiers:
           </p>
           <ul className="text-sm text-yellow-700 dark:text-yellow-300 list-disc list-inside space-y-1 mb-3">
             <li>Creative Creator Pass</li>

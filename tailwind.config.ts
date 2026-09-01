@@ -61,7 +61,22 @@ export default withAccountKitUi({
 			},
 			zIndex: {
 				'45': '45',
-			}
+			},
+			animation: {
+				'songcup-pulse': 'songcup-pulse 2.2s ease-in-out infinite',
+			},
+			keyframes: {
+				'songcup-pulse': {
+					'0%, 100%': {
+						transform: 'scale(1)',
+						filter: 'drop-shadow(0 0 0 transparent)',
+					},
+					'50%': {
+						transform: 'scale(1.04)',
+						filter: 'drop-shadow(0 0 12px rgba(255, 102, 204, 0.6))',
+					},
+				},
+			},
 		}
 	},
 	colors: {

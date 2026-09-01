@@ -8,12 +8,19 @@
  */
 
 import { useCallback, useState, useMemo } from 'react';
-import { useSmartAccountClient } from '@account-kit/react';
-import { wrapFetchWithPayment, decodeXPaymentResponse } from 'x402-fetch';
+import { useSmartAccountClient } from '@/lib/wallet/react';
 import { USDC_TOKEN_ADDRESSES, USDC_TOKEN_DECIMALS } from '@/lib/contracts/USDCToken';
 import { base, alchemy } from '@account-kit/infra';
 import { erc20Abi, createPublicClient } from 'viem';
 import { logger } from '@/lib/utils/logger';
+
+async function loadX402Fetch() {
+  const mod = await import('x402-fetch');
+  return {
+    wrapFetchWithPayment: mod.wrapFetchWithPayment,
+    decodeXPaymentResponse: mod.decodeXPaymentResponse,
+  };
+}
 
 // x402 Payment Configuration for USDC on Base
 const X402_CONFIG = {
@@ -103,10 +110,9 @@ export function useX402Payment() {
         logger.debug(`Recipient: ${recipientAddress}`);
       }
 
+      const { wrapFetchWithPayment, decodeXPaymentResponse } = await loadX402Fetch();
+
       // Wrap fetch with x402 payment capability
-      // This will automatically handle payment negotiations and token approvals
-      // Note: Type assertion needed due to viem version mismatch between x402's bundled viem and our viem
-      // The x402-fetch library only takes fetch and account as parameters
       const fetchWithPayment = (wrapFetchWithPayment as any)(fetch, client.account);
 
       // Make the x402 payment request

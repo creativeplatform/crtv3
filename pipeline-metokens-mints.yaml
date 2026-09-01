@@ -6,7 +6,7 @@ sources:
     name: mint
     subgraphs:
       - name: metokens
-        version: v0.0.1
+        version: 1.0.3
     type: subgraph_entity
 transforms: {}
 sinks:

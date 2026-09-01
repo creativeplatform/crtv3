@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from 'react';
-import { useUser } from '@account-kit/react';
+import { useUser } from '@/lib/wallet/react';
 import { toast } from 'sonner';
 import { logger } from '@/lib/utils/logger';
 

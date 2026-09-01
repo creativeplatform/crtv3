@@ -1,11 +1,12 @@
 import { useCallback, useState } from "react";
-import { useSmartAccountClient, useChain } from "@account-kit/react";
+import { useSmartAccountClient, useChain } from "@/lib/wallet/react";
 import { generatePrivateKey } from "viem/accounts";
 import { LocalAccountSigner } from "@aa-sdk/core";
 import { createModularAccountV2Client } from "@account-kit/smart-contracts";
 import { type SmartAccountSigner } from "@aa-sdk/core";
 import { alchemy } from "@account-kit/infra";
 import { useSessionKeyStorage } from "./useSessionKeyStorage";
+import { buildSessionKeyContext } from "@/lib/wallet/session-keys";
 import { logger } from '@/lib/utils/logger';
 
 
@@ -25,9 +26,6 @@ export function useSessionKey(options: UseSessionKeyOptions = {}) {
   const { chain } = useChain();
   const { client: smartAccountClient } = useSmartAccountClient({
     type: "ModularAccountV2",
-    accountParams: {
-      mode: "default",
-    },
   });
   const [isInstalling, setIsInstalling] = useState(false);
   const { sessionKeys } = useSessionKeyStorage();
@@ -124,6 +122,7 @@ export function useSessionKey(options: UseSessionKeyOptions = {}) {
   return {
     createSessionKey,
     useSessionKeyClient,
+    buildSessionKeyContext,
     isInstalling,
   };
 }

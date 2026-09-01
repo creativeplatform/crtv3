@@ -6,25 +6,37 @@ sources:
     name: subscribe
     subgraphs:
       - name: metokens
-        version: 1.0.2
+        version: 1.0.3
     type: subgraph_entity
   metoken_mints_source:
     name: mint
     subgraphs:
       - name: metokens
-        version: 1.0.2
+        version: 1.0.3
     type: subgraph_entity
   metoken_burns_source:
     name: burn
     subgraphs:
       - name: metokens
-        version: 1.0.2
+        version: 1.0.3
     type: subgraph_entity
   metoken_registers_source:
     name: register
     subgraphs:
       - name: metokens
-        version: 1.0.2
+        version: 1.0.3
+    type: subgraph_entity
+  metoken_hubs_source:
+    name: hub
+    subgraphs:
+      - name: metokens
+        version: 1.0.3
+    type: subgraph_entity
+  metoken_balances_source:
+    name: me_token_balance
+    subgraphs:
+      - name: metokens
+        version: 1.0.3
     type: subgraph_entity
 transforms:
   metoken_subscribes_transform:
@@ -59,6 +71,14 @@ transforms:
         *,
         `timestamp` AS block_timestamp
       FROM metoken_registers_source
+  metoken_hubs_transform:
+    type: sql
+    primary_key: id
+    sql: SELECT * FROM metoken_hubs_source
+  metoken_balances_transform:
+    type: sql
+    primary_key: id
+    sql: SELECT * FROM metoken_balances_source
 sinks:
   postgres_metoken_subscribes:
     from: metoken_subscribes_transform
@@ -83,4 +103,16 @@ sinks:
     schema: public
     secret_name: POSTGRES_SECRET_CMJIQCIFZ0
     table: metoken_registers
+    type: postgres
+  postgres_metoken_hubs:
+    from: metoken_hubs_transform
+    schema: public
+    secret_name: POSTGRES_SECRET_CMJIQCIFZ0
+    table: metoken_hubs
+    type: postgres
+  postgres_metoken_subgraph_balances:
+    from: metoken_balances_transform
+    schema: public
+    secret_name: POSTGRES_SECRET_CMJIQCIFZ0
+    table: metoken_subgraph_balances
     type: postgres

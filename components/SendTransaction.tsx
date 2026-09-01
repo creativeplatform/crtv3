@@ -27,7 +27,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { useSmartAccountClient } from "@account-kit/react";
+import { useSmartAccountClient } from "@/lib/wallet/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -36,11 +36,18 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Loader2, Send, CheckCircle, XCircle, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
-import { type Address, type Hex, encodeFunctionData, parseAbi, parseUnits, formatUnits, erc20Abi } from "viem";
+import { type Address, type Hex, encodeFunctionData, parseAbi, parseUnits, formatUnits } from "viem";
 import { USDC_TOKEN_ADDRESSES, USDC_TOKEN_DECIMALS } from "@/lib/contracts/USDCToken";
 import { DAI_TOKEN_ADDRESSES, DAI_TOKEN_DECIMALS } from "@/lib/contracts/DAIToken";
 import { logger } from '@/lib/utils/logger';
 import { appendBuilderCode } from "@/lib/utils/builder-code";
+import {
+  formatSendError,
+  getMaxEthSendAmount,
+  validateSendBalance,
+  normalizeRecipientAddress,
+} from "@/lib/utils/sendHelpers";
+import { getEthBalance, getErc20Balance } from "@/lib/viem";
 
 
 // Token configuration
@@ -90,26 +97,20 @@ export default function SendTransaction() {
     try {
       logger.debug('Fetching balances for address:', address);
       
-      // Get ETH balance
-      const ethBalance = await client.getBalance({
-        address: address as Address,
-      });
+      // Get ETH balance via public client (smart-account client is write-only)
+      const ethBalance = await getEthBalance(address as Address);
       
       // Get USDC balance
-      const usdcBalance = await client.readContract({
-        address: USDC_TOKEN_ADDRESSES.base as Address,
-        abi: erc20Abi,
-        functionName: 'balanceOf',
-        args: [address as Address],
-      }) as bigint;
+      const usdcBalance = await getErc20Balance({
+        token: USDC_TOKEN_ADDRESSES.base as Address,
+        owner: address as Address,
+      });
       
       // Get DAI balance
-      const daiBalance = await client.readContract({
-        address: DAI_TOKEN_ADDRESSES.base as Address,
-        abi: erc20Abi,
-        functionName: 'balanceOf',
-        args: [address as Address],
-      }) as bigint;
+      const daiBalance = await getErc20Balance({
+        token: DAI_TOKEN_ADDRESSES.base as Address,
+        owner: address as Address,
+      });
 
       const newBalances: Record<TokenSymbol, string> = {
         ETH: formatUnits(ethBalance, 18),
@@ -142,6 +143,14 @@ export default function SendTransaction() {
       return;
     }
 
+    const normalizedRecipient = normalizeRecipientAddress(recipient);
+    if (!normalizedRecipient) {
+      const errorMsg = "Please enter a valid Ethereum recipient address (0x...)";
+      toast.error(errorMsg);
+      setError(errorMsg);
+      return;
+    }
+
     if (!amount || parseFloat(amount) <= 0) {
       const errorMsg = "Please enter a valid amount";
       toast.error(errorMsg);
@@ -149,14 +158,11 @@ export default function SendTransaction() {
       return;
     }
 
-    // Check balance
-    const availableBalance = parseFloat(balances[selectedToken]);
-    const requestedAmount = parseFloat(amount);
-    
-    if (requestedAmount > availableBalance) {
-      const errorMsg = `Insufficient balance. You have ${availableBalance} ${selectedToken}, but trying to send ${requestedAmount} ${selectedToken}`;
-      toast.error(errorMsg);
-      setError(errorMsg);
+    // Check balance (ETH reserves gas buffer)
+    const balanceError = validateSendBalance(selectedToken, amount, balances[selectedToken]);
+    if (balanceError) {
+      toast.error(balanceError);
+      setError(balanceError);
       return;
     }
 
@@ -172,7 +178,7 @@ export default function SendTransaction() {
 
         operation = await client!.sendUserOperation({
           uo: {
-            target: recipient as Address,
+            target: normalizedRecipient,
             data: appendBuilderCode("0x" as Hex),
             value: valueInWei,
           },
@@ -185,7 +191,7 @@ export default function SendTransaction() {
         const transferCalldata = encodeFunctionData({
           abi: parseAbi(["function transfer(address,uint256) returns (bool)"]),
           functionName: "transfer",
-          args: [recipient as Address, tokenAmount],
+          args: [normalizedRecipient, tokenAmount],
         });
 
         logger.debug('Sending ERC-20 transfer:', {
@@ -219,7 +225,7 @@ export default function SendTransaction() {
       fetchBalances();
     } catch (error) {
       logger.error("Error preparing transaction:", error);
-      const errorMsg = `Error preparing transaction: ${error instanceof Error ? error.message : 'Unknown error'}`;
+      const errorMsg = formatSendError(error);
       toast.error(errorMsg);
       setError(errorMsg);
     } finally {
@@ -230,10 +236,8 @@ export default function SendTransaction() {
   const handleMaxAmount = () => {
     const balance = balances[selectedToken];
     if (parseFloat(balance) > 0) {
-      // For ETH, leave a small buffer for gas
       if (selectedToken === 'ETH') {
-        const bufferAmount = parseFloat(balance) - 0.001; // Leave 0.001 ETH for gas
-        setAmount(bufferAmount > 0 ? bufferAmount.toFixed(6) : '0');
+        setAmount(getMaxEthSendAmount(balance));
       } else {
         setAmount(balance);
       }

@@ -2,7 +2,10 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   buildHallidayInputAssets,
   buildHallidayOutputAsset,
+  buildHallidayStoryOutputAsset,
   HALLIDAY_DEFAULT_INPUT_ASSETS,
+  isHallidayLensChainAsset,
+  isHallidayLensOnrampSupported,
   isHallidaySandboxEnabled,
   LENS_GHO_TOKEN_ADDRESS,
   normalizeHallidayAssetId,
@@ -48,6 +51,27 @@ describe('buildHallidayOutputAsset', () => {
   });
 });
 
+describe('buildHallidayStoryOutputAsset', () => {
+  const env = process.env;
+
+  afterEach(() => {
+    process.env = { ...env };
+  });
+
+  it('builds story testnet native IP output by default', () => {
+    delete process.env.NEXT_PUBLIC_HALLIDAY_STORY_OUTPUT_ASSET;
+    delete process.env.NEXT_PUBLIC_HALLIDAY_STORY_CHAIN_SLUG;
+    delete process.env.NEXT_PUBLIC_STORY_NETWORK;
+
+    expect(buildHallidayStoryOutputAsset('testnet')).toBe('story-testnet:0x');
+  });
+
+  it('builds story mainnet native IP output', () => {
+    delete process.env.NEXT_PUBLIC_HALLIDAY_STORY_OUTPUT_ASSET;
+    expect(buildHallidayStoryOutputAsset('mainnet')).toBe('story:0x');
+  });
+});
+
 describe('buildHallidayInputAssets', () => {
   const env = process.env;
 
@@ -68,6 +92,30 @@ describe('buildHallidayInputAssets', () => {
   it('falls back to defaults when override is only whitespace or commas', () => {
     process.env.NEXT_PUBLIC_HALLIDAY_INPUT_ASSET = ' , , ';
     expect(buildHallidayInputAssets()).toEqual([...HALLIDAY_DEFAULT_INPUT_ASSETS]);
+  });
+});
+
+describe('isHallidayLensChainAsset', () => {
+  it('detects lens mainnet and testnet assets', () => {
+    expect(isHallidayLensChainAsset(`lens:${LENS_GHO_TOKEN_ADDRESS}`)).toBe(true);
+    expect(isHallidayLensChainAsset('lens-testnet:0xabc')).toBe(true);
+    expect(isHallidayLensChainAsset('story:0x')).toBe(false);
+  });
+});
+
+describe('isHallidayLensOnrampSupported', () => {
+  const env = process.env;
+
+  afterEach(() => {
+    process.env = { ...env };
+  });
+
+  it('is disabled unless explicitly enabled', () => {
+    delete process.env.NEXT_PUBLIC_HALLIDAY_LENS_ENABLED;
+    expect(isHallidayLensOnrampSupported()).toBe(false);
+
+    process.env.NEXT_PUBLIC_HALLIDAY_LENS_ENABLED = 'true';
+    expect(isHallidayLensOnrampSupported()).toBe(true);
   });
 });
 

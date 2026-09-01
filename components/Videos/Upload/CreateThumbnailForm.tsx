@@ -26,6 +26,7 @@ import { useNftMintingConfigured } from "@/lib/hooks/story/useNftMintingConfigur
 import type { StoryLicenseTerms } from "@/lib/types/story-protocol";
 import type { Address } from "viem";
 import { logger } from '@/lib/utils/logger';
+import { useNsfwDetection } from '@/lib/hooks/useNsfwDetection';
 
 
 interface FormValues {
@@ -112,6 +113,9 @@ const CreateThumbnailForm = ({
 
   const { userMeToken, loading: meTokenLoading, checkUserMeToken } = useMeTokensSupabase();
   const { makePayment, isProcessing: isPaymentProcessing, isConnected } = useX402Payment();
+  const { gateImage, isClassifying: isNsfwChecking } = useNsfwDetection();
+  const gateImageRef = useRef(gateImage);
+  gateImageRef.current = gateImage;
   const requireMeToken = watch("meTokenConfig.requireMeToken");
   const thumbnailType = watch("thumbnailType");
   const customImage = watch("customImage");
@@ -120,6 +124,26 @@ const CreateThumbnailForm = ({
   const { configured: nftMintingConfigured, loading: nftMintingConfigLoading } = useNftMintingConfigured();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const rejectCustomImage = (message: string) => {
+    setError("customImage", { message });
+    toast.error(message);
+    setValue("customImage", null);
+    setCustomPreviewUrl(null);
+    setSelectedImage(undefined);
+    if (blobUrlRef.current) {
+      URL.revokeObjectURL(blobUrlRef.current);
+      blobUrlRef.current = null;
+    }
+    blobUrlFileRef.current = null;
+    currentImageRef.current = null;
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+    setIsCompressing(false);
+    setThumbnailUploading(false);
+    setUploadProgress(0);
+  };
 
   useEffect(() => {
     checkUserMeToken();
@@ -139,11 +163,34 @@ const CreateThumbnailForm = ({
       currentImageRef.current = customImage;
       const imageToUpload = customImage;
 
-      // Process image: compress then upload
+      // Process image: NSFW screen → compress → upload
       const processAndUpload = async () => {
         try {
-          // Step 1: Compress image
+          // Step 0: Client-side NSFW gate (privacy-first; fail-open if model unavailable)
           setIsCompressing(true);
+          setUploadProgress(5);
+          const gate = await gateImageRef.current(imageToUpload);
+          if (currentImageRef.current !== imageToUpload) {
+            return;
+          }
+          if (gate.action === 'block') {
+            rejectCustomImage(
+              'This image appears to contain explicit content and cannot be used as a thumbnail. Please choose another image.'
+            );
+            return;
+          }
+          if (gate.action === 'warn') {
+            // User declined the suggestive-content confirm
+            rejectCustomImage(
+              'Thumbnail rejected. Please choose a different image if you do not want to use a suggestive thumbnail.'
+            );
+            return;
+          }
+          if (gate.action === 'allow' && gate.reason === 'model_unavailable') {
+            logger.warn('[nsfw] Thumbnail NSFW check skipped (model unavailable); continuing upload');
+          }
+
+          // Step 1: Compress image
           setUploadProgress(10);
 
           const compressionResult = await compressImage(imageToUpload, {
@@ -157,6 +204,9 @@ const CreateThumbnailForm = ({
           setUploadProgress(30);
 
           if (!compressionResult.success) {
+            if (currentImageRef.current !== imageToUpload) {
+              return;
+            }
             setError("customImage", {
               message: compressionResult.error || "Failed to compress image. Please use a smaller image size."
             });
@@ -260,9 +310,12 @@ const CreateThumbnailForm = ({
             message: "Failed to process image. Please select a different image and try again."
           });
         } finally {
-          setIsCompressing(false);
-          setThumbnailUploading(false);
-          setUploadProgress(0);
+          // Stale runs must not clear loading for a newer image still in flight
+          if (currentImageRef.current === imageToUpload) {
+            setIsCompressing(false);
+            setThumbnailUploading(false);
+            setUploadProgress(0);
+          }
         }
       };
 
@@ -570,10 +623,29 @@ const CreateThumbnailForm = ({
   };
 
   const handleImageSelection = async (imageUrl: string) => {
-    // If it's a blob URL (AI-generated image), upload to IPFS first
+    // If it's a blob URL (AI-generated image), NSFW-gate then upload to IPFS
     if (imageUrl.startsWith('blob:')) {
       setThumbnailUploading(true);
       try {
+        const gate = await gateImage(imageUrl);
+        if (gate.action === 'block') {
+          toast.error(
+            'This AI image appears to contain explicit content and cannot be used as a thumbnail. Please generate another.'
+          );
+          setSelectedImage(undefined);
+          return;
+        }
+        if (gate.action === 'warn') {
+          toast.error(
+            'Thumbnail rejected. Generate another image if you do not want a suggestive thumbnail.'
+          );
+          setSelectedImage(undefined);
+          return;
+        }
+        if (gate.action === 'allow' && gate.reason === 'model_unavailable') {
+          logger.warn('[nsfw] AI thumbnail NSFW check skipped (model unavailable); continuing upload');
+        }
+
         const result = await uploadThumbnailFromBlob(imageUrl, livepeerAssetId || 'unknown');
         if (result.success && result.thumbnailUrl) {
           // Convert ipfs:// protocol to gateway URL for database storage
@@ -656,9 +728,9 @@ const CreateThumbnailForm = ({
                     type="button"
                     variant="outline"
                     onClick={() => fileInputRef.current?.click()}
-                    disabled={isCompressing || thumbnailUploading}
+                    disabled={isCompressing || thumbnailUploading || isNsfwChecking}
                   >
-                    {isCompressing || thumbnailUploading ? (
+                    {isCompressing || thumbnailUploading || isNsfwChecking ? (
                       <>
                         <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                         Processing...
@@ -680,11 +752,15 @@ const CreateThumbnailForm = ({
               </div>
 
               {/* Upload Progress */}
-              {(isCompressing || thumbnailUploading) && (
+              {(isCompressing || thumbnailUploading || isNsfwChecking) && (
                 <div className="mt-4 space-y-2">
                   <div className="flex items-center justify-between text-xs text-gray-600">
                     <span>
-                      {isCompressing ? "Compressing image..." : "Uploading to IPFS..."}
+                      {isNsfwChecking
+                        ? "Checking image safety..."
+                        : isCompressing
+                          ? "Compressing image..."
+                          : "Uploading to IPFS..."}
                     </span>
                     <span>{uploadProgress}%</span>
                   </div>
@@ -726,13 +802,17 @@ const CreateThumbnailForm = ({
                       showSkeleton={true}
                     />
                   )}
-                  {/* Show loading overlay during compression/upload */}
-                  {(isCompressing || thumbnailUploading) && (
+                  {/* Show loading overlay during NSFW check / compression / upload */}
+                  {(isCompressing || thumbnailUploading || isNsfwChecking) && (
                     <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
                       <div className="text-center text-white">
                         <Loader2 className="h-8 w-8 animate-spin mx-auto mb-2" />
                         <p className="text-sm">
-                          {isCompressing ? "Compressing..." : "Uploading..."}
+                          {isNsfwChecking
+                            ? "Checking..."
+                            : isCompressing
+                              ? "Compressing..."
+                              : "Uploading..."}
                         </p>
                         <p className="text-xs mt-1">{uploadProgress}%</p>
                       </div>
@@ -1019,8 +1099,21 @@ const CreateThumbnailForm = ({
           }}
         />
 
-        {/* NFT Minting Step - Show when Story Protocol is enabled and minting is configured */}
-        {storyIPEnabled && videoAssetId && creatorAddress && metadataURI && (
+        {/* NFT Minting Step - Show when Story Protocol is enabled, a license
+            template is selected, and minting is configured. A license template
+            is required before minting/registering on Story Protocol. */}
+        {storyIPEnabled && !selectedStoryLicense && (
+          <Alert className="bg-amber-50 border-amber-200">
+            <AlertCircle className="h-4 w-4 text-amber-600" />
+            <AlertTitle className="text-amber-800">Select a license template</AlertTitle>
+            <AlertDescription className="text-amber-700">
+              You must choose a license template above before you can mint and
+              register your video on Story Protocol.
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {storyIPEnabled && selectedStoryLicense && videoAssetId && creatorAddress && metadataURI && (
           <div className="mt-4">
             {nftMintingConfigLoading ? (
               <Skeleton className="h-24 w-full" />

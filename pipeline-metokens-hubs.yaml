@@ -1,18 +1,22 @@
-name: pipeline-metokens-registers
+name: pipeline-metokens-hubs
 resource_size: s
 apiVersion: 3
 sources:
-  metoken_registers_source:
-    name: register
+  metoken_hubs_source:
+    name: hub
     subgraphs:
       - name: metokens
-        version: v0.0.1
+        version: 1.0.3
     type: subgraph_entity
-transforms: {}
+transforms:
+  metoken_hubs_transform:
+    type: sql
+    primary_key: id
+    sql: SELECT * FROM metoken_hubs_source
 sinks:
-  postgres_metoken_registers:
-    from: metoken_registers_source
+  postgres_metoken_hubs:
+    from: metoken_hubs_transform
     schema: public
     secret_name: POSTGRES_SECRET_CMJIQCIFZ0
-    table: metoken_registers
+    table: metoken_hubs
     type: postgres

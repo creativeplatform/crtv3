@@ -15,8 +15,11 @@ import { toast } from "sonner";
 import Link from "next/link";
 import { TrendingUpIcon } from "lucide-react";
 import VideoThumbnail from "@/components/Videos/VideoThumbnail";
-import { HERO_VIDEO_ASSET_ID } from "@/context/context";
+import { HERO_VIDEO_ASSET_ID, LIVEPEER_HERO_PLAYBACK_ID } from "@/context/context";
 import { logger } from "@/lib/utils/logger";
+import { mapInBatches } from "@/lib/utils/map-in-batches";
+
+const TOP_VIDEOS_PLAYBACK_CONCURRENCY = 3;
 
 export function TopVideos() {
   const [videos, setVideos] = React.useState<VideoAsset[]>([]);
@@ -62,8 +65,10 @@ export function TopVideos() {
 
         // Filter out the hero video from the trending list
         const filteredVideos = trendingVideos.filter(
-          (video) => video.asset_id !== HERO_VIDEO_ASSET_ID
-        ).slice(0, 10); // Take top 10 after filtering
+          (video) =>
+            video.asset_id !== HERO_VIDEO_ASSET_ID &&
+            video.playback_id !== LIVEPEER_HERO_PLAYBACK_ID,
+        ).slice(0, 10);
 
         if (filteredVideos.length === 0) {
           logger.warn("No trending videos found after filtering hero video");
@@ -78,8 +83,10 @@ export function TopVideos() {
         // Step 2: Fetch playback sources in parallel (no shared AbortSignal — avoids
         // React Strict Mode / fast navigation aborting the whole batch)
         logger.debug("Starting to fetch playback sources...");
-        const sourceEntries = await Promise.all(
-          filteredVideos.map(async (video) => {
+        const sourceEntries = await mapInBatches(
+          filteredVideos,
+          TOP_VIDEOS_PLAYBACK_CONCURRENCY,
+          async (video) => {
             if (!video.playback_id) {
               logger.warn(`Video ${video.asset_id} has no playback_id`);
               return [video.asset_id, null] as const;
@@ -98,7 +105,7 @@ export function TopVideos() {
               );
               return [video.asset_id, null] as const;
             }
-          }),
+          },
         );
 
         if (!isMounted) return;

@@ -1,7 +1,8 @@
 import { Address } from 'viem';
+import { METOKEN_FACTORY_BASE } from '@/lib/contracts/metokens/deployments';
 
 export const METOKEN_FACTORY_ADDRESSES = {
-  base: '0xb31Ae2583d983faa7D8C8304e6A16E414e721A0B' as Address,
+  base: METOKEN_FACTORY_BASE as Address,
   // Add other networks as needed
 } as const;
 

@@ -1,12 +1,12 @@
 "use client";
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { useMeTokenHoldings } from '@/lib/hooks/metokens/useMeTokenHoldings';
-import { MeTokenHolding } from '@/lib/hooks/metokens/useMeTokenHoldings';
+import { useMeTokenHoldings, type MeTokenHolding } from '@/lib/hooks/metokens/useMeTokenHoldings';
+import { useMeTokensSupabase } from '@/lib/hooks/metokens/useMeTokensSupabase';
 import {
   Wallet,
   TrendingUp,
@@ -15,51 +15,61 @@ import {
   ExternalLink,
   RefreshCw,
   AlertCircle,
-  Loader2
+  Loader2,
+  ArrowLeft,
 } from 'lucide-react';
-import { useUser } from '@account-kit/react';
-import { useSmartAccountClient } from '@account-kit/react';
+import { useUser, useSmartAccountClient } from '@/lib/wallet/react';
 import Link from 'next/link';
 import { convertFailingGateway } from '@/lib/utils/image-gateway';
+import { formatMeTokenHoldingUsd } from '@/lib/utils/meTokenHoldingValue';
+import { mergeHoldingsWithOwnMeToken } from '@/lib/utils/meTokenPortfolioHoldings';
 
 interface MeTokenPortfolioProps {
   targetAddress?: string;
   className?: string;
+  /** Same list shown in the account dropdown — keeps View All in sync. */
+  holdingsOverride?: MeTokenHolding[];
+  onBack?: () => void;
+  onRefresh?: () => Promise<void>;
 }
 
-export function MeTokenPortfolio({ targetAddress, className }: MeTokenPortfolioProps) {
+export function MeTokenPortfolio({
+  targetAddress,
+  className,
+  holdingsOverride,
+  onBack,
+  onRefresh,
+}: MeTokenPortfolioProps) {
   const user = useUser();
-  const { holdings, loading, error, totalValue, refreshHoldings } = useMeTokenHoldings(targetAddress);
+  const { address: scaAddress } = useSmartAccountClient({});
+  const ownerAddress = scaAddress || user?.address || '';
+
+  const { holdings, loading, error, refreshHoldings } = useMeTokenHoldings(targetAddress);
+  const { userMeToken, loading: meTokenLoading } = useMeTokensSupabase(targetAddress);
+
   const [refreshing, setRefreshing] = useState(false);
+
+  const displayHoldings = useMemo(() => {
+    if (holdingsOverride) return holdingsOverride;
+    return mergeHoldingsWithOwnMeToken(holdings ?? [], userMeToken, ownerAddress);
+  }, [holdingsOverride, holdings, userMeToken, ownerAddress]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    await refreshHoldings();
-    setRefreshing(false);
-  };
-
-  const formatValue = (value: number) => {
-    if (value >= 1000000) {
-      return `$${(value / 1000000).toFixed(1)}M`;
-    } else if (value >= 1000) {
-      return `$${(value / 1000).toFixed(1)}K`;
-    } else {
-      return `$${value.toFixed(2)}`;
+    try {
+      if (onRefresh) {
+        await onRefresh();
+      } else {
+        await refreshHoldings(true);
+      }
+    } finally {
+      setRefreshing(false);
     }
   };
 
-  const formatBalance = (balance: string) => {
-    const num = parseFloat(balance);
-    if (num >= 1000000) {
-      return `${(num / 1000000).toFixed(2)}M`;
-    } else if (num >= 1000) {
-      return `${(num / 1000).toFixed(2)}K`;
-    } else {
-      return num.toFixed(4);
-    }
-  };
+  const isLoading = !holdingsOverride && (loading || meTokenLoading);
 
-  if (loading) {
+  if (isLoading) {
     return (
       <Card className={className}>
         <CardHeader>
@@ -78,7 +88,7 @@ export function MeTokenPortfolio({ targetAddress, className }: MeTokenPortfolioP
     );
   }
 
-  if (error) {
+  if (error && !holdingsOverride && displayHoldings.length === 0) {
     return (
       <Card className={className}>
         <CardHeader>
@@ -107,7 +117,7 @@ export function MeTokenPortfolio({ targetAddress, className }: MeTokenPortfolioP
     );
   }
 
-  if (holdings.length === 0) {
+  if (displayHoldings.length === 0) {
     return (
       <Card className={className}>
         <CardHeader>
@@ -135,22 +145,37 @@ export function MeTokenPortfolio({ targetAddress, className }: MeTokenPortfolioP
     );
   }
 
-  const ownMeToken = holdings.find(h => h.isOwnMeToken);
-  const otherHoldings = holdings.filter(h => !h.isOwnMeToken);
+  const ownMeToken = displayHoldings.find((h) => h.isOwnMeToken);
+  const otherHoldings = displayHoldings.filter((h) => !h.isOwnMeToken);
+  const totalValue = displayHoldings.reduce(
+    (sum, h) => sum + (h.holdingValueUsd || 0),
+    0
+  );
 
   return (
     <div className={className}>
-      {/* Portfolio Summary */}
       <Card className="mb-6">
         <CardHeader>
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-2">
             <div>
               <CardTitle className="flex items-center gap-2">
+                {onBack && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={onBack}
+                    className="h-8 w-8 p-0"
+                    aria-label="Back to balances"
+                  >
+                    <ArrowLeft className="h-4 w-4" />
+                  </Button>
+                )}
                 <Wallet className="h-5 w-5" />
                 MeToken Portfolio
               </CardTitle>
               <CardDescription>
-                {holdings.length} MeToken{holdings.length !== 1 ? 's' : ''} in your portfolio
+                {displayHoldings.length} MeToken{displayHoldings.length !== 1 ? "s" : ""} in your
+                portfolio
               </CardDescription>
             </div>
             <Button
@@ -168,13 +193,13 @@ export function MeTokenPortfolio({ targetAddress, className }: MeTokenPortfolioP
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="text-center">
               <div className="text-2xl font-bold text-primary">
-                {formatValue(totalValue)}
+                {formatMeTokenHoldingUsd(totalValue)}
               </div>
-              <div className="text-sm text-muted-foreground">Total Value</div>
+              <div className="text-sm text-muted-foreground">Est. holding value</div>
             </div>
             <div className="text-center">
               <div className="text-2xl font-bold">
-                {holdings.length}
+                {displayHoldings.length}
               </div>
               <div className="text-sm text-muted-foreground">MeTokens</div>
             </div>
@@ -188,7 +213,6 @@ export function MeTokenPortfolio({ targetAddress, className }: MeTokenPortfolioP
         </CardContent>
       </Card>
 
-      {/* Own MeToken */}
       {ownMeToken && (
         <Card className="mb-6 border-primary/20 bg-primary/5">
           <CardHeader>
@@ -204,7 +228,6 @@ export function MeTokenPortfolio({ targetAddress, className }: MeTokenPortfolioP
         </Card>
       )}
 
-      {/* Other Holdings */}
       {otherHoldings.length > 0 && (
         <Card>
           <CardHeader className="pb-2">
@@ -264,7 +287,6 @@ function MeTokenHoldingCard({ holding, showCreatorProfile }: MeTokenHoldingCardP
   return (
     <div className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors">
       <div className="flex items-center gap-4 flex-1">
-        {/* Creator Avatar */}
         {showCreatorProfile && (
           <Avatar className="h-10 w-10">
             <AvatarImage
@@ -297,7 +319,8 @@ function MeTokenHoldingCard({ holding, showCreatorProfile }: MeTokenHoldingCardP
 
           <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
             <span>Balance: {formatBalance(holding.balance)}</span>
-            <span>TVL: {formatTVL(holding.tvl)}</span>
+            <span>Est. value: {formatMeTokenHoldingUsd(holding.holdingValueUsd)}</span>
+            <span>Vault TVL: {formatTVL(holding.tvl)}</span>
           </div>
         </div>
       </div>

@@ -11,26 +11,29 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 import { Slash } from "lucide-react";
-// import { ViewsComponent } from "@/components/Player/ViewsComponent";
 import VideoViewMetrics from "@/components/Videos/VideoViewMetrics";
 import { VideoCommentsWrapper } from "@/components/Videos/VideoCommentsWrapper";
 import { Metadata } from "next";
-import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-import { shortenAddress } from "@/lib/utils/utils";
-import { createClient } from "@/lib/sdk/supabase/server";
-import makeBlockie from "ethereum-blockies-base64";
-import { convertFailingGateway } from "@/lib/utils/image-gateway";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import Link from "next/link";
 import { Suspense } from "react";
 import { VideoShareButton } from "@/components/Videos/VideoShareButton";
-import { VideoBuyButton } from "@/components/Videos/VideoBuyButton";
+import { VideoHeartBitSection } from "@/components/heartbit/VideoHeartBitSection";
+import { BuyIPButton } from "@/components/Videos/BuyIPButton";
+import { CreatorMessageButton } from "@/components/Videos/CreatorMessageButton";
 import { VideoEditButton } from "@/components/Videos/VideoEditButton";
 import { VideoSplitDistributeButton } from "@/components/Videos/VideoSplitDistributeButton";
-import { CreatorDisplay } from "@/components/Creator/CreatorDisplay";
+import { RemixInPixelsButton } from "@/components/Videos/RemixInPixelsButton";
+import { AddToMixtapeButton } from "@/components/Videos/AddToMixtapeButton";
+import { VideoPredictButton } from "@/components/Videos/VideoPredictButton";
+import { ActivePredictionsStripServer } from "./ActivePredictionsStripServer";
 import { logger } from '@/lib/utils/logger';
-
+import {
+  getSiteOrigin,
+  getVideoOgImageUrl,
+  VIDEO_OG_IMAGE,
+} from "@/lib/utils/og-image";
 
 type VideoDetailsPageProps = {
   params: Promise<{
@@ -38,88 +41,73 @@ type VideoDetailsPageProps = {
   }>;
 };
 
-const fetchAssetData = async (id: string): Promise<Asset | null> => {
-  try {
-    // Validate UUID format
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+type VideoAssetRow = Awaited<ReturnType<typeof getVideoAssetByAssetId>>;
 
-    if (!uuidRegex.test(id)) {
-      logger.error("Invalid video asset ID format:", id);
-      return null;
-    }
+const UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-    // First, get the video asset from NeonDB using the asset_id (UUID)
-    const videoAsset = await getVideoAssetByAssetId(id);
+function assetFromVideoRow(
+  videoAsset: NonNullable<VideoAssetRow>,
+  assetId: string,
+): Asset {
+  return {
+    id: videoAsset.asset_id || assetId,
+    name: videoAsset.title || "Video",
+    playbackId: videoAsset.playback_id || undefined,
+  } as Asset;
+}
 
-    if (!videoAsset) {
-      logger.error("Video asset not found in database");
-      return null;
-    }
-
-    // Then, fetch the Livepeer asset using the same asset_id
-    const response = await fetchAssetId(id);
-
-    if (response?.asset) {
-      return response.asset;
-    }
-
-    return null;
-  } catch (error) {
-    logger.error("Error fetching asset:", error);
-    return null;
+async function loadVideoPageData(id: string): Promise<{
+  assetData: Asset | null;
+  videoAsset: VideoAssetRow | null;
+}> {
+  if (!UUID_REGEX.test(id)) {
+    logger.error("Invalid video asset ID format:", id);
+    return { assetData: null, videoAsset: null };
   }
-};
+
+  // Isolate Neon from Livepeer so a Livepeer outage cannot wipe a valid DB row.
+  const [dbResult, livepeerResult] = await Promise.allSettled([
+    getVideoAssetByAssetId(id),
+    fetchAssetId(id),
+  ]);
+
+  const videoAsset =
+    dbResult.status === "fulfilled" ? dbResult.value : null;
+  if (dbResult.status === "rejected") {
+    logger.error("Error fetching video asset from database:", dbResult.reason);
+  }
+
+  let assetData: Asset | null = null;
+  if (livepeerResult.status === "fulfilled") {
+    assetData = livepeerResult.value?.asset ?? null;
+  } else {
+    logger.error("Error fetching Livepeer asset:", livepeerResult.reason);
+  }
+
+  if (!videoAsset) {
+    logger.error("Video asset not found in database");
+    return { assetData: null, videoAsset: null };
+  }
+
+  if (!assetData) {
+    assetData = assetFromVideoRow(videoAsset, id);
+  }
+
+  return { assetData, videoAsset };
+}
 
 export default async function VideoDetailsPage({
   params,
 }: VideoDetailsPageProps) {
   const { id } = await params;
-  const assetData: Asset | null = await fetchAssetData(id);
+  const { assetData, videoAsset } = await loadVideoPageData(id);
 
-  if (!assetData) {
+  if (!videoAsset || !assetData) {
     return <div>Asset not found</div>;
   }
 
-  // Get video asset from database to access creator_id
-  let videoAsset = null;
-  try {
-    videoAsset = await getVideoAssetByAssetId(id);
-  } catch (error) {
-    logger.error("Error fetching video asset from database:", error);
-    // Continue with null videoAsset - page can still render with assetData
-  }
   const creatorAddress = videoAsset?.creator_id || null;
-
-  // Fetch creator profile for avatar
-  let creatorProfile = null;
-  if (creatorAddress) {
-    try {
-      const supabase = await createClient();
-      const { data, error } = await supabase
-        .from('creator_profiles')
-        .select('avatar_url, username')
-        .eq('owner_address', creatorAddress.toLowerCase())
-        .single();
-
-      if (error) {
-        // PGRST116 means no rows found - this is acceptable (profile doesn't exist)
-        if (error.code === 'PGRST116') {
-          // Profile doesn't exist, that's okay
-          creatorProfile = null;
-        } else {
-          // Real database error - log it
-          logger.error('Error fetching creator profile:', error);
-          creatorProfile = null;
-        }
-      } else {
-        creatorProfile = data;
-      }
-    } catch (error) {
-      // Handle unexpected errors (network failures, etc.)
-      logger.error('Unexpected error fetching creator profile:', error);
-      creatorProfile = null;
-    }
-  }
 
   return (
     <div className="container max-w-7xl mx-auto px-4">
@@ -157,25 +145,30 @@ export default async function VideoDetailsPage({
       </div>
       <div className="py-10">
         <div className="max-w-4xl mx-auto space-y-6">
-          {/* Video Player */}
           <div>
             <VideoDetails
               asset={assetData}
               videoTitle={videoAsset?.title || assetData?.name}
+              creatorAddress={creatorAddress}
               livepeerAttestationId={videoAsset?.livepeer_attestation_id ?? null}
               storyIpRegistered={videoAsset?.story_ip_registered ?? false}
               storyIpId={videoAsset?.story_ip_id ?? null}
+              storyLicenseTermsId={videoAsset?.story_license_terms_id ?? null}
               contractAddress={videoAsset?.contract_address ?? null}
               tokenId={videoAsset?.token_id ?? null}
             />
-            {/* Uploader Section with Share Button */}
-            <div className="flex items-center justify-between mt-4">
-              {creatorAddress ? (
-                <CreatorDisplay creatorAddress={creatorAddress} />
-              ) : (
-                <div></div>
-              )}
-              <div className="flex items-center gap-2">
+            {creatorAddress && (
+              <div className="mt-4">
+                <VideoHeartBitSection
+                  videoId={assetData.playbackId || id}
+                  videoIpfsHash={videoAsset?.metadata_uri ?? null}
+                  creatorAddress={creatorAddress}
+                />
+              </div>
+            )}
+            {/* Actions (right-aligned) → views → date, each on its own row */}
+            <div className="mt-4 space-y-2">
+              <div className="flex items-center gap-2 flex-wrap justify-end ml-auto">
                 {creatorAddress && (
                   <>
                     <Suspense fallback={<div className="h-9 w-9" />}>
@@ -194,12 +187,44 @@ export default async function VideoDetailsPage({
                   </>
                 )}
                 <Suspense fallback={<div className="h-9 w-9" />}>
-                  {assetData?.playbackId && (
-                    <VideoBuyButton
-                      playbackId={assetData.playbackId}
-                      videoTitle={videoAsset?.title || assetData?.name || "Video"}
-                    />
+                  {creatorAddress &&
+                    videoAsset?.attributes?.content_coin_id && (
+                      <CreatorMessageButton
+                        creatorAddress={creatorAddress}
+                        meTokenAddress={
+                          videoAsset.attributes.content_coin_id as string
+                        }
+                      />
+                    )}
+                </Suspense>
+                {videoAsset?.story_ip_registered &&
+                  videoAsset?.story_ip_id &&
+                  videoAsset?.story_license_terms_id && (
+                    <Suspense fallback={<div className="h-9 w-9" />}>
+                      <BuyIPButton
+                        ipId={videoAsset.story_ip_id}
+                        licenseTermsId={String(videoAsset.story_license_terms_id)}
+                        videoTitle={videoAsset?.title || assetData?.name || "Video"}
+                      />
+                    </Suspense>
                   )}
+                <Suspense fallback={<div className="h-9 w-9" />}>
+                  <AddToMixtapeButton
+                    assetId={id}
+                    videoTitle={videoAsset?.title || assetData?.name || "Video"}
+                    playbackId={assetData?.playbackId || undefined}
+                  />
+                </Suspense>
+                {videoAsset?.story_ip_registered && videoAsset?.story_license_terms_id && (
+                  <Suspense fallback={<div className="h-9 w-9" />}>
+                    <RemixInPixelsButton />
+                  </Suspense>
+                )}
+                <Suspense fallback={<div className="h-9 w-9" />}>
+                  <VideoPredictButton
+                    videoAssetId={id}
+                    videoTitle={videoAsset?.title || assetData?.name || "Video"}
+                  />
                 </Suspense>
                 <Suspense fallback={<div className="h-9 w-9" />}>
                   <VideoShareButton
@@ -209,15 +234,22 @@ export default async function VideoDetailsPage({
                   />
                 </Suspense>
               </div>
+              {assetData.playbackId && (
+                <div className="min-h-4">
+                  <VideoViewMetrics
+                    playbackId={assetData.playbackId}
+                    fallbackViews={videoAsset?.views_count ?? 0}
+                  />
+                </div>
+              )}
+              {videoAsset?.created_at ? (
+                <div>
+                  <span className="text-sm text-muted-foreground md:text-base">
+                    {new Date(videoAsset.created_at).toLocaleDateString()}
+                  </span>
+                </div>
+              ) : null}
             </div>
-            {/* Metrics components */}
-            {assetData.playbackId && (
-              <div className="flex gap-4 items-center mt-4">
-                {/* <ViewsComponent playbackId={assetData.playbackId} /> */}
-                <VideoViewMetrics playbackId={assetData.playbackId} />
-              </div>
-            )}
-            {/* Description */}
             {videoAsset?.description && (
               <div className="mt-4">
                 <div className="prose prose-sm dark:prose-invert max-w-none">
@@ -227,9 +259,12 @@ export default async function VideoDetailsPage({
                 </div>
               </div>
             )}
-          </div>
 
-          {/* Comments Section - Below video like YouTube */}
+          <Suspense fallback={<div className="h-24" />}>
+            <ActivePredictionsStripServer videoAssetId={id} />
+          </Suspense>
+        </div>
+
           {videoAsset && (
             <div className="mt-8">
               <VideoCommentsWrapper
@@ -253,68 +288,39 @@ export async function generateMetadata({
   try {
     const { id } = await params;
 
-    // Validate UUID format
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-    if (!uuidRegex.test(id)) {
+    if (!UUID_REGEX.test(id)) {
       logger.error("Invalid video asset ID format for metadata:", id);
       return { title: "Video Not Found" };
     }
 
-    // First, get the video asset from NeonDB using the asset_id (UUID)
-    const videoAsset = await getVideoAssetByAssetId(id);
+    const { assetData, videoAsset } = await loadVideoPageData(id);
 
-    if (!videoAsset) {
+    if (!videoAsset || !assetData) {
       return { title: "Video Not Found" };
     }
 
-    // Then, fetch the Livepeer asset using the same asset_id
-    const asset = await fetchAssetId(id);
-
-    if (!asset?.asset) return { title: "Video Not Found" };
-
-    // Get thumbnail from database or use fallback
-    let thumbnailUrl =
-      (videoAsset as any)?.thumbnail_url?.trim() ||
-      (asset.asset as any)?.thumbnailUri?.trim() ||
-      null;
-
-    // If no thumbnail or empty string, use default image
-    if (!thumbnailUrl || thumbnailUrl === "") {
-      thumbnailUrl = "/Creative_TV.png";
-    } else {
-      // Apply gateway conversion for IPFS URLs (consistent with ShareDialog)
-      thumbnailUrl = convertFailingGateway(thumbnailUrl);
-    }
-
-    // Construct absolute URL for Open Graph
-    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL ||
-      (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` :
-        "https://tv.creativeplatform.xyz");
+    const baseUrl = getSiteOrigin();
     const absoluteUrl = `${baseUrl}/discover/${id}`;
 
-    // Construct absolute thumbnail URL with proper path joining
-    let absoluteThumbnailUrl: string;
-    if (thumbnailUrl.startsWith("http://") || thumbnailUrl.startsWith("https://")) {
-      // Already an absolute URL, use as-is
-      absoluteThumbnailUrl = thumbnailUrl;
-    } else {
-      // Relative URL - ensure proper path joining
-      const normalizedPath = thumbnailUrl.startsWith("/")
-        ? thumbnailUrl
-        : `/${thumbnailUrl}`;
-      absoluteThumbnailUrl = `${baseUrl}${normalizedPath}`;
-    }
+    // Use the same-origin proxy for OG images — Telegram/SMS crawlers can't
+    // fetch IPFS gateway URLs (grove.storage, ipfs.io, etc). The proxy fetches
+    // the image server-side and serves it from our domain.
+    const ogImageUrl = getVideoOgImageUrl({ id });
 
-    // Use database title (from video_assets table) instead of asset name
-    // Remove .mp4 extension if present
-    let videoTitle = (videoAsset as any)?.title || asset.asset.name || "Watch Video";
+    let videoTitle = (videoAsset as any)?.title || assetData.name || "Watch Video";
     if (videoTitle.endsWith('.mp4')) {
       videoTitle = videoTitle.slice(0, -4);
     }
 
-    // Use nullish coalescing to preserve empty strings (only replace null/undefined)
     const videoDescription = (videoAsset as any)?.description ?? `Watch ${videoTitle} on Creative TV`;
+
+    const ogImage = {
+      url: ogImageUrl,
+      secureUrl: ogImageUrl,
+      width: VIDEO_OG_IMAGE.width,
+      height: VIDEO_OG_IMAGE.height,
+      alt: videoTitle || VIDEO_OG_IMAGE.alt,
+    };
 
     return {
       title: videoTitle,
@@ -322,25 +328,17 @@ export async function generateMetadata({
       openGraph: {
         title: videoTitle,
         description: videoDescription,
-        images: [absoluteThumbnailUrl],
+        images: [ogImage],
         url: absoluteUrl,
-        type: "video.other",
-        videos: asset.asset.playbackUrl
-          ? [
-            {
-              url: asset.asset.playbackUrl,
-              type: "video/mp4",
-              width: 1280,
-              height: 720,
-            },
-          ]
-          : [],
+        type: "website",
+        siteName: "Creative TV",
       },
       twitter: {
         card: "summary_large_image",
         title: videoTitle,
         description: videoDescription,
-        images: [absoluteThumbnailUrl],
+        // Same absolute proxy URL as og:image so each video ID has a thumbnail card
+        images: [ogImageUrl],
       },
     };
   } catch (error) {

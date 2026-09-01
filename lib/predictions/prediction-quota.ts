@@ -13,7 +13,9 @@ export const PREDICTION_MARKETS_MONTHLY_LIMIT = 3;
 export const UNLIMITED_PREDICTION_LOCK_ADDRESSES = new Set(
   [
     LOCK_ADDRESSES.BASE_CREATIVE_PASS,
+    LOCK_ADDRESSES.BASE_CREATIVE_CREATOR_PLUS,
     LOCK_ADDRESSES.BASE_CREATIVE_PASS_3,
+    LOCK_ADDRESSES.BASE_CREATIVE_BRAND_PLUS,
   ].map((a) => a.toLowerCase())
 );
 
@@ -33,11 +35,17 @@ export function getPremiumPredictionAccess(
   for (const m of memberships) {
     if (!m.isValid) continue;
     const a = m.address.toLowerCase();
-    if (a === LOCK_ADDRESSES.BASE_CREATIVE_PASS.toLowerCase()) {
+    if (
+      a === LOCK_ADDRESSES.BASE_CREATIVE_PASS.toLowerCase() ||
+      a === LOCK_ADDRESSES.BASE_CREATIVE_CREATOR_PLUS.toLowerCase()
+    ) {
       tier = "brand";
       break;
     }
-    if (a === LOCK_ADDRESSES.BASE_CREATIVE_PASS_3.toLowerCase()) {
+    if (
+      a === LOCK_ADDRESSES.BASE_CREATIVE_PASS_3.toLowerCase() ||
+      a === LOCK_ADDRESSES.BASE_CREATIVE_BRAND_PLUS.toLowerCase()
+    ) {
       tier = "investor";
       break;
     }

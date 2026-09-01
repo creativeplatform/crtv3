@@ -4,6 +4,7 @@ import { useState } from "react";
 import VideoCardGrid from "@/components/Videos/VideoCardGrid";
 import { VideoSearch } from "@/components/Videos/VideoSearch";
 import LivestreamGrid from "@/components/Live/LivestreamGrid";
+import { ChannelBannersCarousel } from "@/components/channels/ChannelBannersCarousel";
 import Link from "next/link";
 import {
   Breadcrumb,
@@ -31,6 +32,9 @@ const AllVideosContent: React.FC = () => {
           worldwide. Find something inspiring and share it with your friends!
         </p>
       </div>
+      <div className="mx-auto mb-8 max-w-7xl px-4 sm:px-0">
+        <ChannelBannersCarousel />
+      </div>
       <div className="my-5 p-4">
         <Breadcrumb>
           <BreadcrumbList>
@@ -56,13 +60,12 @@ const AllVideosContent: React.FC = () => {
         </Breadcrumb>
       </div>
 
-      {/* Live Streams Section - Public */}
-      <div className="mb-8">
-        <h2 className="mb-4 text-2xl font-bold flex items-center gap-2">
-          Live Now
-        </h2>
-        <LivestreamGrid />
-      </div>
+      {/* Live Streams Section - Public (hidden when none are live) */}
+      <LivestreamGrid
+        heading="Live Now"
+        hideWhenEmpty
+        className="mb-8"
+      />
 
       {/* Videos Section */}
       <div>
@@ -73,7 +76,6 @@ const AllVideosContent: React.FC = () => {
           onSearchChange={setSearchQuery}
           onCategoryChange={setCategory}
           onSortChange={setSortBy}
-          initialSearch={searchQuery}
           initialCategory={category}
           initialSort={sortBy}
         />

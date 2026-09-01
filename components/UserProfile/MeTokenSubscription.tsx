@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -7,14 +7,28 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2, AlertCircle, CheckCircle, ExternalLink } from 'lucide-react';
 import Image from 'next/image';
-import { formatEther, parseEther, encodeFunctionData, maxUint256 } from 'viem';
-import { useSmartAccountClient, useChain } from '@account-kit/react';
+import { parseUnits, formatUnits, encodeFunctionData, maxUint256, type Address } from "viem";
+import { useSmartAccountClient, useChain } from '@/lib/wallet/react';
 import { useMeTokensSupabase, MeTokenData } from '@/lib/hooks/metokens/useMeTokensSupabase';
 import { getHubVaultAddress } from '@/lib/utils/metokenSubscriptionUtils';
+import { getErc20Balance, getErc20Allowance } from "@/lib/viem";
+import {
+  HUB_ASSET_CONFIGS,
+  getHubAssetByHubId,
+  DEFAULT_HUB_ASSET,
+} from "@/lib/contracts/MeTokenHubs";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { DaiFundingOptions } from '@/components/wallet/funding/DaiFundingOptions';
 import { parseBundlerError, shouldRetryError } from '@/lib/utils/bundlerErrorParser';
 import { logger } from '@/lib/utils/logger';
 import { appendBuilderCode } from "@/lib/utils/builder-code";
+import { METOKEN_DIAMOND_BASE } from '@/lib/contracts/metokens/deployments';
 
 interface MeTokenSubscriptionProps {
   meToken: MeTokenData;
@@ -22,7 +36,7 @@ interface MeTokenSubscriptionProps {
 }
 
 export function MeTokenSubscription({ meToken, onSubscriptionSuccess }: MeTokenSubscriptionProps) {
-  const [hubId, setHubId] = useState('1'); // Default hub ID
+  const [hubId, setHubId] = useState(String(HUB_ASSET_CONFIGS[DEFAULT_HUB_ASSET].hubId));
   const [assetsDeposited, setAssetsDeposited] = useState('');
   const [daiBalance, setDaiBalance] = useState<bigint>(BigInt(0));
   const [error, setError] = useState<string | null>(null);
@@ -59,86 +73,71 @@ export function MeTokenSubscription({ meToken, onSubscriptionSuccess }: MeTokenS
     setCountdown(null);
   };
 
-  // Check DAI balance
-  const checkDaiBalance = useCallback(async () => {
-    if (!client) return;
+  const selectedHubAsset = getHubAssetByHubId(Number(hubId)) ?? HUB_ASSET_CONFIGS[DEFAULT_HUB_ASSET];
+  const collateralSymbol = selectedHubAsset.symbol;
+  const collateralAddress = selectedHubAsset.address;
+  const collateralDecimals = selectedHubAsset.decimals;
+  const collateralDisplayName = selectedHubAsset.displayName;
+
+  const depositAmount = useMemo(() => {
+    if (!assetsDeposited || parseFloat(assetsDeposited) <= 0) return 0n;
+    try {
+      return parseUnits(assetsDeposited, collateralDecimals);
+    } catch {
+      return 0n;
+    }
+  }, [assetsDeposited, collateralDecimals]);
+
+  // Check collateral balance
+  const checkCollateralBalance = useCallback(async () => {
+    if (!client?.account?.address) return;
 
     try {
-      const daiContract = {
-        address: '0x50c5725949a6f0c72e6c4a641f24049a917db0cb' as `0x${string}`, // DAI on Base
-        abi: [
-          {
-            "inputs": [{ "internalType": "address", "name": "account", "type": "address" }],
-            "name": "balanceOf",
-            "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-            "stateMutability": "view",
-            "type": "function"
-          }
-        ] as const,
-      };
-
-      const balance = await client.readContract({
-        address: daiContract.address,
-        abi: daiContract.abi,
-        functionName: 'balanceOf',
-        args: [client.account?.address as `0x${string}`],
-      }) as bigint;
+      const balance = await getErc20Balance({
+        token: collateralAddress,
+        owner: client.account.address,
+      });
 
       setDaiBalance(balance);
     } catch (err) {
-      logger.error('Failed to check DAI balance:', err);
+      logger.error(`Failed to check ${collateralSymbol} balance:`, err);
       setDaiBalance(BigInt(0));
     }
-  }, [client]);
+  }, [client?.account?.address, collateralAddress, collateralSymbol]);
 
-  // Check DAI allowance status
+  // Check collateral allowance status
   const checkAllowanceStatus = useCallback(async () => {
-    if (!client) {
+    if (!client?.account?.address) {
       setApprovalComplete(false);
       return;
     }
 
     try {
-      const diamondAddress = '0xba5502db2aC2cBff189965e991C07109B14eB3f5';
-      const daiAddress = '0x50c5725949a6f0c72e6c4a641f24049a917db0cb' as `0x${string}`;
-
       // Get the correct spender address (Vault)
-      const hubIdBigInt = hubId ? BigInt(hubId) : BigInt(1); // Default to hub 1
+      const hubIdBigInt = BigInt(hubId || HUB_ASSET_CONFIGS[DEFAULT_HUB_ASSET].hubId);
       const vaultAddress = await getHubVaultAddress(hubIdBigInt);
       logger.debug('🔍 Checking allowance for spender (Vault):', vaultAddress);
 
-      const currentAllowance = await client.readContract({
-        address: daiAddress,
-        abi: [
-          {
-            "inputs": [
-              { "internalType": "address", "name": "owner", "type": "address" },
-              { "internalType": "address", "name": "spender", "type": "address" }
-            ],
-            "name": "allowance",
-            "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-            "stateMutability": "view",
-            "type": "function"
-          }
-        ] as const,
-        functionName: 'allowance',
-        args: [client.account?.address as `0x${string}`, vaultAddress as `0x${string}`] as const,
-      }) as bigint;
+      const currentAllowance = await getErc20Allowance({
+        token: collateralAddress,
+        owner: client.account.address,
+        spender: vaultAddress as `0x${string}`,
+      });
 
       const hasUnlimitedAllowance = currentAllowance >= (maxUint256 / BigInt(2));
       setApprovalComplete(hasUnlimitedAllowance);
 
       logger.debug('📊 Allowance status checked:', {
         hasUnlimited: hasUnlimitedAllowance,
-        allowance: formatEther(currentAllowance),
+        allowance: formatUnits(currentAllowance, collateralDecimals),
       });
     } catch (err) {
       logger.error('Failed to check allowance status:', err);
       setApprovalComplete(false);
     }
-  }, [client]);
+  }, [client?.account?.address, hubId, collateralAddress]);
 
-  // Handle DAI approval
+  // Handle collateral approval
   const handleApprove = async () => {
     if (!client) {
       setError('Wallet not connected');
@@ -151,15 +150,15 @@ export function MeTokenSubscription({ meToken, onSubscriptionSuccess }: MeTokenS
     setApprovalComplete(false);
 
     try {
-      const diamondAddress = '0xba5502db2aC2cBff189965e991C07109B14eB3f5';
-      const daiAddress = '0x50c5725949a6f0c72e6c4a641f24049a917db0cb' as `0x${string}`;
+      const diamondAddress = METOKEN_DIAMOND_BASE;
+      const collateralTokenAddress = collateralAddress;
 
       // Get the correct spender address (Vault)
-      const hubIdBigInt = hubId ? BigInt(hubId) : BigInt(1); // Default to hub 1
+      const hubIdBigInt = BigInt(hubId || HUB_ASSET_CONFIGS[DEFAULT_HUB_ASSET].hubId);
       const vaultAddress = await getHubVaultAddress(hubIdBigInt);
-      logger.debug('📝 Step 1: Approving unlimited DAI for Vault:', vaultAddress);
+      logger.debug(`📝 Step 1: Approving unlimited ${collateralSymbol} for Vault:`, vaultAddress);
 
-      setSuccess('Approving unlimited DAI... Please sign the transaction in your wallet.');
+      setSuccess(`Approving unlimited ${collateralSymbol}... Please sign the transaction in your wallet.`);
 
       // Build approve operation
       const approveData = encodeFunctionData({
@@ -180,7 +179,7 @@ export function MeTokenSubscription({ meToken, onSubscriptionSuccess }: MeTokenS
       });
 
       logger.debug('🔍 Approve operation details:', {
-        target: daiAddress,
+        target: collateralTokenAddress,
         spender: vaultAddress,
         dataLength: approveData.length,
         value: '0',
@@ -192,11 +191,11 @@ export function MeTokenSubscription({ meToken, onSubscriptionSuccess }: MeTokenS
       // Add timeout wrapper
       const approvePromise = client.sendUserOperation({
         uo: {
-          target: daiAddress,
+          target: collateralTokenAddress,
           data: appendBuilderCode(approveData),
           value: BigInt(0),
-        },
-      });
+          },
+          });
 
       const timeoutPromise = new Promise((_, reject) => {
         setTimeout(() => {
@@ -221,24 +220,10 @@ export function MeTokenSubscription({ meToken, onSubscriptionSuccess }: MeTokenS
       logger.debug('🔍 Starting aggressive multi-node validation...');
       setSuccess('Approval confirmed! Validating across network nodes...');
 
-      const allowanceAbi = [
-        {
-          "inputs": [
-            { "internalType": "address", "name": "owner", "type": "address" },
-            { "internalType": "address", "name": "spender", "type": "address" }
-          ],
-          "name": "allowance",
-          "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-          "stateMutability": "view",
-          "type": "function"
-        }
-      ] as const;
-
       const allowanceParams = {
-        address: daiAddress,
-        abi: allowanceAbi,
-        functionName: 'allowance' as const,
-        args: [client.account?.address as `0x${string}`, vaultAddress as `0x${string}`] as const,
+        token: collateralTokenAddress,
+        owner: client.account?.address as `0x${string}`,
+        spender: vaultAddress as `0x${string}`,
       };
 
       let validated = false;
@@ -256,12 +241,12 @@ export function MeTokenSubscription({ meToken, onSubscriptionSuccess }: MeTokenS
         try {
           // Perform multiple parallel reads to hit different nodes
           const checks = await Promise.all([
-            client.readContract(allowanceParams),
-            client.readContract(allowanceParams),
-            client.readContract(allowanceParams),
-          ]) as bigint[];
+            getErc20Allowance(allowanceParams),
+            getErc20Allowance(allowanceParams),
+            getErc20Allowance(allowanceParams),
+          ]);
 
-          const allowances = checks.map(a => formatEther(a));
+          const allowances = checks.map(a => formatUnits(a, collateralDecimals));
           logger.debug(`Allowance checks: Allowance checks:`, allowances);
 
           // All 3 checks must pass
@@ -271,7 +256,7 @@ export function MeTokenSubscription({ meToken, onSubscriptionSuccess }: MeTokenS
             validated = true;
             const avgAllowance = checks.reduce((a, b) => a + b, BigInt(0)) / BigInt(checks.length);
             logger.debug(`Validation passed Validation passed after ${elapsedSeconds} seconds!`);
-            logger.debug(`Allowance checks: Average allowance across nodes: ${formatEther(avgAllowance)} DAI`);
+            logger.debug(`Allowance checks: Average allowance across nodes: ${formatUnits(avgAllowance, collateralDecimals)} ${collateralSymbol}`);
             setSuccess('Allowance validated across network! Ready to mint.');
             setApprovalComplete(true);
           } else {
@@ -297,7 +282,7 @@ export function MeTokenSubscription({ meToken, onSubscriptionSuccess }: MeTokenS
 
     } catch (err) {
       logger.error('❌ Approval failed:', err);
-      setError(err instanceof Error ? err.message : 'Failed to approve DAI');
+      setError(err instanceof Error ? err.message : `Failed to approve ${collateralSymbol}`);
       throw err;
     } finally {
       setIsApproving(false);
@@ -336,12 +321,12 @@ export function MeTokenSubscription({ meToken, onSubscriptionSuccess }: MeTokenS
 
       logger.debug('✅ Confirmed not subscribed, proceeding with mint...');
 
-      const diamondAddress = '0xba5502db2aC2cBff189965e991C07109B14eB3f5' as `0x${string}`;
-      const daiAddress = '0x50c5725949a6f0c72e6c4a641f24049a917db0cb' as `0x${string}`;
-      const depositAmount = parseEther(assetsDeposited);
+      const diamondAddress = METOKEN_DIAMOND_BASE as `0x${string}`;
+      const collateralTokenAddress = collateralAddress;
+      const depositAmount = parseUnits(assetsDeposited, collateralDecimals);
 
       // Get the correct spender address (Vault)
-      const hubIdBigInt = hubId ? BigInt(hubId) : BigInt(1); // Default to hub 1
+      const hubIdBigInt = BigInt(hubId || HUB_ASSET_CONFIGS[DEFAULT_HUB_ASSET].hubId);
       let vaultAddress: string;
       try {
         vaultAddress = await getHubVaultAddress(hubIdBigInt);
@@ -351,29 +336,29 @@ export function MeTokenSubscription({ meToken, onSubscriptionSuccess }: MeTokenS
         vaultAddress = diamondAddress;
       }
 
-      // CRITICAL: Refresh and verify smart account has DAI balance BEFORE attempting transaction
-      logger.debug('🔍 Verifying smart account DAI balance...');
-      await checkDaiBalance(); // Refresh balance first to get latest state
+      // CRITICAL: Refresh and verify smart account has enough collateral balance BEFORE attempting transaction
+      logger.debug(`🔍 Verifying smart account ${collateralSymbol} balance...`);
+      await checkCollateralBalance(); // Refresh balance first to get latest state
 
       logger.debug('📊 Balance check:', {
         smartAccount: client.account?.address,
-        daiBalance: formatEther(daiBalance),
-        required: formatEther(depositAmount),
+        daiBalance: formatUnits(daiBalance, collateralDecimals),
+        required: formatUnits(depositAmount, collateralDecimals),
         hasEnough: daiBalance >= depositAmount,
       });
 
       if (daiBalance < depositAmount) {
-        const errorMsg = `Insufficient DAI balance in your smart account. ` +
-          `You have ${formatEther(daiBalance)} DAI but need ${formatEther(depositAmount)} DAI. ` +
-          `Please transfer DAI to your smart account (${client.account?.address}) first. ` +
-          `DAI must be in your smart account, not your EOA wallet.`;
+        const errorMsg = `Insufficient ${collateralSymbol} balance in your smart account. ` +
+          `You have ${formatUnits(daiBalance, collateralDecimals)} ${collateralSymbol} but need ${formatUnits(depositAmount, collateralDecimals)} ${collateralSymbol}. ` +
+          `Please transfer ${collateralSymbol} to your smart account (${client.account?.address}) first. ` +
+          `${collateralSymbol} must be in your smart account, not your EOA wallet.`;
         logger.error('❌', errorMsg);
         setError(errorMsg);
         setIsMinting(false);
         return;
       }
 
-      logger.debug('✅ Smart account has sufficient DAI balance');
+      logger.debug(`✅ Smart account has sufficient ${collateralSymbol} balance`);
 
       // Try batched operations with client.sendUserOperation first
       // This bypasses wallet_prepareCalls and uses eth_estimateUserOperationGas directly
@@ -425,7 +410,7 @@ export function MeTokenSubscription({ meToken, onSubscriptionSuccess }: MeTokenS
       // 2. wallet_prepareCalls (used by sendCallsAsync) checks allowance BEFORE simulating approve
       // 3. The bundler uses a different RPC node than the one used for reading, causing state sync delays
       // 4. Separate transactions ensure the approve is confirmed on-chain before attempting mint
-      //    - Step 1: Approve DAI (confirmed on-chain, visible to all nodes)
+      //    - Step 1: Approve ${collateralSymbol} (confirmed on-chain, visible to all nodes)
       //    - Step 2: Mint MeTokens (uses confirmed allowance)
       //
       // This approach is more reliable than batching when dealing with RPC node state sync issues
@@ -436,27 +421,15 @@ export function MeTokenSubscription({ meToken, onSubscriptionSuccess }: MeTokenS
       logger.debug('🔍 Checking current allowance before attempting approval...');
       let currentAllowance: bigint;
       try {
-        currentAllowance = await client.readContract({
-          address: daiAddress,
-          abi: [
-            {
-              "inputs": [
-                { "internalType": "address", "name": "owner", "type": "address" },
-                { "internalType": "address", "name": "spender", "type": "address" }
-              ],
-              "name": "allowance",
-              "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-              "stateMutability": "view",
-              "type": "function"
-            }
-          ] as const,
-          functionName: 'allowance',
-          args: [client.account?.address as `0x${string}`, vaultAddress as `0x${string}`] as const,
-        }) as bigint;
+        currentAllowance = await getErc20Allowance({
+          token: collateralTokenAddress,
+          owner: client.account?.address as `0x${string}`,
+          spender: vaultAddress as `0x${string}`,
+        });
 
         logger.debug('📊 Current allowance check:', {
           allowance: currentAllowance.toString(),
-          formatted: formatEther(currentAllowance),
+          formatted: formatUnits(currentAllowance, collateralDecimals),
           required: depositAmount.toString(),
           hasUnlimited: currentAllowance >= (maxUint256 / BigInt(2)),
           hasSufficient: currentAllowance >= depositAmount,
@@ -475,10 +448,10 @@ export function MeTokenSubscription({ meToken, onSubscriptionSuccess }: MeTokenS
       // If allowance exists, we'll try minting first and handle bundler sync issues via retry logic
       if (!hasUnlimitedAllowance && !hasSufficientAllowance) {
         logger.debug('📝 Allowance insufficient, sending approve transaction...');
-        setSuccess('Step 1: Approving DAI... Please sign in your wallet.');
+        setSuccess(`Step 1: Approving ${collateralSymbol}... Please sign in your wallet.`);
 
         logger.debug('📋 Approve transaction details:', {
-          target: daiAddress,
+          target: collateralTokenAddress,
           dataLength: approveData.length,
           data: approveData,
           smartAccount: client.account?.address,
@@ -492,11 +465,11 @@ export function MeTokenSubscription({ meToken, onSubscriptionSuccess }: MeTokenS
           logger.debug('⏳ Sending approve UserOperation (this may require wallet signature)...');
           const approvePromise = client.sendUserOperation({
             uo: {
-              target: daiAddress,
+              target: collateralTokenAddress,
               data: appendBuilderCode(approveData),
               value: BigInt(0),
-            },
-          });
+              },
+              });
 
           const timeoutPromise = new Promise<never>((_, reject) => {
             setTimeout(() => {
@@ -545,7 +518,7 @@ export function MeTokenSubscription({ meToken, onSubscriptionSuccess }: MeTokenS
         logger.debug('✅ Sufficient allowance already exists, proceeding to mint');
         logger.debug('📊 Allowance details:', {
           allowance: currentAllowance.toString(),
-          formatted: formatEther(currentAllowance),
+          formatted: formatUnits(currentAllowance, collateralDecimals),
           hasUnlimited: hasUnlimitedAllowance,
           hasSufficient: hasSufficientAllowance,
         });
@@ -570,30 +543,18 @@ export function MeTokenSubscription({ meToken, onSubscriptionSuccess }: MeTokenS
 
         for (let attempt = 1; attempt <= maxAttempts; attempt++) {
           try {
-            const polledAllowance = await client.readContract({
-              address: daiAddress,
-              abi: [
-                {
-                  "inputs": [
-                    { "internalType": "address", "name": "owner", "type": "address" },
-                    { "internalType": "address", "name": "spender", "type": "address" }
-                  ],
-                  "name": "allowance",
-                  "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-                  "stateMutability": "view",
-                  "type": "function"
-                }
-              ] as const,
-              functionName: 'allowance',
-              args: [client.account?.address as `0x${string}`, diamondAddress as `0x${string}`] as const,
-            }) as bigint;
+            const polledAllowance = await getErc20Allowance({
+              token: collateralTokenAddress,
+              owner: client.account?.address as `0x${string}`,
+              spender: vaultAddress as `0x${string}`,
+            });
 
             const hasUnlimitedAllowance = polledAllowance >= (maxUint256 / BigInt(2));
             const hasSufficientAllowance = polledAllowance >= depositAmount;
 
             logger.debug(`Allowance checks: Allowance check attempt ${attempt}/${maxAttempts}:`, {
               allowance: polledAllowance.toString(),
-              formatted: formatEther(polledAllowance),
+              formatted: formatUnits(polledAllowance, collateralDecimals),
               hasUnlimited: hasUnlimitedAllowance,
               hasSufficient: hasSufficientAllowance,
               required: depositAmount.toString(),
@@ -708,6 +669,7 @@ export function MeTokenSubscription({ meToken, onSubscriptionSuccess }: MeTokenS
 
           const isAllowanceError = mintErrorMessage.includes('insufficient allowance') ||
             mintErrorMessage.includes('ERC20') ||
+            mintErrorMessage.includes('execution reverted') ||
             parsedMintError.message.includes('allowance');
 
           if (!isAllowanceError || mintAttempt === maxMintRetries) {
@@ -741,11 +703,11 @@ export function MeTokenSubscription({ meToken, onSubscriptionSuccess }: MeTokenS
               logger.debug('📝 Sending fresh approval to sync bundler state...');
               const freshApproveOperation = await client.sendUserOperation({
                 uo: {
-                  target: daiAddress,
+                  target: collateralTokenAddress,
                   data: appendBuilderCode(approveData),
                   value: BigInt(0),
-                },
-              });
+                  },
+                  });
 
               logger.debug('✅ Fresh approve UserOperation sent:', freshApproveOperation.hash);
               setSuccess('Fresh approval sent! Waiting for confirmation...');
@@ -782,27 +744,15 @@ export function MeTokenSubscription({ meToken, onSubscriptionSuccess }: MeTokenS
           // Re-verify allowance before retry
           logger.debug('🔍 Re-verifying allowance before retry...');
           try {
-            const retryAllowance = await client.readContract({
-              address: daiAddress,
-              abi: [
-                {
-                  "inputs": [
-                    { "internalType": "address", "name": "owner", "type": "address" },
-                    { "internalType": "address", "name": "spender", "type": "address" }
-                  ],
-                  "name": "allowance",
-                  "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-                  "stateMutability": "view",
-                  "type": "function"
-                }
-              ] as const,
-              functionName: 'allowance',
-              args: [client.account?.address as `0x${string}`, vaultAddress as `0x${string}`] as const,
-            }) as bigint;
+            const retryAllowance = await getErc20Allowance({
+              token: collateralTokenAddress,
+              owner: client.account?.address as `0x${string}`,
+              spender: vaultAddress as `0x${string}`,
+            });
 
             logger.debug('📊 Allowance before retry:', {
               allowance: retryAllowance.toString(),
-              formatted: formatEther(retryAllowance),
+              formatted: formatUnits(retryAllowance, collateralDecimals),
               required: depositAmount.toString(),
               hasUnlimited: retryAllowance >= (maxUint256 / BigInt(2)),
               hasSufficient: retryAllowance >= depositAmount,
@@ -904,31 +854,27 @@ export function MeTokenSubscription({ meToken, onSubscriptionSuccess }: MeTokenS
     }
   }, [meToken.address]);
 
-  // Check DAI balance on mount and when client changes
+  // Check ${collateralSymbol} balance on mount and when client changes
   useEffect(() => {
-    checkDaiBalance();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [client]); // Only re-run when client changes
+    checkCollateralBalance();
+  }, [client]);
 
   // Check real subscription status on mount and when meToken address changes
   useEffect(() => {
     checkRealSubscriptionStatus();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [meToken.address]); // Only re-run when meToken address changes
+  }, [meToken.address]);
 
-  // Check allowance status on mount and when client/amount changes
+  // Check allowance status on mount and when client/amount/hub changes
   useEffect(() => {
-    if (client && assetsDeposited && parseFloat(assetsDeposited) > 0) {
+    if (client?.account?.address && assetsDeposited && parseFloat(assetsDeposited) > 0) {
       checkAllowanceStatus();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [client, assetsDeposited]);
+  }, [client?.account?.address, assetsDeposited, hubId]);
 
   // Check real subscription status on mount and when meToken address changes
   useEffect(() => {
     checkRealSubscriptionStatus();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [meToken.address]); // Only re-run when meToken address changes
+  }, [meToken.address]);
 
   return (
     <Card>
@@ -985,20 +931,20 @@ export function MeTokenSubscription({ meToken, onSubscriptionSuccess }: MeTokenS
               min="1"
             />
             <p className="text-sm text-muted-foreground">
-              The hub ID to subscribe to (default: 1)
+              Choose the stablecoin hub used to back your MeToken (default: {DEFAULT_HUB_ASSET})
             </p>
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="assetsDeposited" className="flex items-center space-x-2">
               <Image
-                src="/images/tokens/dai-logo.svg"
-                alt="DAI"
+                src={selectedHubAsset.logo}
+                alt={collateralSymbol}
                 width={16}
                 height={16}
                 className="w-4 h-4"
               />
-              <span>DAI Amount to Deposit</span>
+              <span>{collateralSymbol} Amount to Deposit</span>
             </Label>
             <Input
               id="assetsDeposited"
@@ -1012,24 +958,24 @@ export function MeTokenSubscription({ meToken, onSubscriptionSuccess }: MeTokenS
             />
             <p className="text-sm text-muted-foreground flex items-center space-x-1">
               <Image
-                src="/images/tokens/dai-logo.svg"
-                alt="DAI"
+                src={selectedHubAsset.logo}
+                alt={collateralSymbol}
                 width={12}
                 height={12}
                 className="w-3 h-3"
               />
-              <span>Your DAI balance: {formatEther(daiBalance)}</span>
+              <span>Your {collateralSymbol} balance: {formatUnits(daiBalance, collateralDecimals)}</span>
             </p>
             {assetsDeposited && parseFloat(assetsDeposited) > 0 && (
               <div className="text-sm">
-                {daiBalance >= parseEther(assetsDeposited) ? (
-                  <span className="text-green-600">✓ Sufficient DAI balance</span>
+                {daiBalance >= depositAmount ? (
+                  <span className="text-green-600">✓ Sufficient {collateralSymbol} balance</span>
                 ) : (
                   <div className="space-y-2">
-                    <span className="text-orange-600 block">⚠ Insufficient DAI balance</span>
+                    <span className="text-orange-600 block">⚠ Insufficient {collateralSymbol} balance</span>
                     <p className="text-xs text-muted-foreground">
-                      Your smart account ({client?.account?.address}) needs DAI tokens.
-                      DAI must be in your smart account, not your EOA wallet.
+                      Your smart account ({client?.account?.address}) needs {collateralSymbol} tokens.
+                      {collateralSymbol} must be in your smart account, not your EOA wallet.
                     </p>
                   </div>
                 )}
@@ -1037,13 +983,13 @@ export function MeTokenSubscription({ meToken, onSubscriptionSuccess }: MeTokenS
             )}
           </div>
 
-          {/* Show funding options if insufficient DAI */}
-          {assetsDeposited && parseFloat(assetsDeposited) > 0 && daiBalance < parseEther(assetsDeposited) && (
+          {/* Show funding options if insufficient collateral */}
+          {assetsDeposited && parseFloat(assetsDeposited) > 0 && daiBalance < depositAmount && (
             <DaiFundingOptions
-              requiredAmount={parseEther(assetsDeposited).toString()}
+              requiredAmount={depositAmount.toString()}
               onBalanceUpdate={(balance) => {
                 setDaiBalance(balance);
-                checkDaiBalance(); // Refresh balance
+                checkCollateralBalance(); // Refresh balance
               }}
             />
           )}
@@ -1051,7 +997,7 @@ export function MeTokenSubscription({ meToken, onSubscriptionSuccess }: MeTokenS
           <div className="flex gap-2">
             <Button
               onClick={handleApprove}
-              disabled={!client || isApproving || isMinting || !assetsDeposited || parseFloat(assetsDeposited) <= 0 || approvalComplete || daiBalance < parseEther(assetsDeposited)}
+              disabled={!client || isApproving || isMinting || !assetsDeposited || parseFloat(assetsDeposited) <= 0 || approvalComplete || daiBalance < depositAmount}
               className="flex-1"
               variant={approvalComplete ? "outline" : "default"}
             >
@@ -1066,13 +1012,13 @@ export function MeTokenSubscription({ meToken, onSubscriptionSuccess }: MeTokenS
                   Approved
                 </>
               ) : (
-                'Approve DAI'
+                `Approve ${collateralSymbol}`
               )}
             </Button>
 
             <Button
               onClick={handleMint}
-              disabled={!client || isApproving || isMinting || !assetsDeposited || parseFloat(assetsDeposited) <= 0 || daiBalance < parseEther(assetsDeposited)}
+              disabled={!client || isApproving || isMinting || !assetsDeposited || parseFloat(assetsDeposited) <= 0 || daiBalance < depositAmount}
               className="flex-1"
             >
               {isMinting ? (
@@ -1098,7 +1044,7 @@ export function MeTokenSubscription({ meToken, onSubscriptionSuccess }: MeTokenS
                 'Unknown'}</li>
           </ul>
           <p className="text-xs">
-            Note: Subscribing to a hub will lock your DAI and enable trading for your MeToken.
+            Note: Subscribing to a hub will lock your ${collateralSymbol} and enable trading for your MeToken.
           </p>
         </div>
       </CardContent>

@@ -1,5 +1,18 @@
 import { PriceHistoryPoint } from '@/app/api/market/tokens/[address]/price-history/route';
-import { IChartApi, ISeriesApi, LineStyleOptions, AreaStyleOptions, CandlestickStyleOptions, HistogramStyleOptions, UTCTimestamp, Time, LineData, AreaData, HistogramData } from 'lightweight-charts';
+import {
+  LineStyle,
+  type LineStyleOptions,
+  type AreaStyleOptions,
+  type CandlestickStyleOptions,
+  type HistogramStyleOptions,
+  type BaselineStyleOptions,
+  type CreatePriceLineOptions,
+  type UTCTimestamp,
+  type Time,
+  type LineData,
+  type AreaData,
+  type HistogramData,
+} from 'lightweight-charts';
 
 // Use the actual types from lightweight-charts
 export type ChartDataPoint = LineData<Time> | AreaData<Time>;
@@ -12,6 +25,9 @@ export interface CandlestickDataPoint {
   low: number;
   close: number;
 }
+
+export const CHART_UP = '#22c55e';
+export const CHART_DOWN = '#ef4444';
 
 /**
  * Convert price history data to lightweight-charts format
@@ -65,7 +81,69 @@ export function convertToCandlestickData(priceHistory: PriceHistoryPoint[]): Can
 }
 
 /**
+ * Convert volume data to lightweight-charts format with candlestick-derived colors.
+ * Falls back to comparing each point's price to the previous point when no exact
+ * candle timestamp match exists, so volume bars still show correct directionality.
+ */
+export function convertToVolumeDataWithColor(
+  priceHistory: PriceHistoryPoint[],
+  candles?: CandlestickDataPoint[],
+  isDark: boolean = false
+): VolumeDataPoint[] {
+  if (!candles || candles.length === 0) {
+    return convertToVolumeData(priceHistory);
+  }
+
+  const colors = getChartColors(isDark);
+  const candleMap = new Map<number, CandlestickDataPoint>(
+    candles.map((c) => [c.time, c])
+  );
+
+  return priceHistory.map((point, index) => {
+    const timeKey = Math.floor(point.timestamp / 3600) * 3600;
+    const candle = candleMap.get(timeKey as UTCTimestamp);
+    let isUp: boolean;
+    if (candle) {
+      isUp = candle.close >= candle.open;
+    } else if (index > 0) {
+      // Fallback: compare to previous price point
+      isUp = point.price >= priceHistory[index - 1].price;
+    } else {
+      isUp = true;
+    }
+
+    return {
+      time: point.timestamp as UTCTimestamp,
+      value: point.volume,
+      color: isUp ? colors.volumeUp : colors.volumeDown,
+    } as HistogramData<Time>;
+  });
+}
+
+/**
+ * Color volume bars from consecutive price moves (for baseline/area charts).
+ */
+export function convertToVolumeDataFromPriceDirection(
+  priceHistory: PriceHistoryPoint[],
+  isDark: boolean = false
+): VolumeDataPoint[] {
+  const colors = getChartColors(isDark);
+  return priceHistory.map((point, index) => {
+    const isUp =
+      index === 0
+        ? true
+        : point.price >= priceHistory[index - 1].price;
+    return {
+      time: point.timestamp as UTCTimestamp,
+      value: point.volume,
+      color: isUp ? colors.volumeUp : colors.volumeDown,
+    } as HistogramData<Time>;
+  });
+}
+
+/**
  * Convert volume data to lightweight-charts format
+ * (uncolored fallback for line/area charts)
  */
 export function convertToVolumeData(priceHistory: PriceHistoryPoint[]): VolumeDataPoint[] {
   return priceHistory.map((point) => ({
@@ -86,6 +164,8 @@ export function getChartColors(isDark: boolean): {
   areaBottom: string;
   volumeUp: string;
   volumeDown: string;
+  up: string;
+  down: string;
 } {
   if (isDark) {
     return {
@@ -97,28 +177,40 @@ export function getChartColors(isDark: boolean): {
       areaBottom: 'rgba(59, 130, 246, 0.05)',
       volumeUp: 'rgba(34, 197, 94, 0.5)',
       volumeDown: 'rgba(239, 68, 68, 0.5)',
-    };
-  } else {
-    return {
-      background: '#ffffff',
-      text: '#1f2937',
-      grid: '#e5e7eb',
-      line: '#3b82f6',
-      areaTop: 'rgba(59, 130, 246, 0.5)',
-      areaBottom: 'rgba(59, 130, 246, 0.05)',
-      volumeUp: 'rgba(34, 197, 94, 0.5)',
-      volumeDown: 'rgba(239, 68, 68, 0.5)',
+      up: CHART_UP,
+      down: CHART_DOWN,
     };
   }
+  return {
+    background: '#ffffff',
+    text: '#1f2937',
+    grid: '#e5e7eb',
+    line: '#3b82f6',
+    areaTop: 'rgba(59, 130, 246, 0.5)',
+    areaBottom: 'rgba(59, 130, 246, 0.05)',
+    volumeUp: 'rgba(34, 197, 94, 0.5)',
+    volumeDown: 'rgba(239, 68, 68, 0.5)',
+    up: CHART_UP,
+    down: CHART_DOWN,
+  };
 }
 
 /**
- * Get line series options
+ * Period-colored line (green gain / red loss vs period open).
  */
-export function getLineSeriesOptions(isDark: boolean): Partial<LineStyleOptions> {
+export function getLineSeriesOptions(
+  isDark: boolean,
+  isPositive?: boolean
+): Partial<LineStyleOptions> {
   const colors = getChartColors(isDark);
+  const color =
+    isPositive === undefined
+      ? colors.line
+      : isPositive
+        ? colors.up
+        : colors.down;
   return {
-    color: colors.line,
+    color,
     lineWidth: 2,
     crosshairMarkerVisible: true,
     crosshairMarkerRadius: 4,
@@ -126,14 +218,37 @@ export function getLineSeriesOptions(isDark: boolean): Partial<LineStyleOptions>
 }
 
 /**
- * Get area series options
+ * Period-colored area (green gain / red loss vs period open).
  */
-export function getAreaSeriesOptions(isDark: boolean): Partial<AreaStyleOptions> {
+export function getAreaSeriesOptions(
+  isDark: boolean,
+  isPositive?: boolean
+): Partial<AreaStyleOptions> {
   const colors = getChartColors(isDark);
+  const positive = isPositive !== false;
+  const lineColor =
+    isPositive === undefined
+      ? colors.line
+      : positive
+        ? colors.up
+        : colors.down;
+  const topColor =
+    isPositive === undefined
+      ? colors.areaTop
+      : positive
+        ? 'rgba(34, 197, 94, 0.4)'
+        : 'rgba(239, 68, 68, 0.4)';
+  const bottomColor =
+    isPositive === undefined
+      ? colors.areaBottom
+      : positive
+        ? 'rgba(34, 197, 94, 0.05)'
+        : 'rgba(239, 68, 68, 0.05)';
+
   return {
-    lineColor: colors.line,
-    topColor: colors.areaTop,
-    bottomColor: colors.areaBottom,
+    lineColor,
+    topColor,
+    bottomColor,
     lineWidth: 2,
     crosshairMarkerVisible: true,
     crosshairMarkerRadius: 4,
@@ -141,14 +256,58 @@ export function getAreaSeriesOptions(isDark: boolean): Partial<AreaStyleOptions>
 }
 
 /**
- * Get candlestick series options
+ * Baseline series: green above / red below period open (best PnL visualization).
  */
-export function getCandlestickSeriesOptions(isDark: boolean): Partial<CandlestickStyleOptions> {
+export function getBaselineSeriesOptions(
+  basePrice: number
+): Partial<BaselineStyleOptions> {
   return {
-    upColor: '#22c55e',
-    downColor: '#ef4444',
+    baseValue: { type: 'price', price: basePrice },
+    relativeGradient: true,
+    topLineColor: CHART_UP,
+    topFillColor1: 'rgba(34, 197, 94, 0.35)',
+    topFillColor2: 'rgba(34, 197, 94, 0.05)',
+    bottomLineColor: CHART_DOWN,
+    bottomFillColor1: 'rgba(239, 68, 68, 0.05)',
+    bottomFillColor2: 'rgba(239, 68, 68, 0.35)',
+    lineWidth: 2,
+    crosshairMarkerVisible: true,
+    crosshairMarkerRadius: 4,
+  };
+}
+
+/**
+ * Labeled price line at period open (createPriceLine cue for baseline charts).
+ */
+export function getPeriodOpenPriceLineOptions(
+  basePrice: number,
+  isDark: boolean
+): CreatePriceLineOptions {
+  return {
+    price: basePrice,
+    color: isDark ? '#9ca3af' : '#6b7280',
+    lineWidth: 1,
+    lineStyle: LineStyle.Dashed,
+    axisLabelVisible: true,
+    title: 'Period open',
+  };
+}
+
+/**
+ * Get candlestick series options with matching wick/border colors.
+ */
+export function getCandlestickSeriesOptions(
+  _isDark: boolean
+): Partial<CandlestickStyleOptions> {
+  return {
+    upColor: CHART_UP,
+    downColor: CHART_DOWN,
     borderVisible: true,
+    borderUpColor: CHART_UP,
+    borderDownColor: CHART_DOWN,
     wickVisible: true,
+    wickUpColor: CHART_UP,
+    wickDownColor: CHART_DOWN,
   };
 }
 
@@ -167,9 +326,9 @@ export function getVolumeSeriesOptions(isDark: boolean): Partial<HistogramStyleO
  */
 export function formatTime(timestamp: number, period: '7d' | '30d' | 'all'): string {
   const date = new Date(timestamp * 1000);
-  
+
   if (period === '7d') {
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' ' + 
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' ' +
            date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
   } else if (period === '30d') {
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
@@ -177,4 +336,3 @@ export function formatTime(timestamp: number, period: '7d' | '30d' | 'all'): str
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   }
 }
-

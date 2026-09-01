@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { checkBotId } from 'botid/server';
+import { checkBotIdDeep } from '@/lib/middleware/botIdGuard';
 import { meTokenSupabaseService } from '@/lib/sdk/supabase/metokens';
 import { meTokensSubgraph } from '@/lib/sdk/metokens/subgraph';
 import { createServiceClient } from '@/lib/sdk/supabase/service';
@@ -10,10 +10,12 @@ import {
 } from '@/lib/utils/metokenUtils';
 import { serverLogger } from '@/lib/utils/logger';
 import { rateLimiters } from '@/lib/middleware/rateLimit';
+import { calculateMeTokenVaultTvlUsd, formatHubAssetAmount, resolveHubAsset } from '@/lib/utils/hubAssetUtils';
+import { formatEther } from 'viem';
 
 // POST /api/metokens/sync - Sync a MeToken from blockchain to database
 export async function POST(request: NextRequest) {
-  const verification = await checkBotId();
+  const verification = await checkBotIdDeep();
   if (verification.isBot) {
     return NextResponse.json({ error: 'Access denied' }, { status: 403 });
   }
@@ -123,13 +125,12 @@ export async function POST(request: NextRequest) {
 
     serverLogger.debug('Got blockchain data:', { tokenInfo, protocolInfo });
 
-    // Calculate TVL (Total Value Locked)
+    // Calculate TVL (Total Value Locked) with hub-specific collateral decimals
     const balancePooled = BigInt(protocolInfo.balancePooled);
     const balanceLocked = BigInt(protocolInfo.balanceLocked);
-    const totalBalance = balancePooled + balanceLocked;
-    
-    // For now, we'll assume 1 unit = $1 (in production, you'd use an oracle)
-    const tvl = Number(totalBalance) / 1e18; // Convert from wei to ether
+    const hubId = protocolInfo.hubId;
+    const hubAsset = resolveHubAsset(hubId);
+    const tvl = calculateMeTokenVaultTvlUsd(balancePooled, balanceLocked, hubId);
 
     // Create MeToken data for database
     const meTokenData = {
@@ -137,11 +138,11 @@ export async function POST(request: NextRequest) {
       owner_address: tokenInfo.owner.toLowerCase(),
       name: tokenInfo.name,
       symbol: tokenInfo.symbol,
-      total_supply: Number(tokenInfo.totalSupply) / 1e18, // Convert from wei to ether
+      total_supply: Number(formatEther(BigInt(tokenInfo.totalSupply))), // MeToken ERC-20 is 18 decimals
       tvl: tvl,
-      hub_id: protocolInfo.hubId,
-      balance_pooled: Number(protocolInfo.balancePooled) / 1e18,
-      balance_locked: Number(protocolInfo.balanceLocked) / 1e18,
+      hub_id: hubId,
+      balance_pooled: Number(formatHubAssetAmount(balancePooled, hubAsset)),
+      balance_locked: Number(formatHubAssetAmount(balanceLocked, hubAsset)),
       start_time: protocolInfo.startTime > 0 ? new Date(protocolInfo.startTime * 1000).toISOString() : undefined,
       end_time: protocolInfo.endTime > 0 ? new Date(protocolInfo.endTime * 1000).toISOString() : undefined,
       end_cooldown: protocolInfo.endCooldown > 0 ? new Date(protocolInfo.endCooldown * 1000).toISOString() : undefined,

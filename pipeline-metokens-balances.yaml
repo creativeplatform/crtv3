@@ -1,0 +1,22 @@
+name: pipeline-metokens-balances
+resource_size: s
+apiVersion: 3
+sources:
+  metoken_balances_source:
+    name: me_token_balance
+    subgraphs:
+      - name: metokens
+        version: 1.0.3
+    type: subgraph_entity
+transforms:
+  metoken_balances_transform:
+    type: sql
+    primary_key: id
+    sql: SELECT * FROM metoken_balances_source
+sinks:
+  postgres_metoken_subgraph_balances:
+    from: metoken_balances_transform
+    schema: public
+    secret_name: POSTGRES_SECRET_CMJIQCIFZ0
+    table: metoken_subgraph_balances
+    type: postgres

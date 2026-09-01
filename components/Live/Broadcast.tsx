@@ -33,11 +33,20 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { updateStream } from "@/services/streams";
+import { useWalletAuth } from "@/lib/auth/useWalletAuth";
+import { walletAuthHeadersToArgs } from "@/lib/auth/require-wallet";
+import { parseStreamProxyFailure } from "@/lib/livepeer/stream-proxy-errors";
+import { getDetailPlaybackSource } from "@/lib/hooks/livepeer/useDetailPlaybackSources";
+import { CreativeBrandOverlay } from "@/components/Player/CreativeBrandOverlay";
+import { FloatingTipHearts } from "@/components/Live/FloatingTipHearts";
 
 interface BroadcastProps {
   streamKey: string;
   streamId?: string | null;
+  /** Playback id used for tip ledger / floating hearts (`stream:{playbackId}`). */
+  playbackId?: string | null;
   creatorAddress: string;
+  saveRecording?: boolean;
 }
 
 export interface StreamProfile {
@@ -53,34 +62,137 @@ export interface StreamProfile {
 }
 
 export interface CreateStreamProxyParams {
+  creatorAddress: string;
+  legacyCreatorAddress?: string | null;
   name: string;
   profiles: StreamProfile[];
   record: boolean;
   playbackPolicy: any;
   multistream?: any;
+  authHeaders: Record<string, string>;
 }
 
 export async function createStreamViaProxy(params: CreateStreamProxyParams) {
-  const { name, profiles, record, playbackPolicy, multistream } = params;
-  const body: any = {
+  const {
+    creatorAddress,
+    legacyCreatorAddress,
+    name,
+    profiles,
+    record,
+    playbackPolicy,
+    authHeaders,
+  } = params;
+  const body: Record<string, unknown> = {
+    creatorAddress,
     name,
     profiles,
     record,
     playbackPolicy,
   };
-  if (multistream !== undefined) {
-    body.multistream = multistream;
+  if (legacyCreatorAddress) {
+    body.legacyCreatorAddress = legacyCreatorAddress;
   }
   const res = await fetch("/api/livepeer/livepeer-proxy", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...authHeaders },
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error("Failed to create stream");
+  if (res.status === 409) {
+    const existing = (await res.json()) as Record<string, unknown>;
+    if (existing.code === "STREAM_EXISTS") {
+      return {
+        streamId: existing.streamId as string,
+        playbackId: existing.playbackId as string,
+        streamKey: existing.streamKey as string,
+      };
+    }
+  }
+  if (!res.ok) {
+    throw await parseStreamProxyFailure(res);
+  }
   return res.json();
 }
 
-function BroadcastWithControls({ streamKey, streamId: propStreamId, creatorAddress }: BroadcastProps) {
+export async function fetchStreamKeyForCreator(
+  creatorAddress: string,
+  authHeaders: Record<string, string>,
+  legacyCreatorAddress?: string | null,
+) {
+  const params = new URLSearchParams({ creatorAddress });
+  if (legacyCreatorAddress) {
+    params.set("legacyCreatorAddress", legacyCreatorAddress);
+  }
+  const res = await fetch(`/api/livepeer/stream-key?${params.toString()}`, {
+    headers: authHeaders,
+  });
+  if (!res.ok) {
+    throw await parseStreamProxyFailure(res);
+  }
+  return res.json() as Promise<{
+    streamId: string;
+    playbackId: string;
+    streamKey: string;
+  }>;
+}
+
+async function finalizeStreamRecordings(streamId: string) {
+  try {
+    await fetch("/api/streams/recordings/finalize", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ streamId }),
+    });
+  } catch (err) {
+    logger.error("Failed to finalize stream recordings:", err);
+  }
+}
+
+/** Poll until Livepeer reports playable sources (HLS warm-up), or give up. */
+async function waitForPlaybackSources(
+  playbackId: string,
+  opts?: { signal?: AbortSignal; maxAttempts?: number; intervalMs?: number },
+): Promise<boolean> {
+  const maxAttempts = opts?.maxAttempts ?? 15;
+  const intervalMs = opts?.intervalMs ?? 2_000;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    if (opts?.signal?.aborted) return false;
+    try {
+      const sources = await getDetailPlaybackSource(playbackId, {
+        signal: opts?.signal,
+      });
+      if (sources && sources.length > 0) {
+        logger.info("Playback sources ready after WHIP live", {
+          playbackId,
+          attempt,
+          sourceCount: sources.length,
+        });
+        return true;
+      }
+    } catch (err) {
+      if (opts?.signal?.aborted) return false;
+      logger.debug("Playback readiness poll failed:", err);
+    }
+    if (attempt < maxAttempts) {
+      await new Promise((resolve) => setTimeout(resolve, intervalMs));
+    }
+  }
+
+  logger.warn("Playback sources not ready before is_live timeout; marking live anyway", {
+    playbackId,
+    maxAttempts,
+  });
+  return false;
+}
+
+function BroadcastWithControls({
+  streamKey,
+  streamId: propStreamId,
+  playbackId,
+  creatorAddress,
+  saveRecording = true,
+}: BroadcastProps) {
+  const { getAuthHeaders } = useWalletAuth();
   const ingestUrl = React.useMemo(() => {
     return `https://ingest.livepeer.studio/whip/${streamKey}`;
   }, [streamKey]);
@@ -110,26 +222,57 @@ function BroadcastWithControls({ streamKey, streamId: propStreamId, creatorAddre
     }
   }, [broadcastError]);
 
-  // Sync is_live status with DB
+  const finalizeTimeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+
+  // Sync is_live with DB only after Livepeer playback is ready (or warm-up budget expires).
+  // Finalize recordings when broadcast ends.
   useEffect(() => {
     if (!creatorAddress) return;
 
+    const abort = new AbortController();
+
     const syncStatus = async () => {
       try {
+        const auth = walletAuthHeadersToArgs(await getAuthHeaders());
         if (status === 'live') {
-          await updateStream(creatorAddress, { is_live: true, last_live_at: new Date().toISOString() });
-          logger.info("Stream marked as live in DB");
+          if (playbackId) {
+            await waitForPlaybackSources(playbackId, { signal: abort.signal });
+            if (abort.signal.aborted) return;
+          }
+          if (abort.signal.aborted) return;
+          await updateStream(
+            creatorAddress,
+            { is_live: true, last_live_at: new Date().toISOString() },
+            auth,
+          );
+          logger.info("Stream marked as live in DB (playback-ready gated)", {
+            playbackId,
+          });
         } else if (status === 'idle' || status === 'error') {
-          await updateStream(creatorAddress, { is_live: false });
+          await updateStream(creatorAddress, { is_live: false, last_live_at: new Date().toISOString() }, auth);
           logger.info("Stream marked as offline in DB");
+          if (status === 'idle' && propStreamId && saveRecording) {
+            // Recording assets may take a minute to process; retry a few times.
+            const delays = [15_000, 45_000, 120_000];
+            finalizeTimeoutsRef.current = delays.map((delay) =>
+              setTimeout(() => finalizeStreamRecordings(propStreamId), delay)
+            );
+          }
         }
       } catch (err) {
+        if (abort.signal.aborted) return;
         logger.error("Failed to sync stream status:", err);
       }
     };
 
-    syncStatus();
-  }, [status, creatorAddress]);
+    void syncStatus();
+
+    return () => {
+      abort.abort();
+      finalizeTimeoutsRef.current.forEach(clearTimeout);
+      finalizeTimeoutsRef.current = [];
+    };
+  }, [status, creatorAddress, propStreamId, playbackId, getAuthHeaders, saveRecording]);
 
   const [isFullscreen, setIsFullscreen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -164,6 +307,9 @@ function BroadcastWithControls({ streamKey, streamId: propStreamId, creatorAddre
           playsInline
           className="h-full w-full object-contain bg-black"
         />
+
+        <CreativeBrandOverlay />
+        <FloatingTipHearts streamId={playbackId || undefined} />
 
         {/* Loading / Status Overlay */}
         {(status === 'loading' || status === 'error') && (

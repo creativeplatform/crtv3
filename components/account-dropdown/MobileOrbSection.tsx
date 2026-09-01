@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { useOrbSession } from "@/context/OrbSessionContext";
 import { shortenAddress } from "@/lib/utils/utils";
 import useModularAccount from "@/lib/hooks/accountkit/useModularAccount";
-import { useUser } from "@account-kit/react";
+import { useUser } from "@/lib/wallet/react";
 
 export function MobileOrbSection() {
   const user = useUser();
@@ -61,7 +61,12 @@ export function MobileOrbSection() {
           variant="outline"
           size="sm"
           className="w-full text-xs"
-          onClick={() => openOrbLogin()}
+          onClick={() => {
+            if (typeof window !== "undefined") {
+              window.dispatchEvent(new Event("crtv:close-mobile-menu"));
+            }
+            openOrbLogin();
+          }}
         >
           Sign in with Orb
         </Button>

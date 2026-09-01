@@ -11,7 +11,6 @@ import { Src } from "@livepeer/react";
 import { HeroPlayer } from "../Player/HeroPlayer";
 import { PlayerLoading } from "../Player/Player";
 import { getHeroPlaybackSource } from "../../lib/hooks/livepeer/useHeroPlaybackSource";
-import { useTour } from "@/context/TourContext";
 import { logger } from '@/lib/utils/logger';
 
 
@@ -33,6 +32,8 @@ const PlayIcon = (props: React.SVGProps<SVGSVGElement>) => {
 
 const HeroSection: React.FC = () => {
   const router = useRouter();
+  /** Set to true to restore the homepage Watch Demo CTA. */
+  const SHOW_WATCH_DEMO = false;
   const [src, setSrc] = useState<Src[] | null>(null);
   const [heroPlaybackId, setHeroPlaybackId] = useState<string | undefined>(
     undefined,
@@ -40,10 +41,9 @@ const HeroSection: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
-  const { startTour } = useTour();
-
   const handleWatchDemo = () => {
-    startTour();
+    // Tour has been disabled
+    logger.debug("Tour is disabled - watch demo button clicked");
   };
 
   useEffect(() => {
@@ -119,18 +119,20 @@ const HeroSection: React.FC = () => {
             <span className="text-orange-600">{HERO_NAME.bottom}</span>
           </h1>
           <p className="text-gray-500">{HERO_DESCRIPTION}</p>
-          <div className="flex flex-col items-center space-y-4 sm:flex-row sm:justify-center sm:space-x-6 sm:space-y-0 md:justify-start">
-            <button
-              className={
-                "flex items-center space-x-2 rounded-full bg-pink-600 px-6 py-2 text-lg font-normal text-white " +
-                "transition duration-200 hover:bg-pink-700 lg:py-3"
-              }
-              onClick={handleWatchDemo}
-            >
-              <PlayIcon className="h-5 w-5" />
-              <span>{HERO_BUTTONS.secondary.text}</span>
-            </button>
-          </div>
+          {SHOW_WATCH_DEMO ? (
+            <div className="flex flex-col items-center space-y-4 sm:flex-row sm:justify-center sm:space-x-6 sm:space-y-0 md:justify-start">
+              <button
+                className={
+                  "flex items-center space-x-2 rounded-full bg-pink-600 px-6 py-2 text-lg font-normal text-white " +
+                  "transition duration-200 hover:bg-pink-700 lg:py-3"
+                }
+                onClick={handleWatchDemo}
+              >
+                <PlayIcon className="h-5 w-5" />
+                <span>{HERO_BUTTONS.secondary.text}</span>
+              </button>
+            </div>
+          ) : null}
         </div>
         <div className="w-full md:ml-8 md:flex-1">
           <div className="relative w-full overflow-hidden rounded-2xl bg-black shadow-2xl">

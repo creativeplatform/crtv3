@@ -8,7 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useCreatorProfile } from '@/lib/hooks/metokens/useCreatorProfile';
-import { useUser } from '@account-kit/react';
+import { useUser } from '@/lib/wallet/react';
 import { useToast } from '@/components/ui/use-toast';
 import { useWalletStatus } from '@/lib/hooks/accountkit/useWalletStatus';
 import { AvatarUpload } from './AvatarUpload';
@@ -193,7 +193,7 @@ export function CreatorProfileManager({ targetAddress, onProfileUpdated }: Creat
         </div>
 
         {isOwner && (
-          <div className="flex gap-2 pt-4">
+          <div className="flex flex-col gap-2 pt-4 sm:flex-row">
             {isEditing ? (
               <>
                 <Button

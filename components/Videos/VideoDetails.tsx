@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, forwardRef, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useRef, forwardRef, useMemo, useCallback } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   CheckIcon,
   ChevronDownIcon,
@@ -11,7 +12,7 @@ import {
 import { Src } from "@livepeer/react";
 import * as Popover from "@radix-ui/react-popover";
 
-import { useUser, useAuthModal } from "@account-kit/react";
+import { useUser, useAuthModal } from "@/lib/wallet/react";
 import { userToAccount } from "@/lib/types/account";
 
 import {
@@ -36,14 +37,22 @@ import {
   useSubtitles,
 } from "@/components/Player/Subtitles";
 import { getDetailPlaybackSource } from "@/lib/hooks/livepeer/useDetailPlaybackSources";
+import {
+  livepeerViewMetricsQueryKey,
+  type LivepeerViewMetrics,
+} from "@/lib/hooks/livepeer/useLivepeerViewMetrics";
 import { generateAccessKey, WebhookContext } from "@/lib/access-key";
 import { Skeleton } from "../ui/skeleton";
 import { Badge } from "../ui/badge";
+import { useIsVideoAdmin } from "@/hooks/useIsVideoAdmin";
 import { Button } from "../ui/button";
 import { fetchVideoAssetByPlaybackId } from "@/lib/utils/video-assets-client";
 import { getThumbnailUrl } from "@/lib/utils/thumbnail";
 import { convertFailingGateway } from "@/lib/utils/image-gateway";
 import Link from "next/link";
+import { LicensePurchaseDialog } from "@/components/Videos/LicensePurchaseDialog";
+import { CreatorDisplay } from "@/components/Creator/CreatorDisplay";
+import { CreativeBrandOverlay } from "@/components/Player/CreativeBrandOverlay";
 
 const STORY_SCAN_IP_BASE =
   process.env.NEXT_PUBLIC_STORY_NETWORK === "mainnet"
@@ -55,14 +64,19 @@ const STORY_DISPUTE_DOCS_URL = "https://docs.story.foundation/concepts/dispute-m
 function StoryIPBlock({
   storyIpId,
   storyScanBase,
+  licenseTermsId,
+  videoTitle,
 }: {
   storyIpId: string;
   storyScanBase: string;
+  licenseTermsId?: string | null;
+  videoTitle?: string;
 }) {
   const [attestationStatus, setAttestationStatus] = useState<
     "idle" | "loading" | "ok" | "error"
   >("idle");
   const [infringementSummary, setInfringementSummary] = useState<string | null>(null);
+  const [licenseDialogOpen, setLicenseDialogOpen] = useState(false);
 
   useEffect(() => {
     if (!storyIpId) return;
@@ -126,12 +140,28 @@ function StoryIPBlock({
         >
           View on Story Protocol →
         </a>
-        <Link
-          href="/marketplace/ip"
-          className="text-xs text-primary hover:underline inline-flex items-center gap-1"
-        >
-          Purchase IP →
-        </Link>
+        {licenseTermsId ? (
+          <>
+            <button
+              type="button"
+              onClick={() => setLicenseDialogOpen(true)}
+              className="text-xs text-primary hover:underline inline-flex items-center gap-1"
+            >
+              Buy License →
+            </button>
+            <LicensePurchaseDialog
+              ipId={storyIpId}
+              licenseTermsId={licenseTermsId}
+              videoTitle={videoTitle ?? ""}
+              open={licenseDialogOpen}
+              onOpenChange={setLicenseDialogOpen}
+            />
+          </>
+        ) : (
+          <span className="text-xs text-muted-foreground">
+            Contact creator for licensing
+          </span>
+        )}
         <a
           href={STORY_DISPUTE_DOCS_URL}
           target="_blank"
@@ -148,11 +178,15 @@ function StoryIPBlock({
 type VideoDetailsProps = {
   asset: Asset;
   videoTitle?: string;
+  /** Creator wallet — shown below the title. */
+  creatorAddress?: string | null;
   /** When set, shows a "Verifiable" badge (Livepeer creator attestation). */
   livepeerAttestationId?: string | null;
   /** Story Protocol: when true and storyIpId is set, shows "Registered as IP" block with View/Purchase CTAs. */
   storyIpRegistered?: boolean;
   storyIpId?: string | null;
+  /** Story Protocol license terms ID — when set, enables "Buy License" button. */
+  storyLicenseTermsId?: string | null;
   /** Optional: NFT contract and token ID for Story/IP links. */
   contractAddress?: string | null;
   tokenId?: string | null;
@@ -161,12 +195,15 @@ type VideoDetailsProps = {
 export default function VideoDetails({
   asset,
   videoTitle,
+  creatorAddress,
   livepeerAttestationId,
   storyIpRegistered,
   storyIpId,
+  storyLicenseTermsId,
   contractAddress,
   tokenId,
 }: VideoDetailsProps) {
+  const isVideoAdmin = useIsVideoAdmin();
   const [playbackSources, setPlaybackSources] = useState<Src[] | null>(null);
   const [sourcesLoading, setSourcesLoading] = useState(true);
   const [sourcesError, setSourcesError] = useState<string | null>(null);
@@ -174,10 +211,119 @@ export default function VideoDetails({
   const [dbStatus, setDbStatus] = useState<"draft" | "published" | "minted" | "archived" | null>(null);
   const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null);
 
+  const containerRef = useRef<HTMLDivElement>(null);
+  const queryClient = useQueryClient();
+
   const user = useUser();
   const account = useMemo(() => userToAccount(user), [user]);
   const { openAuthModal } = useAuthModal();
   const isConnected = !!user;
+
+  useEffect(() => {
+    // Player (and containerRef) only mount when wallet is connected
+    if (!isConnected || !asset?.playbackId || !playbackSources?.length) return;
+
+    let cancelled = false;
+    let incrementing = false;
+    let incremented = false;
+    let attachedVideo: HTMLVideoElement | null = null;
+    let observer: MutationObserver | null = null;
+    let rafId = 0;
+    let rafAttempts = 0;
+    const MAX_RAF_ATTEMPTS = 120; // ~2s at 60fps, then stop
+
+    const handlePlay = async () => {
+      if (incremented || incrementing || !asset.playbackId) return;
+      incrementing = true;
+
+      try {
+        const response = await fetch(
+          `/api/video-assets/views/increment/${encodeURIComponent(asset.playbackId)}`,
+          { method: "POST" },
+        );
+        let payload: { viewCount?: unknown; code?: unknown } | null = null;
+        try {
+          payload = (await response.json()) as {
+            viewCount?: unknown;
+            code?: unknown;
+          };
+        } catch {
+          payload = null;
+        }
+
+        // DB mutates before the response — treat any 2xx as consumed so we don't double-count
+        if (response.ok) {
+          incremented = true;
+          const viewCount = Number(payload?.viewCount);
+          if (Number.isFinite(viewCount) && viewCount > 0) {
+            // Keep optimistic DB count for this session; do not invalidate Livepeer
+            // metrics (refetch often returns a stale lower total and wipes the bump).
+            queryClient.setQueryData<LivepeerViewMetrics>(
+              livepeerViewMetricsQueryKey(asset.playbackId),
+              (prev) => ({
+                playbackId: asset.playbackId!,
+                viewCount,
+                playtimeMins: prev?.playtimeMins ?? 0,
+                legacyViewCount: prev?.legacyViewCount ?? 0,
+                totalViews: Math.max(viewCount, prev?.totalViews ?? 0),
+              }),
+            );
+          }
+        } else {
+          console.warn("Failed to increment views:", {
+            status: response.status,
+            code: payload?.code ?? null,
+          });
+        }
+      } catch (err) {
+        console.error("Failed to increment views:", err);
+      } finally {
+        incrementing = false;
+      }
+    };
+
+    const attach = (video: HTMLVideoElement) => {
+      if (attachedVideo === video) return;
+      if (attachedVideo) {
+        attachedVideo.removeEventListener("play", handlePlay);
+      }
+      attachedVideo = video;
+      video.addEventListener("play", handlePlay);
+    };
+
+    const setup = () => {
+      if (cancelled) return;
+      const container = containerRef.current;
+      if (!container) {
+        rafAttempts += 1;
+        if (rafAttempts < MAX_RAF_ATTEMPTS) {
+          rafId = requestAnimationFrame(setup);
+        }
+        return;
+      }
+
+      // Player may mount after this effect — observe until <video> exists
+      const existing = container.querySelector("video");
+      if (existing) attach(existing);
+
+      observer = new MutationObserver(() => {
+        const video = container.querySelector("video");
+        if (video) attach(video);
+      });
+      observer.observe(container, { childList: true, subtree: true });
+    };
+
+    setup();
+
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(rafId);
+      observer?.disconnect();
+      if (attachedVideo) {
+        attachedVideo.removeEventListener("play", handlePlay);
+      }
+    };
+  }, [isConnected, asset?.playbackId, playbackSources, queryClient]);
 
   const loadPlaybackSources = useCallback(async () => {
     if (!asset?.playbackId) {
@@ -521,11 +667,18 @@ export default function VideoDetails({
       <div className="w-full">
         <div className="w-full space-y-6">
           <h1 className="text-2xl font-bold">{videoTitle || asset?.name}</h1>
+          {creatorAddress && (
+            <CreatorDisplay
+              creatorAddress={creatorAddress}
+              playbackId={asset?.playbackId || undefined}
+              className="mt-2"
+            />
+          )}
           <div className="flex items-center gap-2 flex-wrap">
-            {asset?.status?.phase && (
+            {isVideoAdmin && asset?.status?.phase && (
               <Badge>{asset.status.phase}</Badge>
             )}
-            {dbStatus && <Badge variant="secondary">{dbStatus}</Badge>}
+            {isVideoAdmin && dbStatus && <Badge variant="secondary">{dbStatus}</Badge>}
             {livepeerAttestationId && (
               <Badge
                 variant="secondary"
@@ -541,6 +694,8 @@ export default function VideoDetails({
             <StoryIPBlock
               storyIpId={storyIpId}
               storyScanBase={STORY_SCAN_IP_BASE}
+              licenseTermsId={storyLicenseTermsId}
+              videoTitle={videoTitle}
             />
           )}
           {/* Render other asset details */}
@@ -558,10 +713,10 @@ export default function VideoDetails({
                 <div className="flex flex-col items-center gap-6 p-8 max-w-md text-center">
                   <div className="flex flex-col gap-2">
                     <h2 className="text-2xl font-bold text-white">
-                      Connect Your Wallet
+                      Connect Your Account
                     </h2>
                     <p className="text-gray-300">
-                      Please connect your wallet to watch this video.
+                      Please select &quot;Get Started&quot; to watch this video.
                     </p>
                   </div>
                   <Button
@@ -592,14 +747,16 @@ export default function VideoDetails({
               <Player.Root
                 src={playbackSources}
                 playbackId={asset?.playbackId}
+                volume={0}
                 {...conditionalProps}
               >
-                <Player.Container className="aspect-video w-full overflow-hidden rounded-lg bg-gray-800">
+                <Player.Container ref={containerRef} className="relative aspect-video w-full overflow-hidden rounded-lg bg-gray-800">
                   <Player.Video
                     title={asset?.name}
                     className="h-full w-full"
                     poster={thumbnailUrl || undefined}
                   />
+                  <CreativeBrandOverlay />
                   <Player.LoadingIndicator
                     className="relative h-full w-full bg-black/50 backdrop-blur data-[visible=true]:animate-in 
                   data-[visible=false]:animate-out data-[visible=false]:fade-out-0 data-[visible=true]:fade-in-0"

@@ -20,7 +20,7 @@
  */
 
 import { verifyMessage } from "viem";
-import { publicClient } from "@/lib/viem";
+import { fallbackPublicClient, publicClient } from "@/lib/viem";
 import { serverLogger } from "@/lib/utils/logger";
 
 const MAX_AGE_SECONDS = 5 * 60;
@@ -28,6 +28,25 @@ const MAX_AGE_SECONDS = 5 * 60;
 const HEADER_ADDRESS = "x-wallet-address";
 const HEADER_TIMESTAMP = "x-wallet-timestamp";
 const HEADER_SIGNATURE = "x-wallet-signature";
+const HEX_SIGNATURE_RE = /^0x([0-9a-fA-F]{2})+$/;
+
+function getWalletAuthHeaderValue(
+  headers: Record<string, string>,
+  headerName: string,
+): string | undefined {
+  const target = headerName.toLowerCase();
+  if (headers[headerName] !== undefined) return headers[headerName];
+  const entry = Object.entries(headers).find(([key]) => key.toLowerCase() === target);
+  return entry?.[1];
+}
+
+/** Case-insensitive read of the signed wallet address from client auth headers. */
+export function getWalletAddressFromAuthHeaders(
+  headers: Record<string, string>,
+): string | undefined {
+  const raw = getWalletAuthHeaderValue(headers, HEADER_ADDRESS);
+  return raw?.trim().toLowerCase() || undefined;
+}
 
 export class WalletAuthError extends Error {
   constructor(public status: number, message: string) {
@@ -42,6 +61,69 @@ export function buildWalletAuthMessage(address: string, timestamp: number): stri
 
 export interface VerifiedWallet {
   address: string;
+}
+
+export type VerifyWalletSignatureResult =
+  | { ok: true }
+  | { ok: false; reason: "invalid" }
+  | { ok: false; reason: "unavailable" };
+
+/**
+ * Verifies a wallet signature for EOAs (local) and smart accounts (EIP-1271).
+ * Retries on-chain verification via the public Base RPC when Alchemy errors.
+ */
+export async function verifyWalletSignature(
+  address: `0x${string}`,
+  message: string,
+  signature: `0x${string}`,
+): Promise<VerifyWalletSignatureResult> {
+  if (!HEX_SIGNATURE_RE.test(signature)) {
+    return { ok: false, reason: "invalid" };
+  }
+
+  let valid = false;
+  try {
+    valid = await verifyMessage({ address, message, signature });
+  } catch (err) {
+    serverLogger.warn("EOA verifyMessage threw, falling through to EIP-1271:", err);
+  }
+  if (valid) return { ok: true };
+
+  let primaryRpcFailed = false;
+  try {
+    valid = await publicClient.verifyMessage({ address, message, signature });
+    if (valid) return { ok: true };
+  } catch (err) {
+    primaryRpcFailed = true;
+    serverLogger.warn("EIP-1271 verifyMessage failed on primary RPC:", err);
+  }
+
+  if (primaryRpcFailed) {
+    try {
+      valid = await fallbackPublicClient.verifyMessage({
+        address,
+        message,
+        signature,
+      });
+      if (valid) return { ok: true };
+    } catch (err) {
+      serverLogger.warn("EIP-1271 verifyMessage failed on fallback RPC:", err);
+      return { ok: false, reason: "unavailable" };
+    }
+  }
+
+  return { ok: false, reason: "invalid" };
+}
+
+function assertWalletSignatureValid(result: VerifyWalletSignatureResult): void {
+  if (result.ok) return;
+  if (result.reason === "unavailable") {
+    throw new WalletAuthError(
+      503,
+      "Wallet verification temporarily unavailable. Please retry.",
+    );
+  }
+  throw new WalletAuthError(401, "Invalid wallet signature");
 }
 
 /**
@@ -90,35 +172,12 @@ export async function requireWalletAuth(
   }
 
   const message = buildWalletAuthMessage(address, timestamp);
-
-  let valid = false;
-  try {
-    // EOA path. Cheap, no RPC call.
-    valid = await verifyMessage({
-      address: address as `0x${string}`,
-      message,
-      signature,
-    });
-  } catch (err) {
-    serverLogger.warn("EOA verifyMessage threw, falling through to EIP-1271:", err);
-  }
-
-  if (!valid) {
-    // Smart-account path: EIP-1271 / 6492 via the on-chain isValidSignature.
-    try {
-      valid = await publicClient.verifyMessage({
-        address: address as `0x${string}`,
-        message,
-        signature,
-      });
-    } catch (err) {
-      serverLogger.warn("EIP-1271 verifyMessage failed:", err);
-    }
-  }
-
-  if (!valid) {
-    throw new WalletAuthError(401, "Invalid wallet signature");
-  }
+  const result = await verifyWalletSignature(
+    address as `0x${string}`,
+    message,
+    signature,
+  );
+  assertWalletSignatureValid(result);
 
   return { address };
 }
@@ -154,8 +213,29 @@ export interface WalletAuthArgs {
   signature: string;
 }
 
+/** Convert client auth headers into server-action args. */
+export function walletAuthHeadersToArgs(
+  headers: Record<string, string>,
+): WalletAuthArgs {
+  return {
+    address: getWalletAuthHeaderValue(headers, HEADER_ADDRESS) ?? "",
+    timestamp: Number(getWalletAuthHeaderValue(headers, HEADER_TIMESTAMP)),
+    signature: getWalletAuthHeaderValue(headers, HEADER_SIGNATURE) ?? "",
+  };
+}
+
+/**
+ * Verify a wallet-auth triple. By default the signature must cover the
+ * generic canonical message; pass `buildMessage` to bind the signature to a
+ * purpose-specific message (e.g. sticker claim delegation) so a generic auth
+ * signature can't be replayed for that action.
+ */
 export async function verifyWalletAuthArgs(
-  auth: WalletAuthArgs | undefined
+  auth: WalletAuthArgs | undefined,
+  buildMessage: (
+    address: string,
+    timestamp: number,
+  ) => string = buildWalletAuthMessage,
 ): Promise<VerifiedWallet> {
   if (!auth || !auth.address || !auth.timestamp || !auth.signature) {
     throw new WalletAuthError(
@@ -183,32 +263,12 @@ export async function verifyWalletAuthArgs(
     );
   }
 
-  const message = buildWalletAuthMessage(address, auth.timestamp);
-  const signature = auth.signature as `0x${string}`;
-
-  let valid = false;
-  try {
-    valid = await verifyMessage({
-      address: address as `0x${string}`,
-      message,
-      signature,
-    });
-  } catch (err) {
-    serverLogger.warn("EOA verifyMessage threw, falling through to EIP-1271:", err);
-  }
-  if (!valid) {
-    try {
-      valid = await publicClient.verifyMessage({
-        address: address as `0x${string}`,
-        message,
-        signature,
-      });
-    } catch (err) {
-      serverLogger.warn("EIP-1271 verifyMessage failed:", err);
-    }
-  }
-  if (!valid) {
-    throw new WalletAuthError(401, "Invalid wallet signature");
-  }
+  const message = buildMessage(address, auth.timestamp);
+  const result = await verifyWalletSignature(
+    address as `0x${string}`,
+    message,
+    auth.signature as `0x${string}`,
+  );
+  assertWalletSignatureValid(result);
   return { address };
 }

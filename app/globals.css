@@ -31,6 +31,20 @@
   }
 }
 
+/*
+ * Phone landscape can exceed Tailwind `md` (768px) width and would switch the
+ * Chones banner to the desktop SVG. Keep the beige mobile layout on coarse-
+ * pointer landscape viewports with a short height (typical phone landscape).
+ */
+@media (orientation: landscape) and (max-height: 600px) and (pointer: coarse) {
+  .chones-banner-mobile {
+    display: block !important;
+  }
+  .chones-banner-desktop {
+    display: none !important;
+  }
+}
+
 @layer base {
   :root {
     --background: 0 0% 100%;

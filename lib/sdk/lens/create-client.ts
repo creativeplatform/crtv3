@@ -1,6 +1,13 @@
-import { PublicClient, testnet, mainnet } from "@lens-protocol/client";
+import { PublicClient } from "@lens-protocol/client";
+import { mainnet, testnet, type EnvironmentConfig } from "@lens-protocol/env";
 
-const lensEnv = process.env.NEXT_PUBLIC_LENS_ENV === "production" ? mainnet : testnet;
+/**
+ * Lens environments from `@lens-protocol/client` can resolve to a stub mainnet
+ * that throws at runtime. Import the real configs from `@lens-protocol/env`.
+ */
+export function getLensSdkEnvironment(): EnvironmentConfig {
+  return process.env.NEXT_PUBLIC_LENS_ENV === "production" ? mainnet : testnet;
+}
 
 /**
  * Creates a Lens Public Client.
@@ -11,7 +18,7 @@ const lensEnv = process.env.NEXT_PUBLIC_LENS_ENV === "production" ? mainnet : te
  */
 export const createLensClient = (apiKey?: string) => {
     return PublicClient.create({
-        environment: lensEnv,
+        environment: getLensSdkEnvironment(),
         ...(apiKey && { apiKey }),
     });
 };

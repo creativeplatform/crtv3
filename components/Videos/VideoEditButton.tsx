@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useUser, useSmartAccountClient } from "@account-kit/react";
+import { useUser, useSmartAccountClient } from "@/lib/wallet/react";
 import { Button } from "@/components/ui/button";
 import { Pencil } from "lucide-react";
 import { VideoEditDialog } from "./VideoEditDialog";

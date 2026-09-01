@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useUser, useSmartAccountClient } from "@account-kit/react";
+import { useUser, useSmartAccountClient } from "@/lib/wallet/react";
 import { Button } from "@/components/ui/button";
 import { DollarSign, Loader2 } from "lucide-react";
 import { toast } from "sonner";

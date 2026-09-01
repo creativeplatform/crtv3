@@ -6,6 +6,7 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import { useVideo } from '../../context/VideoContext';
 import './Player.css';
 import { safelyPauseVideo } from '@/lib/utils/video-controls';
+import { CreativeBrandOverlay } from './CreativeBrandOverlay';
 
 export const HeroPlayer: React.FC<{
   src: Src[] | null;
@@ -84,6 +85,8 @@ export const HeroPlayer: React.FC<{
           playsInline
           controls={false}
         />
+
+        <CreativeBrandOverlay />
         
         <Player.LoadingIndicator
           style={{

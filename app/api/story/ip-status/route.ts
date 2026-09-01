@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const STORY_API_BASE = "https://api.storyapis.com/api/v4";
+const STORY_API_BASE = process.env.STORY_API_BASE_URL ?? "https://api.storyapis.com/api/v4";
 
 /** Infringement status from Story List IP Assets API (per provider). */
 export interface InfringementStatusItem {

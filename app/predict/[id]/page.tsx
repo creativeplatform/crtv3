@@ -17,12 +17,21 @@ import { getRealityEthContractAddress } from "@/lib/sdk/reality-eth/reality-eth-
 import { createPublicClient, http, fallback, formatEther } from "viem";
 import { baseMainnet } from "@/lib/utils/chains/base";
 import { getQuestion } from "@/lib/sdk/reality-eth/reality-eth-question-wrapper";
+import { enrichPredictionDisplaySync } from "@/lib/predictions/enrich-prediction-display";
 import { logger } from "@/lib/utils/logger";
 
 
 interface PredictionDetailsPageProps {
   params: Promise<{ id: string }>;
 }
+
+const PREDICTION_OG_IMAGE = {
+  url: "/images/prediction_banner.png",
+  width: 800,
+  height: 300,
+  alt: "The best way to predict the future is to create it.",
+  type: "image/png",
+} as const;
 
 export async function generateMetadata(
   { params }: PredictionDetailsPageProps,
@@ -50,11 +59,11 @@ export async function generateMetadata(
     let description = defaultDescription;
 
     if (questionData) {
-      if (questionData.question) {
-        // Try to parse the question if it's a template
-        // For standard reality.eth questions, the question text is often the title
-        title = questionData.question;
-      }
+      const { parsed } = enrichPredictionDisplaySync(
+        questionData.question ?? "",
+        questionData.template_id
+      );
+      title = parsed.title || defaultTitle;
 
       // Add bounty to description if it exists
       if (questionData.bounty && questionData.bounty > 0n) {
@@ -70,18 +79,32 @@ export async function generateMetadata(
         title: `Prediction: ${title}`,
         description: description,
         type: "website",
+        images: [PREDICTION_OG_IMAGE],
       },
       twitter: {
         card: "summary_large_image",
         title: `Prediction: ${title}`,
         description: description,
-      }
+        images: [PREDICTION_OG_IMAGE.url],
+      },
     };
   } catch (error) {
     logger.error("Error generating metadata:", error);
     return {
       title: defaultTitle,
       description: defaultDescription,
+      openGraph: {
+        title: defaultTitle,
+        description: defaultDescription,
+        type: "website",
+        images: [PREDICTION_OG_IMAGE],
+      },
+      twitter: {
+        card: "summary_large_image",
+        title: defaultTitle,
+        description: defaultDescription,
+        images: [PREDICTION_OG_IMAGE.url],
+      },
     };
   }
 }
@@ -127,20 +150,21 @@ export default async function PredictionDetailsPage({
           </Breadcrumb>
         </div>
 
-        <Card className="p-6 mb-6">
-          <div className="mb-4">
-            <Link
-              href={realityEthUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-blue-500 hover:text-blue-700 underline font-mono text-sm"
-            >
-              View on Reality.eth
-              <ExternalLink className="h-3 w-3" />
-            </Link>
-          </div>
+        <Card className="p-6 mb-4">
           <PredictionDetails questionId={id} />
         </Card>
+
+        <p className="text-center text-xs text-muted-foreground">
+          <Link
+            href={realityEthUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 hover:text-foreground underline-offset-2 hover:underline"
+          >
+            Verify on Reality.eth
+            <ExternalLink className="h-3 w-3" />
+          </Link>
+        </p>
       </div>
     </div>
   );

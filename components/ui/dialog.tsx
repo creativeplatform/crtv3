@@ -5,6 +5,11 @@ import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 
 import { cn } from "@/lib/utils/utils";
+import { createRadixLayerFocusHandlers } from "@/lib/utils/radixLayerFocus";
+
+const dialogFocusHandlers = createRadixLayerFocusHandlers(
+  "[data-radix-dialog-content]"
+);
 
 const Dialog = DialogPrimitive.Root;
 
@@ -32,13 +37,12 @@ DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
 
 const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
-  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
->(({ className, children, ...props }, ref) => {
-  const previousActiveElementRef = React.useRef<HTMLElement | null>(null);
-
-  return (
+  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & {
+    overlayClassName?: string;
+  }
+>(({ className, overlayClassName, children, ...props }, ref) => (
     <DialogPortal>
-      <DialogOverlay />
+      <DialogOverlay className={overlayClassName} />
       <DialogPrimitive.Content
         ref={ref}
         className={cn(
@@ -49,42 +53,8 @@ const DialogContent = React.forwardRef<
           data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] rounded-lg`,
           className
         )}
-        onOpenAutoFocus={(e) => {
-          // When dialog opens, blur any focused elements outside the dialog
-          // This prevents aria-hidden warnings when background elements retain focus
-          const activeElement = document.activeElement as HTMLElement;
-
-          // Check if the active element is outside the dialog
-          if (activeElement && !activeElement.closest('[data-radix-dialog-content]')) {
-            previousActiveElementRef.current = activeElement;
-            // Blur the element to prevent aria-hidden warnings
-            // Use setTimeout to ensure this happens after Radix processes the dialog open
-            setTimeout(() => {
-              if (activeElement && !activeElement.closest('[data-radix-dialog-content]')) {
-                activeElement.blur();
-              }
-            }, 0);
-          }
-
-          // Prevent auto-focus conflicts that can cause aria-hidden warnings
-          // This helps avoid accessibility warnings with third-party scripts that inject buttons
-          if (
-            activeElement &&
-            (activeElement.closest('[data-radix-dialog-content]') ||
-              activeElement.tagName === 'BUTTON' ||
-              activeElement.closest('script'))
-          ) {
-            e.preventDefault();
-          }
-        }}
-        onCloseAutoFocus={(e) => {
-          // Restore focus when dialog closes (optional, but good UX)
-          if (previousActiveElementRef.current) {
-            e.preventDefault();
-            previousActiveElementRef.current.focus();
-            previousActiveElementRef.current = null;
-          }
-        }}
+        onOpenAutoFocus={dialogFocusHandlers.onOpenAutoFocus}
+        onCloseAutoFocus={dialogFocusHandlers.onCloseAutoFocus}
         {...props}
       >
         {children}
@@ -98,8 +68,7 @@ const DialogContent = React.forwardRef<
         </DialogPrimitive.Close>
       </DialogPrimitive.Content>
     </DialogPortal>
-  );
-});
+  ));
 DialogContent.displayName = DialogPrimitive.Content.displayName;
 
 const DialogHeader = ({

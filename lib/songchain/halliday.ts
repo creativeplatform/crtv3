@@ -9,6 +9,15 @@ const DEFAULT_CHAIN_SLUG: Record<LensNetwork, string> = {
   testnet: 'lens-testnet',
 };
 
+const DEFAULT_STORY_CHAIN_SLUG: Record<'mainnet' | 'testnet', string> = {
+  mainnet: 'story',
+  testnet: 'story-testnet',
+};
+
+function getStoryNetwork(): 'mainnet' | 'testnet' {
+  return process.env.NEXT_PUBLIC_STORY_NETWORK === 'mainnet' ? 'mainnet' : 'testnet';
+}
+
 function readEnv(...keys: string[]): string | null {
   for (const key of keys) {
     const value = process.env[key]?.trim();
@@ -59,8 +68,46 @@ export function buildHallidayOutputAsset(
   return normalizeHallidayAssetId(`${chainSlug}:${token}`);
 }
 
+/**
+ * Halliday output asset for native $IP on Story Protocol (gas funding).
+ * @see https://docs.halliday.xyz/pages/payments-sdk-docs
+ */
+export function buildHallidayStoryOutputAsset(
+  network: 'mainnet' | 'testnet' = getStoryNetwork(),
+): string {
+  const assetOverride = readEnv(
+    'NEXT_PUBLIC_HALLIDAY_STORY_OUTPUT_ASSET',
+    'HALLIDAY_STORY_OUTPUT_ASSET',
+  );
+  if (assetOverride) return normalizeHallidayAssetId(assetOverride);
+
+  const chainSlug =
+    readEnv('NEXT_PUBLIC_HALLIDAY_STORY_CHAIN_SLUG', 'HALLIDAY_STORY_CHAIN_SLUG') ??
+    DEFAULT_STORY_CHAIN_SLUG[network];
+
+  return normalizeHallidayAssetId(`${chainSlug}:0x`);
+}
+
 export function isHallidaySandboxEnabled(): boolean {
   const value = readEnv('NEXT_PUBLIC_HALLIDAY_SANDBOX', 'HALLIDAY_SANDBOX');
+  return value === '1' || value?.toLowerCase() === 'true';
+}
+
+/** True when the Halliday asset id targets Lens mainnet or testnet. */
+export function isHallidayLensChainAsset(asset: string): boolean {
+  const chain = normalizeHallidayAssetId(asset).split(':')[0];
+  return chain === 'lens' || chain === 'lens-testnet';
+}
+
+/**
+ * Halliday production rejects `lens:*` outputs (`Unknown Chain: 'lens'`).
+ * Opt in with NEXT_PUBLIC_HALLIDAY_LENS_ENABLED=true once Halliday ships support.
+ */
+export function isHallidayLensOnrampSupported(): boolean {
+  const value = readEnv(
+    'NEXT_PUBLIC_HALLIDAY_LENS_ENABLED',
+    'HALLIDAY_LENS_ENABLED',
+  );
   return value === '1' || value?.toLowerCase() === 'true';
 }
 

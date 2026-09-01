@@ -3,6 +3,7 @@
 import {
     Dialog,
     DialogContent,
+    DialogDescription,
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog";
@@ -30,6 +31,9 @@ export function NewsletterModal({
             <DialogContent className="max-w-4xl h-[90vh] flex flex-col p-0 gap-0 overflow-hidden sm:max-w-5xl">
                 <DialogHeader className="px-6 py-4 flex flex-row items-center justify-between border-b bg-background z-10">
                     <DialogTitle className="truncate pr-4 flex-1">{title}</DialogTitle>
+                    <DialogDescription className="sr-only">
+                        Read the full publication in this modal or open it in a new tab.
+                    </DialogDescription>
                     <div className="flex items-center gap-2">
                         <DearCreativeTradeButton />
                         <Button variant="ghost" size="sm" asChild className="hidden sm:flex" onClick={(e) => e.stopPropagation()}>

@@ -51,10 +51,10 @@ export function useAutoDeployContentCoin() {
 
             if (e.message === "Content coin deployment timed out") {
                 logger.warn("Continuing despite deployment timeout");
-                // Return null or similar to indicate partial failure but don't throw
                 return null;
             }
-            // Don't block upload success UI
+            // Don't block upload success UI — deployContentCoin already soft-toasts
+            return null;
         }
     };
 

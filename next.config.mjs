@@ -13,10 +13,10 @@ const withPWA = createPWA({
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   // Optimize memory usage in development
-  turbopack: {},
+  transpilePackages: ['@privy-io/react-auth', '@privy-io/alchemy-migration'],
   experimental: {
     // Reduce memory usage by optimizing compilation
-    optimizePackageImports: ['@account-kit/react', '@account-kit/core', '@apollo/client', 'lucide-react', 'framer-motion'],
+    optimizePackageImports: ['@privy-io/react-auth', '@privy-io/alchemy-migration', '@apollo/client', 'lucide-react', 'framer-motion'],
   },
   // External packages that should not be processed by the bundler
   // Externalize thread-stream and pino packages on server to avoid bundling test files
@@ -105,6 +105,14 @@ const nextConfig = {
     // Use NormalModuleReplacementPlugin to replace problematic test file imports with empty module
     // This catches imports that reference test files directly
     const emptyModulePath = require.resolve('./lib/webpack/empty-module.cjs');
+
+    // Privy optional peer deps (fiat onramp, Farcaster Solana mini-app). Creative TV is EVM-only.
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      '@stripe/crypto': emptyModulePath,
+      '@farcaster/mini-app-solana': emptyModulePath,
+    };
+
     config.plugins.push(
       new webpack.NormalModuleReplacementPlugin(
         /thread-stream[\/\\]test[\/\\].*\.(js|mjs|ts)$/,
@@ -122,6 +130,13 @@ const nextConfig = {
         }
       )
     );
+
+    // viem/ox Tempo chain defs use dynamic requires — harmless in dev, very noisy in the terminal.
+    config.ignoreWarnings = [
+      ...(config.ignoreWarnings ?? []),
+      { module: /virtualMasterPool\.js/ },
+      { message: /Critical dependency: the request of a dependency is an expression/ },
+    ];
 
     // Handle .wasm files as asset resources
     // Place them in static/media/ to match Next.js default behavior
@@ -214,6 +229,28 @@ const nextConfig = {
         );
       }
     }
+
+    // Privy pulls optional Solana funding UI; Creative TV is EVM-only.
+    // Keep @solana-program/* installable — IgnorePlugin left broken runtime requires.
+    config.plugins.push(
+      new webpack.IgnorePlugin({
+        checkResource(resource) {
+          return /FundSolWalletWithExternalSolanaWallet/.test(resource || "");
+        },
+      })
+    );
+
+    const alchemySolanaActionsStub = require.resolve('./lib/webpack/alchemy-solana-actions-stub.mjs');
+    config.plugins.push(
+      new webpack.NormalModuleReplacementPlugin(
+        /solanaSmartWalletActions\.js$/,
+        (resource) => {
+          if (/@alchemy[\\/]wallet-apis[\\/]dist[\\/]esm[\\/]client\.js$/.test(resource.contextInfo?.issuer || '')) {
+            resource.request = alchemySolanaActionsStub;
+          }
+        }
+      )
+    );
 
     return config;
   },
@@ -344,15 +381,78 @@ const nextConfig = {
     ],
   },
   async headers() {
+    // Privy CSP requirements: https://docs.privy.io/security/implementation-guide/content-security-policy
+    const privyChildSrc = [
+      "'self'",
+      "https://auth.privy.io",
+      "https://verify.walletconnect.com",
+      "https://verify.walletconnect.org",
+    ].join(" ");
+
+    const privyFrameSrc = [
+      "'self'",
+      "https://auth.privy.io",
+      "https://verify.walletconnect.com",
+      "https://verify.walletconnect.org",
+      "https://challenges.cloudflare.com",
+      "https:",
+    ].join(" ");
+
+    const privyConnectSrc = [
+      "'self'",
+      "https://auth.privy.io",
+      "wss://relay.walletconnect.com",
+      "wss://relay.walletconnect.org",
+      "wss://www.walletlink.org",
+      "https://*.rpc.privy.systems",
+      "https://explorer-api.walletconnect.com",
+      "https://api.g.alchemy.com",
+      "https:",
+      "wss:",
+      "ws:",
+    ].join(" ");
+
+    const privyScriptSrc = [
+      "'self'",
+      "'unsafe-eval'",
+      "'unsafe-inline'",
+      "blob:",
+      "https://challenges.cloudflare.com",
+      "https://va.vercel-scripts.com",
+      "https://vercel.live",
+    ].join(" ");
+
+    const mainCsp = [
+      "default-src 'self'",
+      "img-src 'self' blob: data: https:",
+      "media-src 'self' blob: data: https:",
+      `script-src ${privyScriptSrc}`,
+      "style-src 'self' 'unsafe-inline'",
+      "font-src 'self' data:",
+      `connect-src ${privyConnectSrc}`,
+      `child-src ${privyChildSrc}`,
+      `frame-src ${privyFrameSrc}`,
+      "worker-src 'self' blob:",
+      "manifest-src 'self'",
+      "object-src 'none'",
+      "base-uri 'self'",
+      "form-action 'self'",
+      "frame-ancestors 'none'",
+      "upgrade-insecure-requests",
+    ].join("; ");
+
     const embedCsp = [
       "default-src 'self'",
       "img-src 'self' blob: data: https:",
       "media-src 'self' blob: data: https:",
-      "script-src 'self' 'unsafe-eval' 'unsafe-inline' blob: https://va.vercel-scripts.com https://vercel.live",
+      `script-src ${privyScriptSrc}`,
       "style-src 'self' 'unsafe-inline'",
       "font-src 'self' data:",
-      "connect-src 'self' https: wss: ws:",
-      "frame-src 'self' https:",
+      `connect-src ${privyConnectSrc}`,
+      `child-src ${privyChildSrc}`,
+      `frame-src ${privyFrameSrc}`,
+      "worker-src 'self' blob:",
+      "manifest-src 'self'",
       "object-src 'none'",
       "base-uri 'self'",
       "form-action 'self'",
@@ -384,21 +484,7 @@ const nextConfig = {
           },
           {
             key: 'Content-Security-Policy',
-            value: [
-              "default-src 'self'",
-              "img-src 'self' blob: data: https:",
-              "media-src 'self' blob: data: https:",
-              "script-src 'self' 'unsafe-eval' 'unsafe-inline' blob: https://va.vercel-scripts.com https://vercel.live",
-              "style-src 'self' 'unsafe-inline'",
-              "font-src 'self' data:",
-              "connect-src 'self' https: wss: ws:",
-              "frame-src 'self' https:",
-              "object-src 'none'",
-              "base-uri 'self'",
-              "form-action 'self'",
-              "frame-ancestors 'none'",
-              "upgrade-insecure-requests",
-            ].join('; '),
+            value: mainCsp,
           },
         ],
       },

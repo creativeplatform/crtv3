@@ -1,5 +1,5 @@
-import { NextResponse } from 'next/server';
-import { getSongchainConfig } from '@/lib/songchain/config';
+import { NextRequest, NextResponse } from 'next/server';
+import { getSongchainConfig, getSongCupConfig } from '@/lib/songchain/config';
 import { getLensNetwork } from '@/lib/sdk/lens/chains';
 import {
   getLensNetworkLabel,
@@ -54,10 +54,13 @@ async function checkConfiguredGraph(
 }
 
 /** Public health check for Songchain / Lens env (no secrets). */
-export async function GET() {
-  const raw = getSongchainConfig();
+export async function GET(request: NextRequest) {
+  const context = request.nextUrl.searchParams.get('context');
+  const isSongCup = context === 'song-cup';
+  const raw = isSongCup ? getSongCupConfig() : getSongchainConfig();
   const config = await resolveSongchainConfig(raw);
   const network = getLensNetwork();
+  const envPrefix = isSongCup ? 'SONG_CUP' : 'SONGCHAIN';
 
   const [publicFeed, exclusiveFeed, graph] = await Promise.all([
     checkConfiguredFeed(config.publicFeedId),
@@ -68,7 +71,7 @@ export async function GET() {
   const hints: string[] = [];
   if (!config.enabled) {
     hints.push(
-      'Set NEXT_PUBLIC_SONGCHAIN_FEED_ID (and related vars) in your deployment environment.',
+      `Set NEXT_PUBLIC_${envPrefix}_FEED_ID (and related vars) in your deployment environment.`,
       'Ensure NEXT_PUBLIC_LENS_ENV matches the network where feeds were created.',
     );
     if (config.resolutionNotes.length > 0) {
@@ -77,17 +80,17 @@ export async function GET() {
   }
   if (publicFeed.configured && !publicFeed.registered) {
     hints.push(
-      'Public feed is not registered on Lens. Use a feed contract address — not your Lens app contract. Set NEXT_PUBLIC_SONGCHAIN_APP_ID for the app and leave FEED_ID empty to auto-resolve, or set FEED_ID to a feed linked in the app dashboard.',
+      `Public feed is not registered on Lens. Use a feed contract address — not your Lens app contract. Set NEXT_PUBLIC_${envPrefix}_APP_ID for the app and leave FEED_ID empty to auto-resolve, or set FEED_ID to a feed linked in the app dashboard.`,
     );
   }
   if (exclusiveFeed.configured && !exclusiveFeed.registered) {
     hints.push(
-      'Exclusive feed address is set but not registered on Lens. Verify NEXT_PUBLIC_SONGCHAIN_EXCLUSIVE_FEED_ID.',
+      `Exclusive feed address is set but not registered on Lens. Verify NEXT_PUBLIC_${envPrefix}_EXCLUSIVE_FEED_ID.`,
     );
   }
   if (graph.configured && !graph.registered) {
     hints.push(
-      'Graph address is not registered on Lens. Set NEXT_PUBLIC_SONGCHAIN_GRAPH_ID or resolve via NEXT_PUBLIC_SONGCHAIN_APP_ID.',
+      `Graph address is not registered on Lens. Set NEXT_PUBLIC_${envPrefix}_GRAPH_ID or resolve via NEXT_PUBLIC_${envPrefix}_APP_ID.`,
     );
   }
 
@@ -97,6 +100,7 @@ export async function GET() {
       (!publicFeed.configured || publicFeed.registered) &&
       (!exclusiveFeed.configured || exclusiveFeed.registered) &&
       (!graph.configured || graph.registered),
+    context: isSongCup ? 'song-cup' : 'songchain',
     lensNetwork: network,
     lensNetworkLabel: getLensNetworkLabel(network),
     appId: truncateFeedId(config.appId),

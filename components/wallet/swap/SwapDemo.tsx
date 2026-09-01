@@ -50,7 +50,7 @@ export function SwapDemo() {
         <CardContent>
           <div className="space-y-2">
             <div className="text-sm">
-              <strong>✅ Supported Tokens:</strong> ETH, USDC, DAI on Base
+              <strong>✅ Supported Tokens:</strong> ETH, USDC, USDS, DAI, GHO on Base
             </div>
             <div className="text-sm">
               <strong>✅ Gasless Swaps:</strong> Paymaster integration for sponsored gas

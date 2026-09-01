@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import { useVideoChat } from "@/lib/hooks/xmtp/useVideoChat";
-import { useUser } from "@account-kit/react";
+import { useUser } from "@/lib/wallet/react";
 import useModularAccount from "@/lib/hooks/accountkit/useModularAccount";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

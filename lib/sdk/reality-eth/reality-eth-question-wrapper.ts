@@ -1,7 +1,7 @@
 import { type Address, type PublicClient, type WalletClient, encodeFunctionData, parseAbi, keccak256, encodePacked } from "viem";
 import { base } from "@account-kit/infra";
 import { getRealityEthContract, getRealityEthContractAddress, getRealityEthABI } from "./reality-eth-client";
-import { getRealityEthSubgraphUrl } from "./reality-eth-subgraph";
+import { queryRealityEthSubgraph } from "@/lib/subgraph/query-reality-eth-subgraph";
 import { encodeQuestionText, validateQuestionData, type QuestionData } from "./reality-eth-utils";
 import { serverLogger } from '@/lib/utils/logger';
 import { appendBuilderCode } from "@/lib/utils/builder-code";
@@ -302,6 +302,7 @@ export async function submitAnswer(
  */
 export interface RealityEthQuestion {
   question: string;
+  template_id?: bigint | number;
   opening_ts: bigint;
   timeout: bigint;
   finalize_ts: bigint;
@@ -385,8 +386,12 @@ export async function getQuestion(
       });
 
       if (logs.length > 0) {
-        const logArgs = logs[0].args as any;
-        questionText = logArgs.question;
+        const logArgs = logs[0].args as {
+          question?: string;
+          template_id?: bigint | number;
+        };
+        questionText = logArgs.question ?? "";
+        structData.template_id = logArgs.template_id;
       } else {
         serverLogger.warn(`No LogNewQuestion event found for ${questionId}. Title might be missing.`);
       }
@@ -574,8 +579,6 @@ export async function getAnswerHistory(
   if (entries.length === 0 || entries[0].history_hash !== zeroHash) {
     serverLogger.info(`⚠️ RPC logs incomplete for ${questionId} (Start hash: ${entries[0]?.history_hash || 'none'}). Fetching from Subgraph...`);
 
-    const GRAPH_URL = getRealityEthSubgraphUrl();
-
     const query = `
       query GetHistory($qId: ID!) {
         question(id: $qId) {
@@ -594,18 +597,20 @@ export async function getAnswerHistory(
     `;
 
     try {
-      const response = await fetch(GRAPH_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query, variables: { qId: questionId } }),
-      });
+      const result = await queryRealityEthSubgraph<{
+        question?: { id: string; arbitrator: string };
+        answers?: Array<{
+          answer: string;
+          history_hash: string;
+          answerer: string;
+          bond: string;
+          created: string;
+          is_commitment: boolean;
+        }>;
+      }>(query, { qId: questionId });
 
-      const result = await response.json();
-      if (result.errors?.length) {
-        serverLogger.error("Reality.eth subgraph GraphQL errors:", result.errors);
-      }
-      const answerLogs = result.data?.answers;
-      const questionMeta = result.data?.question;
+      const answerLogs = result?.answers;
+      const questionMeta = result?.question;
 
       if (answerLogs && Array.isArray(answerLogs)) {
         entries = answerLogs.map((a: any) => ({

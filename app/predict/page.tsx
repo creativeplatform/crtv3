@@ -1,4 +1,5 @@
 import React, { Suspense } from "react";
+import type { Metadata } from "next";
 import Image from "next/image";
 import {
   Breadcrumb,
@@ -12,6 +13,31 @@ import Link from "next/link";
 import { Slash } from "lucide-react";
 import { PredictionList } from "@/components/predictions/PredictionList";
 import { PredictionListSkeleton } from "@/components/predictions/PredictionListSkeleton";
+
+export const metadata: Metadata = {
+  title: "Predictions",
+  description: "Make predictions and bet on outcomes using Reality.eth.",
+  openGraph: {
+    title: "Predictions",
+    description: "Make predictions and bet on outcomes using Reality.eth.",
+    type: "website",
+    images: [
+      {
+        url: "/images/prediction_banner.png",
+        width: 800,
+        height: 300,
+        alt: "The best way to predict the future is to create it.",
+        type: "image/png",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Predictions",
+    description: "Make predictions and bet on outcomes using Reality.eth.",
+    images: ["/images/prediction_banner.png"],
+  },
+};
 
 export default function PredictPage() {
   return (

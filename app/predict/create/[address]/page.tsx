@@ -10,7 +10,6 @@ import {
 import { Slash } from "lucide-react";
 import Link from "next/link";
 import { CreatePrediction } from "@/components/predictions/CreatePrediction";
-import { MembershipGuard } from "@/components/auth/MembershipGuard";
 
 const CreatePredictionPage = () => {
   return (
@@ -45,9 +44,7 @@ const CreatePredictionPage = () => {
           </BreadcrumbList>
         </Breadcrumb>
       </div>
-      <MembershipGuard>
-        <CreatePrediction />
-      </MembershipGuard>
+      <CreatePrediction />
     </div>
   );
 };

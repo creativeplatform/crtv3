@@ -3,7 +3,7 @@
 import { useState, useCallback, useEffect, useMemo } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { useSmartAccountClient } from "@account-kit/react";
+import { useSmartAccountClient } from "@/lib/wallet/react";
 import { base } from "@account-kit/infra";
 import { createPublicClient, http, fallback, formatEther } from "viem";
 import {
@@ -11,26 +11,40 @@ import {
   buildClaimWinningsParams,
   claimWinnings as claimWinningsTx,
   withdraw,
-  getBalanceOf,
 } from "@/lib/sdk/reality-eth/reality-eth-question-wrapper";
 import { useWalletStatus } from "@/lib/hooks/accountkit/useWalletStatus";
 import { Loader2, Wallet, Gift } from "lucide-react";
 import { toast } from "sonner";
 import { logger } from "@/lib/utils/logger";
+import {
+  getUserClaimStatus,
+  type UserClaimStatus,
+} from "@/lib/predictions/claim-status";
+import type { ParsedPredictionDisplay } from "@/lib/predictions/parse-prediction-display";
 
 interface ClaimWinningsCardProps {
   questionId: string;
+  finalAnswer: string | null;
+  parsed: ParsedPredictionDisplay;
 }
 
 type ClaimStep = "idle" | "fetching" | "claiming" | "withdrawing" | "done" | "error";
 
-export function ClaimWinningsCard({ questionId }: ClaimWinningsCardProps) {
-  const [balance, setBalance] = useState<bigint | null>(null);
+export function ClaimWinningsCard({
+  questionId,
+  finalAnswer,
+  parsed,
+}: ClaimWinningsCardProps) {
+  const [claimStatus, setClaimStatus] = useState<UserClaimStatus | null>(null);
+  const [winningBondTotal, setWinningBondTotal] = useState<bigint>(0n);
+  const [contractBalance, setContractBalance] = useState<bigint | null>(null);
   const [step, setStep] = useState<ClaimStep>("idle");
   const [error, setError] = useState<string | null>(null);
-  const [canClaim, setCanClaim] = useState<boolean | null>(null);
+  const [winningAnswerLabel, setWinningAnswerLabel] = useState<string | null>(
+    null
+  );
 
-  const { isConnected, walletAddress } = useWalletStatus();
+  const { isConnected, walletAddress, smartAccountAddress } = useWalletStatus();
   const { client: accountKitClient } = useSmartAccountClient({});
 
   const publicClient = useMemo(
@@ -49,25 +63,41 @@ export function ClaimWinningsCard({ questionId }: ClaimWinningsCardProps) {
     []
   );
 
-  const fetchBalanceAndClaimability = useCallback(async () => {
-    if (!walletAddress) return;
+  const refreshStatus = useCallback(async () => {
+    if (!walletAddress || !finalAnswer) return;
     setError(null);
     try {
-      const bal = await getBalanceOf(publicClient, walletAddress as `0x${string}`);
-      setBalance(bal);
-      const history = await getAnswerHistory(publicClient, questionId);
-      setCanClaim(history.length > 0);
+      const result = await getUserClaimStatus({
+        publicClient,
+        questionId,
+        addresses: [walletAddress, smartAccountAddress],
+        finalAnswer,
+        parsed,
+      });
+      setClaimStatus(result.status);
+      setWinningBondTotal(result.winningBondTotal);
+      setContractBalance(result.contractBalance);
+      setWinningAnswerLabel(result.winningAnswerLabel);
     } catch (e: unknown) {
-      const err = e as { message?: string };
-      logger.error("Error fetching balance / history:", e);
-      setError(err?.message ?? "Failed to fetch");
-      setCanClaim(false);
+      logger.error("Error fetching claim status:", e);
+      setError((e as { message?: string })?.message ?? "Failed to check status");
     }
-  }, [questionId, walletAddress, publicClient]);
+  }, [
+    walletAddress,
+    smartAccountAddress,
+    finalAnswer,
+    publicClient,
+    questionId,
+    parsed,
+  ]);
 
   useEffect(() => {
-    if (isConnected && walletAddress) void fetchBalanceAndClaimability();
-  }, [isConnected, walletAddress, questionId, fetchBalanceAndClaimability]);
+    if (isConnected && walletAddress && finalAnswer) {
+      void refreshStatus();
+    } else {
+      setClaimStatus(null);
+    }
+  }, [isConnected, walletAddress, finalAnswer, refreshStatus]);
 
   const handleClaimAndWithdraw = async () => {
     if (!isConnected || !walletAddress || !accountKitClient) {
@@ -86,7 +116,8 @@ export function ClaimWinningsCard({ questionId }: ClaimWinningsCardProps) {
         return;
       }
 
-      const { history_hashes, addrs, bonds, answers } = buildClaimWinningsParams(history);
+      const { history_hashes, addrs, bonds, answers } =
+        buildClaimWinningsParams(history);
 
       setStep("claiming");
       try {
@@ -98,32 +129,39 @@ export function ClaimWinningsCard({ questionId }: ClaimWinningsCardProps) {
           answers,
         });
         toast.success("Winnings distributed.");
-      } catch (claimError: any) {
-        // If claim fails, we check if it was because it's already claimed or similar
-        const msg = claimError?.message || "";
+      } catch (claimError: unknown) {
+        const msg =
+          claimError instanceof Error ? claimError.message : "";
         logger.warn("Claim warning (might be already claimed):", claimError);
 
-        if (msg.toLowerCase().includes("already") || msg.toLowerCase().includes("revert")) {
+        if (
+          msg.toLowerCase().includes("already") ||
+          msg.toLowerCase().includes("revert")
+        ) {
           toast.info("Winnings might already be distributed. Checking balance...");
         } else {
-          // If it's a real unknown error, we stop here? 
-          // Or we continues to check balance just in case.
           toast.error("Distribution step failed, but checking for withdrawable funds...");
         }
       }
 
-      // Always check balance after claim attempt
-      const bal = await getBalanceOf(publicClient, walletAddress as `0x${string}`);
-      if (bal > 0n) {
-        setStep("withdrawing");
+      setStep("withdrawing");
+      const result = await getUserClaimStatus({
+        publicClient,
+        questionId,
+        addresses: [walletAddress, smartAccountAddress],
+        finalAnswer,
+        parsed,
+      });
+
+      if (result.contractBalance > 0n) {
         await withdraw(publicClient, accountKitClient as any);
         toast.success("Withdrawal successful!");
       } else {
-        toast.info("No funds to withdraw.");
+        toast.info("No funds to withdraw yet.");
       }
 
       setStep("done");
-      await fetchBalanceAndClaimability();
+      await refreshStatus();
     } catch (e: unknown) {
       logger.error("Claim/withdraw process error:", e);
       const msg = (e as { message?: string })?.message ?? "Process failed.";
@@ -144,7 +182,7 @@ export function ClaimWinningsCard({ questionId }: ClaimWinningsCardProps) {
       await withdraw(publicClient, accountKitClient as any);
       toast.success("Withdrawal successful!");
       setStep("done");
-      await fetchBalanceAndClaimability();
+      await refreshStatus();
     } catch (e: unknown) {
       logger.error("Withdraw error:", e);
       setError((e as { message?: string })?.message ?? "Withdrawal failed.");
@@ -153,8 +191,35 @@ export function ClaimWinningsCard({ questionId }: ClaimWinningsCardProps) {
     }
   };
 
-  const isLoading = step === "fetching" || step === "claiming" || step === "withdrawing";
-  const hasBalance = balance !== null && balance > 0n;
+  if (claimStatus === "not_participant" && isConnected) {
+    return null;
+  }
+
+  if (claimStatus === "bonded_lost" && isConnected) {
+    return (
+      <Card className="p-4 bg-muted/40 border-muted">
+        <p className="text-sm text-muted-foreground">
+          This prediction is resolved. Your bond was on a losing answer.
+        </p>
+      </Card>
+    );
+  }
+
+  if (claimStatus === "already_settled" && isConnected) {
+    return (
+      <Card className="p-4 bg-muted/40 border-muted">
+        <p className="text-sm text-muted-foreground">
+          Winnings for this market have already been claimed and withdrawn.
+        </p>
+      </Card>
+    );
+  }
+
+  const isLoading =
+    step === "fetching" || step === "claiming" || step === "withdrawing";
+  const hasBalance = contractBalance !== null && contractBalance > 0n;
+  const showClaimCta =
+    claimStatus === "won_pending_claim" || claimStatus === "won_withdrawable";
 
   return (
     <Card className="p-6 bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800">
@@ -164,32 +229,55 @@ export function ClaimWinningsCard({ questionId }: ClaimWinningsCardProps) {
           Claim your winnings
         </h2>
       </div>
-      <p className="text-sm text-emerald-700 dark:text-emerald-300 mb-4">
-        This prediction is resolved. If you bonded on the winning answer, claim to distribute
-        winnings to your balance, then withdraw to your wallet.
-      </p>
 
       {!isConnected ? (
         <p className="text-sm text-amber-700 dark:text-amber-300">
           Connect your wallet to claim or withdraw.
         </p>
-      ) : (
+      ) : showClaimCta ? (
         <>
+          <p className="text-sm text-emerald-700 dark:text-emerald-300 mb-4">
+            {claimStatus === "won_pending_claim" ? (
+              <>
+                You bonded{" "}
+                <strong>
+                  {Number(formatEther(winningBondTotal)).toFixed(4)} ETH
+                </strong>{" "}
+                on{" "}
+                <strong>{winningAnswerLabel ?? "the winning answer"}</strong>.
+                Claim to distribute winnings, then withdraw to your wallet.
+              </>
+            ) : (
+              <>
+                You have{" "}
+                <strong>
+                  {Number(formatEther(contractBalance ?? 0n)).toFixed(4)} ETH
+                </strong>{" "}
+                ready to withdraw from Reality.eth
+                {contractBalance && contractBalance > winningBondTotal
+                  ? " (may include other markets)"
+                  : ""}
+                .
+              </>
+            )}
+          </p>
+
           <div className="flex flex-wrap items-center gap-3 mb-4">
             <Button
               type="button"
-              onClick={fetchBalanceAndClaimability}
+              onClick={refreshStatus}
               disabled={isLoading}
               variant="outline"
               size="sm"
               className="border-emerald-300 dark:border-emerald-700"
             >
-              {balance === null ? "Check balance" : "Refresh"}
+              Refresh
             </Button>
-            {balance !== null && (
+            {contractBalance !== null && (
               <span className="inline-flex items-center gap-1 text-sm text-emerald-800 dark:text-emerald-200">
                 <Wallet className="h-4 w-4" aria-hidden />
-                Withdrawable Balance: {Number(formatEther(balance)).toFixed(3)} ETH
+                Withdrawable balance:{" "}
+                {Number(formatEther(contractBalance)).toFixed(4)} ETH
               </span>
             )}
           </div>
@@ -201,42 +289,39 @@ export function ClaimWinningsCard({ questionId }: ClaimWinningsCardProps) {
           )}
 
           <div className="flex flex-wrap gap-2">
-            {canClaim !== false && (
+            {claimStatus === "won_pending_claim" && (
               <Button
                 type="button"
                 onClick={handleClaimAndWithdraw}
                 disabled={isLoading}
                 className="bg-emerald-600 hover:bg-emerald-700 text-white"
-                aria-label="Claim winnings and withdraw to wallet"
               >
                 {isLoading ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
-                    {step === "claiming"
-                      ? "Distributing…"
-                      : step === "withdrawing"
-                        ? "Withdrawing…"
-                        : "Processing…"}
+                    Processing…
                   </>
                 ) : (
                   "Claim & withdraw"
                 )}
               </Button>
             )}
-            {hasBalance && (
+            {hasBalance && claimStatus === "won_withdrawable" && (
               <Button
                 type="button"
-                variant="outline"
                 onClick={handleWithdrawOnly}
                 disabled={isLoading}
-                className="border-emerald-400 dark:border-emerald-600"
-                aria-label="Withdraw balance only"
+                className="bg-emerald-600 hover:bg-emerald-700 text-white"
               >
-                Withdraw only
+                Withdraw
               </Button>
             )}
           </div>
         </>
+      ) : (
+        <p className="text-sm text-muted-foreground">
+          Checking claim eligibility…
+        </p>
       )}
     </Card>
   );

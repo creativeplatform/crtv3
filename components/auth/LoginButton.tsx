@@ -5,7 +5,7 @@ import {
   useAuthModal,
   useUser,
   useSmartAccountClient,
-} from "@account-kit/react";
+} from "@/lib/wallet/react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";

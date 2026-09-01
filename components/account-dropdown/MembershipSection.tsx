@@ -3,29 +3,31 @@
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  useMembershipVerification,
-  type MembershipDetails,
-} from "../../lib/hooks/unlock/useMembershipVerification";
+import { useMembershipContext } from "../../lib/context/MembershipContext";
+import { type MembershipDetails } from "../../lib/hooks/unlock/useMembershipVerification";
+import { getProfileMembershipUrl } from "@/lib/utils/profile-urls";
+import { useSmartAccountClient, useUser } from "@/lib/wallet/react";
+import useModularAccount from "@/lib/hooks/accountkit/useModularAccount";
 import { LoginWithEthereumButton } from "@/components/auth/LoginWithEthereumButton";
-import { LockKeyhole, ShieldCheck, ShieldX, AlertTriangle } from "lucide-react";
-import {
-  LOCK_ADDRESSES,
-  type LockAddressValue,
-} from "../../lib/sdk/unlock/services";
+import { LockKeyhole, ShieldCheck, ShieldX, AlertTriangle, Calendar, ExternalLink } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { useUser } from "@account-kit/react";
+import { getPassDisplayName } from "../../lib/access/membership-labels";
 
-interface MembershipSectionProps {
-  className?: string;
-  onNavigate?: () => void;
+function formatExpiration(expiration?: number): string {
+  if (!expiration) return "Unknown";
+  const ms = expiration * 1000;
+  if (ms > 32503680000000) return "Lifetime / Never expires";
+  const date = new Date(ms);
+  if (date.toString() === "Invalid Date") return "Unknown";
+  return date.toISOString().split("T")[0];
 }
 
-const MEMBERSHIP_NAMES: Record<LockAddressValue, string> = {
-  [LOCK_ADDRESSES.BASE_CREATIVE_PASS]: "Creative Pass",
-  [LOCK_ADDRESSES.BASE_CREATIVE_PASS_2]: "Creative Pass Plus",
-  [LOCK_ADDRESSES.BASE_CREATIVE_PASS_3]: "Creative Pass Pro",
-} as const;
+function isExpired(expiration?: number): boolean {
+  if (!expiration) return false;
+  const ms = expiration * 1000;
+  if (ms > 32503680000000) return false;
+  return ms < Date.now();
+}
 
 const ERROR_MESSAGES: Record<string, string> = {
   LOCK_NOT_FOUND: "Unable to verify membership. Please try again later.",
@@ -40,20 +42,41 @@ const ERROR_MESSAGES: Record<string, string> = {
   DEFAULT: "An error occurred while verifying membership.",
 };
 
+interface MembershipSectionProps {
+  className?: string;
+  onNavigate?: () => void;
+}
+
 function BuyMembershipCta({
+  profileAddress,
   className,
   onNavigate,
 }: {
+  profileAddress?: string;
   className?: string;
   onNavigate?: () => void;
 }) {
+  if (!profileAddress) {
+    return (
+      <div className={`space-y-2 ${className || ""}`}>
+        <p className="text-xs text-muted-foreground">
+          Connect your wallet to view pricing and purchase memberships.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className={`space-y-2 ${className || ""}`}>
       <p className="text-xs text-muted-foreground">
         View pricing and purchase Unlock memberships on Base with USDC.
       </p>
       <Button asChild className="w-full bg-black hover:bg-gray-900 text-white">
-        <Link href="/memberships" className="w-full" onClick={onNavigate}>
+        <Link
+          href={getProfileMembershipUrl(profileAddress)}
+          className="w-full"
+          onClick={onNavigate}
+        >
           Buy Membership
         </Link>
       </Button>
@@ -66,8 +89,13 @@ export function MembershipSection({
   onNavigate,
 }: MembershipSectionProps) {
   const user = useUser();
-  const { isVerified, hasMembership, isLoading, error, membershipDetails } =
-    useMembershipVerification();
+  const { address: scaAddress } = useSmartAccountClient({});
+  const { account } = useModularAccount();
+  const { isVerified, hasMembership, isLoading, error, membershipDetails, walletAddress } =
+    useMembershipContext();
+
+  const profileAddress =
+    walletAddress || account?.address || scaAddress || user?.address;
 
   if (isLoading) {
     return (
@@ -94,7 +122,7 @@ export function MembershipSection({
           <AlertDescription>{errorMessage}</AlertDescription>
         </Alert>
         {user ? (
-          <BuyMembershipCta onNavigate={onNavigate} />
+          <BuyMembershipCta profileAddress={profileAddress} onNavigate={onNavigate} />
         ) : (
           <LoginWithEthereumButton />
         )}
@@ -110,7 +138,7 @@ export function MembershipSection({
             <ShieldX className="h-4 w-4" />
             <span>No active membership</span>
           </div>
-          <BuyMembershipCta onNavigate={onNavigate} />
+          <BuyMembershipCta profileAddress={profileAddress} onNavigate={onNavigate} />
         </div>
       );
     }
@@ -133,7 +161,7 @@ export function MembershipSection({
           <LockKeyhole className="h-4 w-4" />
           <span>No active membership</span>
         </div>
-        <BuyMembershipCta onNavigate={onNavigate} />
+        <BuyMembershipCta profileAddress={profileAddress} onNavigate={onNavigate} />
       </div>
     );
   }
@@ -145,31 +173,48 @@ export function MembershipSection({
         <span>Verified Member</span>
       </div>
       {membershipDetails && membershipDetails.length > 0 && (
-        <div className="space-y-2">
+        <div className="space-y-3">
           {membershipDetails
             .filter(({ isValid }: MembershipDetails) => isValid)
-            .map(({ address, lock }: MembershipDetails) => (
+            .map(({ address, lock, expiration }: MembershipDetails) => {
+              const expired = isExpired(expiration);
+              return (
               <div
                 key={address}
-                className="flex items-center justify-between text-xs"
+                className="rounded-md border border-border/60 p-3 space-y-3"
               >
-                <span className="text-muted-foreground">
-                  {MEMBERSHIP_NAMES[address]}
-                </span>
-                <span className="font-medium">
-                  {lock?.name || "Active"}
-                  {lock?.expirationDuration && (
-                    <span className="ml-1 text-muted-foreground">
-                      (Expires:{" "}
-                      {new Date(
-                        lock.expirationDuration * 1000
-                      ).toLocaleDateString()}
-                      )
-                    </span>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-medium text-foreground">
+                    {getPassDisplayName(address)}
+                  </span>
+                  {lock?.image && (
+                    <img
+                      src={lock.image}
+                      alt=""
+                      className="h-8 w-8 rounded-md object-cover"
+                    />
                   )}
-                </span>
+                </div>
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Calendar className="h-3.5 w-3.5" />
+                  <span>
+                    {expired ? "Expired on" : "Expires on"}{" "}
+                    {formatExpiration(expiration)}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button asChild variant="outline" size="sm" className="gap-1">
+                    <Link
+                      href={profileAddress ? getProfileMembershipUrl(profileAddress) : "#"}
+                      onClick={onNavigate}
+                    >
+                      Manage Membership
+                      <ExternalLink className="h-3 w-3" />
+                    </Link>
+                  </Button>
+                </div>
               </div>
-            ))}
+            );})}
         </div>
       )}
       <div className="text-xs text-muted-foreground">

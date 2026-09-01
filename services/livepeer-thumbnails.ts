@@ -10,7 +10,7 @@ const getThumbnailUrlSchema = z.object({
 
 export async function getThumbnailUrl({ playbackId }: { playbackId: string }) {
   const res = await fetch(
-    `/api/livepeer/playback-info?playbackId=${playbackId}`
+    `/api/internal/playback-info?playbackId=${playbackId}`
   );
   if (!res.ok)
     return {
@@ -39,7 +39,7 @@ export async function getThumbnailUrl({ playbackId }: { playbackId: string }) {
 export async function getThumbnailFromVTT({ playbackId }: { playbackId: string }) {
   try {
     const res = await fetch(
-      `/api/livepeer/playback-info?playbackId=${playbackId}`
+      `/api/internal/playback-info?playbackId=${playbackId}`
     );
     
     if (!res.ok) {

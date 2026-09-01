@@ -2,19 +2,21 @@ import { formatEther } from 'viem';
 import { publicClient } from '@/lib/viem';
 import { parseAbi } from 'viem';
 import { logger } from '@/lib/utils/logger';
+import { METOKEN_DIAMOND_BASE, METOKEN_FACTORY_BASE, METOKENS_BASE_ASSETS } from '@/lib/contracts/metokens/deployments';
 
 // Official MeTokens Protocol Contract Addresses
 export const METOKEN_CONTRACTS = {
   // Base Mainnet
   BASE: {
-    DIAMOND: '0xba5502db2aC2cBff189965e991C07109B14eB3f5',
-    FACTORY: '0xb31Ae2583d983faa7D8C8304e6A16E414e721A0B',
-    DAI: '0x50c5725949a6f0c72e6c4a641f24049a917db0cb'
+    DIAMOND: METOKEN_DIAMOND_BASE,
+    FACTORY: METOKEN_FACTORY_BASE,
+    DAI: METOKENS_BASE_ASSETS.DAI,
+    USDC: METOKENS_BASE_ASSETS.USDC,
   },
   // Mainnet
   MAINNET: {
     DIAMOND: '0x0B4ec400e8D10218D0869a5b0036eA4BCf92d905',
-    FACTORY: '0xb31Ae2583d983faa7D8C8304e6A16E414e721A0B',
+    FACTORY: '0x8D4ee3599aF814bF3Aa884c161f0dE81d9e97225',
     DAI: '0x6B175474E89094C44Da98b954EedeAC495271d0F'
   },
   // Optimism

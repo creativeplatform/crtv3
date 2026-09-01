@@ -2,7 +2,7 @@
 
 /**
  * RobustMeTokenCreator - MeToken creation component with timeout handling
- * 
+ *
  * This component uses the useMeTokenCreation hook to provide:
  * 1. Progressive status updates
  * 2. Timeout recovery with background polling
@@ -10,7 +10,7 @@
  * 4. Better UX for long blockchain transactions
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -27,26 +27,43 @@ import {
   RefreshCw,
   Wallet,
   ArrowRight,
-  X
+  X,
 } from 'lucide-react';
-import { formatEther, parseEther } from 'viem';
-import { useSmartAccountClient, useChain } from '@account-kit/react';
+import { useSmartAccountClient } from '@/lib/wallet/react';
 import { useToast } from '@/components/ui/use-toast';
-import { useMeTokenCreation, PendingMeTokenTransaction, CreationStatus } from '@/lib/hooks/metokens/useMeTokenCreation';
-import { getDaiTokenContract } from '@/lib/contracts/DAIToken';
+import {
+  useMeTokenCreation,
+  type PendingMeTokenTransaction,
+  type CreationStatus,
+} from '@/lib/hooks/metokens/useMeTokenCreation';
+import { useMeTokenHubs } from '@/lib/hooks/metokens/useMeTokenHubs';
+import {
+  HUB_ASSET_CONFIGS,
+  DEFAULT_HUB_ASSET,
+  type HubAssetConfig,
+  type HubAssetSymbol,
+} from '@/lib/contracts/MeTokenHubs';
+import {
+  formatHubAssetAmount,
+  parseHubAssetAmount,
+  resolveHubAsset,
+} from '@/lib/utils/hubAssetUtils';
 import { logger } from '@/lib/utils/logger';
-
+import { getErc20Balance } from '@/lib/viem';
+import { cn } from '@/lib/utils';
 
 interface RobustMeTokenCreatorProps {
   onMeTokenCreated?: (meTokenAddress: string, transactionHash?: string, meTokenId?: string) => void;
   onClose?: () => void;
 }
 
-// Status step configuration
-const STATUS_STEPS: Record<CreationStatus, { label: string; icon: React.ReactNode; color: string }> = {
+const STATUS_STEPS: Record<
+  CreationStatus,
+  { label: string; icon: ReactNode; color: string }
+> = {
   idle: { label: 'Ready to create', icon: <Wallet className="h-4 w-4" />, color: 'text-muted-foreground' },
-  checking_balance: { label: 'Checking DAI balance...', icon: <Loader2 className="h-4 w-4 animate-spin" />, color: 'text-blue-500' },
-  approving_dai: { label: 'Approving DAI...', icon: <Loader2 className="h-4 w-4 animate-spin" />, color: 'text-blue-500' },
+  checking_balance: { label: 'Checking balance...', icon: <Loader2 className="h-4 w-4 animate-spin" />, color: 'text-blue-500' },
+  approving_dai: { label: 'Approving collateral...', icon: <Loader2 className="h-4 w-4 animate-spin" />, color: 'text-blue-500' },
   waiting_approval: { label: 'Waiting for approval...', icon: <Clock className="h-4 w-4 animate-pulse" />, color: 'text-yellow-500' },
   creating_metoken: { label: 'Creating MeToken...', icon: <Loader2 className="h-4 w-4 animate-spin" />, color: 'text-blue-500' },
   waiting_confirmation: { label: 'Waiting for confirmation...', icon: <Clock className="h-4 w-4 animate-pulse" />, color: 'text-yellow-500' },
@@ -55,17 +72,30 @@ const STATUS_STEPS: Record<CreationStatus, { label: string; icon: React.ReactNod
   error: { label: 'Error', icon: <AlertCircle className="h-4 w-4" />, color: 'text-red-500' },
 };
 
+/** Page-specific collateral logos for the creation form backing selector. */
+const CREATOR_COLLATERAL_LOGOS: Partial<Record<HubAssetSymbol, string>> = {
+  USDS: '/images/tokens/s_usds.webp',
+  GHO: '/images/tokens/gho-coin.png',
+};
+
 export function RobustMeTokenCreator({ onMeTokenCreated, onClose }: RobustMeTokenCreatorProps) {
   const [name, setName] = useState('');
   const [symbol, setSymbol] = useState('');
-  const [hubId, setHubId] = useState('1');
   const [assetsDeposited, setAssetsDeposited] = useState('');
-  const [daiBalance, setDaiBalance] = useState<bigint>(BigInt(0));
+  const [assetBalances, setAssetBalances] = useState<Record<string, bigint>>({});
   const [showPendingTransactions, setShowPendingTransactions] = useState(false);
 
+  // Keep the latest callback in a ref so the success effect below can depend on
+  // a stable value instead of re-firing every time the parent re-renders with a
+  // new inline `onMeTokenCreated` reference (React error #185 loop).
+  const onMeTokenCreatedRef = useRef(onMeTokenCreated);
+  useEffect(() => {
+    onMeTokenCreatedRef.current = onMeTokenCreated;
+  }, [onMeTokenCreated]);
+
   const { client } = useSmartAccountClient({});
-  const { chain } = useChain();
   const { toast } = useToast();
+  const { activeHubs, defaultHub, loading: hubsLoading, error: hubsError } = useMeTokenHubs();
 
   const {
     state,
@@ -76,67 +106,120 @@ export function RobustMeTokenCreator({ onMeTokenCreated, onClose }: RobustMeToke
     retryPendingTransaction,
   } = useMeTokenCreation();
 
-  // Check DAI balance
-  const checkDaiBalance = useCallback(async () => {
-    if (!client?.account?.address) return;
+  const hubOptions = useMemo(() => {
+    return activeHubs.map((hub) => {
+      const config =
+        hub.symbol !== 'UNKNOWN'
+          ? HUB_ASSET_CONFIGS[hub.symbol as HubAssetSymbol]
+          : null;
 
-    try {
-      const daiContract = getDaiTokenContract('base');
-      const balance = await client.readContract({
-        address: daiContract.address as `0x${string}`,
-        abi: daiContract.abi,
-        functionName: 'balanceOf',
-        args: [client.account.address],
-      }) as bigint;
+      return {
+        hubId: hub.hubId,
+        symbol: hub.symbol,
+        displayName: config?.displayName ?? hub.displayName,
+        tagline: config?.tagline ?? hub.description,
+        logo: config?.logo,
+        decimals: hub.decimals,
+        address: hub.asset,
+        recommended: config?.recommended,
+        deprecated: config?.deprecated,
+      };
+    });
+  }, [activeHubs]);
 
-      setDaiBalance(balance);
-    } catch (err) {
-      logger.error('Failed to check DAI balance:', err);
-      setDaiBalance(BigInt(0));
-    }
-  }, [client]);
+  const fallbackHubId = HUB_ASSET_CONFIGS[DEFAULT_HUB_ASSET].hubId;
+  const [selectedHubId, setSelectedHubId] = useState<number>(fallbackHubId);
 
-  // Check balance on mount and when client changes
   useEffect(() => {
-    checkDaiBalance();
-  }, [checkDaiBalance]);
+    if (defaultHub && selectedHubId === fallbackHubId) {
+      setSelectedHubId(defaultHub.hubId);
+    }
+  }, [defaultHub, fallbackHubId, selectedHubId]);
+
+  const selectedHubOption =
+    hubOptions.find((hub) => hub.hubId === selectedHubId) ?? hubOptions[0];
+  const selectedAsset = selectedHubOption
+    ? resolveHubAsset(selectedHubOption.hubId)
+    : resolveHubAsset(fallbackHubId);
+
+  const fetchBalances = useCallback(async () => {
+    if (!client?.account?.address || hubOptions.length === 0) return;
+
+    const entries = await Promise.all(
+      hubOptions.map(async (hub) => {
+        try {
+          const balance = await getErc20Balance({
+            token: hub.address,
+            owner: client.account.address,
+          });
+          return [hub.symbol, balance] as const;
+        } catch (err) {
+          logger.error(`Failed to check ${hub.symbol} balance:`, err);
+          return [hub.symbol, BigInt(0)] as const;
+        }
+      })
+    );
+
+    setAssetBalances(Object.fromEntries(entries));
+  }, [client, hubOptions]);
+
+  useEffect(() => {
+    fetchBalances();
+  }, [fetchBalances]);
 
   // Handle successful creation
   useEffect(() => {
     if (state.status === 'success' && state.meTokenAddress) {
+      const tokenName = state.name || name;
+      const tokenSymbol = state.symbol || symbol;
       toast({
-        title: "MeToken Created Successfully!",
-        description: `Your MeToken "${name}" (${symbol}) is ready for trading.`,
+        title: 'MeToken Created Successfully!',
+        description: `Your MeToken "${tokenName}" (${tokenSymbol}) is ready for trading.`,
       });
 
-      onMeTokenCreated?.(state.meTokenAddress, state.txHash, state.meTokenId);
+      onMeTokenCreatedRef.current?.(state.meTokenAddress, state.txHash, state.meTokenId);
 
       // Reset form
       setName('');
       setSymbol('');
       setAssetsDeposited('');
-      setHubId('1');
+      setSelectedHubId(defaultHub?.hubId ?? fallbackHubId);
+      fetchBalances();
     }
-  }, [state.status, state.meTokenAddress, state.txHash, state.meTokenId, name, symbol, toast, onMeTokenCreated]);
+  }, [
+    state.status,
+    state.meTokenAddress,
+    state.txHash,
+    state.meTokenId,
+    state.name,
+    state.symbol,
+    name,
+    symbol,
+    toast,
+    fetchBalances,
+    defaultHub,
+    fallbackHubId,
+  ]);
 
   // Handle creation
   const handleCreate = async () => {
     if (!name.trim() || !symbol.trim()) {
       toast({
-        title: "Missing Information",
-        description: "Please enter a name and symbol for your MeToken.",
-        variant: "destructive",
+        title: 'Missing Information',
+        description: 'Please enter a name and symbol for your MeToken.',
+        variant: 'destructive',
       });
       return;
     }
 
-    const depositAmount = parseEther(assetsDeposited || '0');
+    const depositAmount = parseHubAssetAmount(assetsDeposited || '0', selectedAsset);
+    const selectedBalance = assetBalances[selectedAsset.symbol] ?? BigInt(0);
 
-    if (depositAmount > BigInt(0) && daiBalance < depositAmount) {
+    if (depositAmount > BigInt(0) && selectedBalance < depositAmount) {
       toast({
-        title: "Insufficient DAI",
-        description: `You need ${assetsDeposited} DAI but only have ${formatEther(daiBalance)} DAI.`,
-        variant: "destructive",
+        title: `Insufficient ${selectedAsset.symbol}`,
+        description: `You need ${formatHubAssetAmount(depositAmount, selectedAsset)} ${selectedAsset.symbol} but only have ${formatHubAssetAmount(selectedBalance, selectedAsset)} ${selectedAsset.symbol}.`,
+        variant: 'destructive',
       });
       return;
     }
@@ -145,21 +228,23 @@ export function RobustMeTokenCreator({ onMeTokenCreated, onClose }: RobustMeToke
       await createMeToken({
         name: name.trim(),
         symbol: symbol.trim().toUpperCase(),
-        hubId: parseInt(hubId),
+        hubId: selectedHubId,
         assetsDeposited: assetsDeposited || '0',
       });
     } catch (err) {
       // Error is handled in the hook
       toast({
-        title: "Creation Failed",
-        description: err instanceof Error ? err.message : "Failed to create MeToken",
-        variant: "destructive",
+        title: 'Creation Failed',
+        description: err instanceof Error ? err.message : 'Failed to create MeToken',
+        variant: 'destructive',
       });
     }
   };
 
   const isProcessing = !['idle', 'success', 'error'].includes(state.status);
-  const hasEnoughDai = daiBalance >= parseEther(assetsDeposited || '0');
+  const selectedBalance = assetBalances[selectedAsset.symbol] ?? BigInt(0);
+  const depositAmount = parseHubAssetAmount(assetsDeposited || '0', selectedAsset);
+  const hasEnoughCollateral = selectedBalance >= depositAmount;
   const currentStep = STATUS_STEPS[state.status];
 
   const getExplorerUrl = (type: 'tx' | 'address', hash: string) => {
@@ -245,7 +330,7 @@ export function RobustMeTokenCreator({ onMeTokenCreated, onClose }: RobustMeToke
                 <AlertTitle>Success!</AlertTitle>
                 <AlertDescription>
                   <div className="space-y-2">
-                    <p>{state.message || "Your MeToken has been created successfully."}</p>
+                    <p>{state.message || 'Your MeToken has been created successfully.'}</p>
                     {state.txHash && (
                       <a
                         href={getExplorerUrl('tx', state.txHash)}
@@ -318,24 +403,92 @@ export function RobustMeTokenCreator({ onMeTokenCreated, onClose }: RobustMeToke
                   </div>
                 </div>
 
+                {/* Hub / Backing Collateral Selector */}
                 <div className="space-y-2">
-                  <Label htmlFor="hubId">Hub ID</Label>
-                  <Input
-                    id="hubId"
-                    type="number"
-                    placeholder="1"
-                    value={hubId}
-                    onChange={(e) => setHubId(e.target.value)}
-                    disabled={isProcessing}
-                    min="1"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Hub ID determines the bonding curve parameters. Default is 1.
-                  </p>
+                  <Label>Backing Collateral</Label>
+                  {hubsLoading ? (
+                    <p className="text-sm text-muted-foreground flex items-center gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Loading active hubs...
+                    </p>
+                  ) : hubsError ? (
+                    <Alert variant="destructive">
+                      <AlertDescription>{hubsError}</AlertDescription>
+                    </Alert>
+                  ) : hubOptions.length === 0 ? (
+                    <Alert>
+                      <AlertDescription>
+                        No active MeToken hubs are registered on-chain yet.
+                      </AlertDescription>
+                    </Alert>
+                  ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {hubOptions.map((hub) => {
+                      const config =
+                        hub.symbol !== 'UNKNOWN'
+                          ? HUB_ASSET_CONFIGS[hub.symbol as HubAssetSymbol]
+                          : undefined;
+
+                      return (
+                      <button
+                        key={hub.hubId}
+                        type="button"
+                        onClick={() => setSelectedHubId(hub.hubId)}
+                        disabled={isProcessing}
+                        className={cn(
+                          'flex items-start gap-3 p-3 border rounded-lg text-left transition-colors',
+                          selectedHubId === hub.hubId
+                            ? 'border-primary bg-primary/5'
+                            : 'border-border hover:border-muted-foreground'
+                        )}
+                      >
+                        {config ? (
+                        <TokenLogo
+                          config={config}
+                          className="h-10 w-10 flex-shrink-0"
+                          logoSrc={CREATOR_COLLATERAL_LOGOS[config.symbol]}
+                        />
+                        ) : (
+                          <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center text-xs font-bold">
+                            {hub.symbol.slice(0, 2)}
+                          </div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center flex-wrap gap-2">
+                            <span className="font-semibold">{hub.displayName}</span>
+                            {hub.recommended && (
+                              <span className="text-[10px] bg-primary text-primary-foreground px-1.5 py-0.5 rounded">
+                                Recommended
+                              </span>
+                            )}
+                            {hub.deprecated && (
+                              <span className="text-[10px] bg-muted text-muted-foreground px-1.5 py-0.5 rounded">
+                                Legacy
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-muted-foreground line-clamp-2">
+                            {hub.tagline}
+                          </p>
+                          <p className="text-xs mt-1">
+                            Balance:{' '}
+                            {formatHubAssetAmount(
+                              assetBalances[hub.symbol] ?? BigInt(0),
+                              resolveHubAsset(hub.hubId)
+                            )}{' '}
+                            {hub.symbol}
+                          </p>
+                        </div>
+                      </button>
+                    );})}
+                  </div>
+                  )}
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="assetsDeposited">Initial DAI Deposit (Optional)</Label>
+                  <Label htmlFor="assetsDeposited">
+                    Initial {selectedAsset.symbol} Deposit (Optional)
+                  </Label>
                   <Input
                     id="assetsDeposited"
                     type="number"
@@ -347,10 +500,13 @@ export function RobustMeTokenCreator({ onMeTokenCreated, onClose }: RobustMeToke
                     min="0"
                   />
                   <div className="flex items-center justify-between text-xs text-muted-foreground">
-                    <span>Your DAI balance: {formatEther(daiBalance)} DAI</span>
-                    {assetsDeposited && parseFloat(assetsDeposited) > 0 && (
-                      <span className={hasEnoughDai ? 'text-green-600' : 'text-red-600'}>
-                        {hasEnoughDai ? '✓ Sufficient' : '✗ Insufficient'}
+                    <span>
+                      Your {selectedAsset.symbol} balance:{' '}
+                      {formatHubAssetAmount(selectedBalance, selectedAsset)} {selectedAsset.symbol}
+                    </span>
+                    {assetsDeposited && depositAmount > BigInt(0) && (
+                      <span className={hasEnoughCollateral ? 'text-green-600' : 'text-red-600'}>
+                        {hasEnoughCollateral ? '✓ Sufficient' : '✗ Insufficient'}
                       </span>
                     )}
                   </div>
@@ -358,7 +514,13 @@ export function RobustMeTokenCreator({ onMeTokenCreated, onClose }: RobustMeToke
 
                 <Button
                   onClick={handleCreate}
-                  disabled={isProcessing || !name || !symbol || (parseFloat(assetsDeposited || '0') > 0 && !hasEnoughDai)}
+                  disabled={
+                    isProcessing ||
+                    !name ||
+                    !symbol ||
+                    hubOptions.length === 0 ||
+                    (depositAmount > BigInt(0) && !hasEnoughCollateral)
+                  }
                   className="w-full"
                   size="lg"
                 >
@@ -386,7 +548,8 @@ export function RobustMeTokenCreator({ onMeTokenCreated, onClose }: RobustMeToke
                 <p><strong>What happens next:</strong></p>
                 <ul className="list-disc list-inside space-y-1 ml-2">
                   <li>Your MeToken will be created on the Base blockchain</li>
-                  <li>If depositing DAI, you&apos;ll approve it first</li>
+                  <li>Gas is sponsored via Alchemy paymaster (no ETH required in most cases)</li>
+                  <li>If depositing {selectedAsset.symbol}, approval and subscribe run in one transaction</li>
                   <li>Transaction may take 30 seconds to 2 minutes</li>
                   <li>If it times out, we&apos;ll keep checking in the background</li>
                   <li>Your MeToken will be tradeable immediately after creation</li>
@@ -400,6 +563,47 @@ export function RobustMeTokenCreator({ onMeTokenCreated, onClose }: RobustMeToke
   );
 }
 
+function TokenLogo({
+  config,
+  className,
+  logoSrc,
+}: {
+  config: HubAssetConfig;
+  className?: string;
+  logoSrc?: string;
+}) {
+  const [errored, setErrored] = useState(false);
+  const src = logoSrc ?? config.logo;
+  const [prevSrc, setPrevSrc] = useState(src);
+
+  if (src !== prevSrc) {
+    setPrevSrc(src);
+    setErrored(false);
+  }
+
+  if (errored || !src) {
+    return (
+      <div
+        className={cn(
+          'rounded-full bg-muted flex items-center justify-center text-[10px] font-bold text-muted-foreground',
+          className
+        )}
+      >
+        {config.symbol.slice(0, 2)}
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={src}
+      alt={config.symbol}
+      className={cn('rounded-full object-contain', className)}
+      onError={() => setErrored(true)}
+    />
+  );
+}
+
 // Pending Transaction Card Component
 function PendingTransactionCard({
   tx,
@@ -410,6 +614,8 @@ function PendingTransactionCard({
   onRetry: () => void;
   onClear: () => void;
 }) {
+  const txAsset = resolveHubAsset(tx.hubId);
+
   const getStatusBadge = () => {
     switch (tx.status) {
       case 'pending':
@@ -442,7 +648,7 @@ function PendingTransactionCard({
           {getStatusBadge()}
         </div>
         <div className="text-xs text-muted-foreground">
-          {tx.assetsDeposited} DAI • {timeSince()}
+          {formatHubAssetAmount(parseHubAssetAmount(tx.assetsDeposited, txAsset), txAsset)} {txAsset.symbol} • {timeSince()}
         </div>
         {tx.meTokenAddress && (
           <a

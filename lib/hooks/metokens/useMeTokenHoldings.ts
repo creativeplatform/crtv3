@@ -1,154 +1,94 @@
 "use client";
 
-import { useState, useEffect, useCallback } from 'react';
-import { useUser } from '@account-kit/react';
-import { useSmartAccountClient } from '@account-kit/react';
-import { formatEther } from 'viem';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { subscribeMeTokenBalancesChanged } from '@/lib/hooks/metokens/meTokenBalanceEvents';
+import { useUser } from '@/lib/wallet/react';
+import { useSmartAccountClient } from '@/lib/wallet/react';
+import { formatEther, parseEther } from 'viem';
 import { meTokensSubgraph } from '@/lib/sdk/metokens/subgraph';
 import { creatorProfileSupabaseService, CreatorProfile } from '@/lib/sdk/supabase/creator-profiles';
 import { logger } from '@/lib/utils/logger';
+import { METOKEN_DIAMOND_BASE } from '@/lib/contracts/MeTokenHubs';
+import { resolveHubAsset, calculateMeTokenVaultTvlUsd, type HubAssetSymbol } from '@/lib/utils/hubAssetUtils';
+import { estimateMeTokenHoldingValueUsd } from '@/lib/utils/meTokenHoldingValue';
+import { publicClient } from '@/lib/viem';
 
-// MeTokens contract addresses on Base
-const DIAMOND = '0xba5502db2aC2cBff189965e991C07109B14eB3f5';
+const DIAMOND = METOKEN_DIAMOND_BASE;
 
-// ABI for Diamond contract (key functions for MeTokens)
 const DIAMOND_ABI = [
   {
-    "inputs": [
+    inputs: [{ internalType: 'address', name: 'meToken', type: 'address' }],
+    name: 'getMeTokenInfo',
+    outputs: [
       {
-        "internalType": "address",
-        "name": "meToken",
-        "type": "address"
-      }
-    ],
-    "name": "getMeTokenInfo",
-    "outputs": [
-      {
-        "components": [
-          {
-            "internalType": "address",
-            "name": "owner",
-            "type": "address"
-          },
-          {
-            "internalType": "uint256",
-            "name": "hubId",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint256",
-            "name": "balancePooled",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint256",
-            "name": "balanceLocked",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint256",
-            "name": "startTime",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint256",
-            "name": "endTime",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint256",
-            "name": "targetHubId",
-            "type": "uint256"
-          },
-          {
-            "internalType": "address",
-            "name": "migration",
-            "type": "address"
-          }
+        components: [
+          { internalType: 'address', name: 'owner', type: 'address' },
+          { internalType: 'uint256', name: 'hubId', type: 'uint256' },
+          { internalType: 'uint256', name: 'balancePooled', type: 'uint256' },
+          { internalType: 'uint256', name: 'balanceLocked', type: 'uint256' },
+          { internalType: 'uint256', name: 'startTime', type: 'uint256' },
+          { internalType: 'uint256', name: 'endTime', type: 'uint256' },
+          { internalType: 'uint256', name: 'targetHubId', type: 'uint256' },
+          { internalType: 'address', name: 'migration', type: 'address' },
         ],
-        "internalType": "struct MeTokenInfo",
-        "name": "",
-        "type": "tuple"
-      }
+        internalType: 'struct MeTokenInfo',
+        name: '',
+        type: 'tuple',
+      },
     ],
-    "stateMutability": "view",
-    "type": "function"
-  }
+    stateMutability: 'view',
+    type: 'function',
+  },
 ] as const;
 
-// ERC20 ABI for MeToken
 const ERC20_ABI = [
   {
-    "inputs": [],
-    "name": "name",
-    "outputs": [
-      {
-        "internalType": "string",
-        "name": "",
-        "type": "string"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
+    inputs: [],
+    name: 'name',
+    outputs: [{ internalType: 'string', name: '', type: 'string' }],
+    stateMutability: 'view',
+    type: 'function',
   },
   {
-    "inputs": [],
-    "name": "symbol",
-    "outputs": [
-      {
-        "internalType": "string",
-        "name": "",
-        "type": "string"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
+    inputs: [],
+    name: 'symbol',
+    outputs: [{ internalType: 'string', name: '', type: 'string' }],
+    stateMutability: 'view',
+    type: 'function',
   },
   {
-    "inputs": [],
-    "name": "totalSupply",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
+    inputs: [],
+    name: 'totalSupply',
+    outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }],
+    stateMutability: 'view',
+    type: 'function',
   },
   {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "account",
-        "type": "address"
-      }
-    ],
-    "name": "balanceOf",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  }
+    inputs: [{ internalType: 'address', name: 'account', type: 'address' }],
+    name: 'balanceOf',
+    outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }],
+    stateMutability: 'view',
+    type: 'function',
+  },
 ] as const;
 
 export interface MeTokenHolding {
   address: string;
   name: string;
   symbol: string;
-  balance: string; // Formatted balance string
-  balanceRaw: bigint; // Raw balance for calculations
+  balance: string;
+  balanceRaw: bigint;
   totalSupply: bigint;
+  /** Full vault collateral TVL in USD-stable units (not the wallet's share). */
   tvl: number;
+  /**
+   * Estimated USD value of this wallet's balance:
+   * (balance / totalSupply) × vault TVL. Includes the creator's own holdings.
+   */
+  holdingValueUsd: number;
   creatorProfile: CreatorProfile | null;
   ownerAddress: string;
-  isOwnMeToken: boolean; // True if this is the user's own MeToken
+  isOwnMeToken: boolean;
   hubId: number;
   balancePooled: bigint;
   balanceLocked: bigint;
@@ -157,19 +97,77 @@ export interface MeTokenHolding {
   endCooldown: bigint;
   targetHubId: number;
   migration: boolean;
+  collateralSymbol: HubAssetSymbol;
+  collateralDisplayName: string;
 }
 
 export interface UseMeTokenHoldingsResult {
   holdings: MeTokenHolding[];
   loading: boolean;
   error: string | null;
-  totalValue: number; // Total portfolio value
-  refreshHoldings: () => Promise<void>;
+  totalValue: number;
+  refreshHoldings: (force?: boolean) => Promise<void>;
 }
 
-/** Client-side cache for holdings by address. TTL 45 seconds. */
+/** Clear cached holdings for one wallet or all wallets. */
+export function clearMeTokenHoldingsCache(address?: string): void {
+  if (address) {
+    holdingsCache.delete(address.toLowerCase());
+    return;
+  }
+  holdingsCache.clear();
+}
+
+interface BalanceCandidate {
+  meToken: string;
+  balance: bigint;
+}
+
 const HOLDINGS_CACHE_TTL_MS = 45 * 1000;
 const holdingsCache = new Map<string, { holdings: MeTokenHolding[]; timestamp: number }>();
+
+async function fetchBalanceCandidates(address: string): Promise<BalanceCandidate[]> {
+  try {
+    const indexed = await meTokensSubgraph.getMeTokenBalancesByUser(address, 100, 0);
+    if (indexed.length > 0) {
+      return indexed.map((row) => ({
+        meToken: row.meToken,
+        balance: BigInt(row.balance),
+      }));
+    }
+  } catch (subgraphError) {
+    logger.warn('Indexed balance query failed, trying Supabase fallback:', subgraphError);
+  }
+
+  try {
+    const { MeTokenSupabaseService } = await import('@/lib/sdk/supabase/metokens');
+    const service = new MeTokenSupabaseService();
+    const rows = await service.getUserMeTokenBalances(address);
+    if (rows.length > 0) {
+      return rows.map((row) => ({
+        meToken: row.metoken?.address ?? '',
+        balance: parseEther(String(row.balance ?? 0)),
+      })).filter((r) => r.meToken);
+    }
+  } catch (supabaseError) {
+    logger.warn('Supabase balance fallback failed:', supabaseError);
+  }
+
+  return [];
+}
+
+function calculateTVL(info: {
+  balancePooled?: bigint | number | string;
+  balanceLocked?: bigint | number | string;
+  hubId?: number;
+}, assetAddress?: string): number {
+  return calculateMeTokenVaultTvlUsd(
+    info.balancePooled ?? 0,
+    info.balanceLocked ?? 0,
+    info.hubId,
+    assetAddress
+  );
+}
 
 export function useMeTokenHoldings(targetAddress?: string): UseMeTokenHoldingsResult {
   const user = useUser();
@@ -180,7 +178,7 @@ export function useMeTokenHoldings(targetAddress?: string): UseMeTokenHoldingsRe
 
   const address = targetAddress || scaAddress || user?.address;
 
-  const fetchHoldings = useCallback(async () => {
+  const fetchHoldings = useCallback(async (force = false) => {
     if (!address || !client) {
       setHoldings([]);
       return;
@@ -188,7 +186,7 @@ export function useMeTokenHoldings(targetAddress?: string): UseMeTokenHoldingsRe
 
     const cacheKey = address.toLowerCase();
     const cached = holdingsCache.get(cacheKey);
-    if (cached && Date.now() - cached.timestamp < HOLDINGS_CACHE_TTL_MS) {
+    if (!force && cached && Date.now() - cached.timestamp < HOLDINGS_CACHE_TTL_MS) {
       setHoldings(cached.holdings);
       setLoading(false);
       setError(null);
@@ -199,155 +197,111 @@ export function useMeTokenHoldings(targetAddress?: string): UseMeTokenHoldingsRe
     setError(null);
 
     try {
-      logger.debug('Fetching MeToken holdings for address:', {
-        resolvedAddress: address,
-        scaAddress,
-        userAddress: user?.address,
-        targetAddress
-      });
+      logger.debug('Fetching indexed MeToken holdings for:', address);
 
-      // Get all MeTokens from subgraph with error handling
-      let allMeTokens;
-      try {
-        allMeTokens = await meTokensSubgraph.getAllMeTokens(100, 0);
-        logger.debug(`Found ${allMeTokens.length} MeTokens in subgraph`);
-      } catch (subgraphError) {
-        logger.warn('Subgraph query failed, this is non-critical:', subgraphError);
-        // Return empty holdings but don't throw - subgraph is optional
-        setHoldings([]);
-        setLoading(false);
-        return;
-      }
+      const candidates = await fetchBalanceCandidates(address);
 
-      // (Removed initial array declaration as we map results directly now)
-
-      // PERFORMANCE NOTE: This is an inefficient temporary solution (O(N) loop).
-      // 
-      // Current Implementation:
-      // - Fetches all MeTokens from subgraph
-      // - For each MeToken, makes 2 on-chain calls (getMeTokenInfo + balanceOf)
-      // - Time complexity: O(N) where N = total number of MeTokens
-      // 
-      // Optimization Options:
-      // 1. [RECOMMENDED] Update Subgraph to index ERC20 'Transfer' events
-      //    - Add `meTokenBalances` entity to subgraph schema
-      //    - Index Transfer events to track balances per user
-      //    - Query: `meTokenBalances(where: {user: $address})` - O(1) lookup
-      // 
-      // 2. [ALTERNATIVE] Add client-side caching
-      //    - Cache balance results for a short period (e.g., 30 seconds)
-      //    - Reduces redundant on-chain calls for repeated queries
-      // 
-      // 3. [FUTURE] Implement server-side aggregation
-      //    - Create API endpoint that aggregates balances server-side
-      //    - Cache results in database or Redis
-      //    - Client fetches pre-aggregated data
-      // 
-      // TODO: Implement subgraph optimization (Option 1) for production scalability
-
-      // Optimize: Run checks in parallel to speed up loading
       const holdingsResults = await Promise.all(
-        allMeTokens.map(async (meToken) => {
+        candidates.map(async ({ meToken }) => {
           try {
-            // Get MeToken info from Diamond contract
-            // We use a try-catch per token to ensure one failure doesn't break the whole list
-            const infoPromise = client.readContract({
-              address: DIAMOND,
-              abi: DIAMOND_ABI,
-              functionName: 'getMeTokenInfo',
-              args: [meToken.id as `0x${string}`],
-            }) as Promise<any>;
+            const meTokenAddress = meToken as `0x${string}`;
 
-            // Get user's balance for this MeToken
-            const balancePromise = client.readContract({
-              address: meToken.id as `0x${string}`,
-              abi: ERC20_ABI,
-              functionName: 'balanceOf',
-              args: [address as `0x${string}`],
-            }) as Promise<bigint>;
+            const [info, onChainBalance, name, symbol, totalSupply] = await Promise.all([
+              publicClient.readContract({
+                address: DIAMOND,
+                abi: DIAMOND_ABI,
+                functionName: 'getMeTokenInfo',
+                args: [meTokenAddress],
+              }) as Promise<any>,
+              publicClient.readContract({
+                address: meTokenAddress,
+                abi: ERC20_ABI,
+                functionName: 'balanceOf',
+                args: [address as `0x${string}`],
+              }) as Promise<bigint>,
+              publicClient.readContract({
+                address: meTokenAddress,
+                abi: ERC20_ABI,
+                functionName: 'name',
+              }) as Promise<string>,
+              publicClient.readContract({
+                address: meTokenAddress,
+                abi: ERC20_ABI,
+                functionName: 'symbol',
+              }) as Promise<string>,
+              publicClient.readContract({
+                address: meTokenAddress,
+                abi: ERC20_ABI,
+                functionName: 'totalSupply',
+              }) as Promise<bigint>,
+            ]);
 
-            const [info, balance] = await Promise.all([infoPromise, balancePromise]);
-
-            // Include MeTokens where user has a balance OR if it's their own MeToken
-            const isOwnMeToken = info.owner.toLowerCase() === address.toLowerCase();
-
-            // Only include if user has a balance > 0 OR if it's their own MeToken with some activity (to avoid clutter)
-            if (balance > BigInt(0) || (isOwnMeToken && (info.balancePooled > BigInt(0) || info.balanceLocked > BigInt(0)))) {
-              logger.debug(`Found ${isOwnMeToken ? 'own MeToken' : 'balance'} for ${meToken.id}:`, balance.toString());
-
-              // Get ERC20 token details
-              const [name, symbol, totalSupply] = await Promise.all([
-                client.readContract({
-                  address: meToken.id as `0x${string}`,
-                  abi: ERC20_ABI,
-                  functionName: 'name',
-                }) as Promise<string>,
-                client.readContract({
-                  address: meToken.id as `0x${string}`,
-                  abi: ERC20_ABI,
-                  functionName: 'symbol',
-                }) as Promise<string>,
-                client.readContract({
-                  address: meToken.id as `0x${string}`,
-                  abi: ERC20_ABI,
-                  functionName: 'totalSupply',
-                }) as Promise<bigint>,
-              ]);
-
-              // Calculate TVL
-              const tvl = calculateTVL(info);
-
-              // Fetch creator profile
-              let creatorProfile: CreatorProfile | null = null;
-              try {
-                // Fetch profile in parallel if possible, but for now strict await is okay inside this map
-                creatorProfile = await creatorProfileSupabaseService.getCreatorProfileByOwner(info.owner);
-              } catch (profileError) {
-                logger.warn(`Failed to fetch creator profile for ${info.owner}:`, profileError);
-              }
-
-              return {
-                address: meToken.id,
-                name,
-                symbol,
-                balance: formatEther(balance),
-                balanceRaw: balance,
-                totalSupply,
-                tvl,
-                creatorProfile,
-                ownerAddress: info.owner,
-                isOwnMeToken,
-                hubId: Number(info.hubId),
-                balancePooled: BigInt(info.balancePooled || 0),
-                balanceLocked: BigInt(info.balanceLocked || 0),
-                startTime: BigInt(info.startTime || 0),
-                endTime: BigInt(info.endTime || 0),
-                endCooldown: BigInt(info.endCooldown || 0),
-                targetHubId: Number(info.targetHubId || 0),
-                migration: Boolean(info.migration),
-              } as MeTokenHolding;
+            const balance = onChainBalance;
+            if (balance <= BigInt(0)) {
+              return null;
             }
+
+            const isOwnMeToken = info.owner.toLowerCase() === address.toLowerCase();
+            const hubId = Number(info.hubId);
+            const collateral = resolveHubAsset(hubId);
+            const tvl = calculateTVL(
+              {
+                balancePooled: info.balancePooled,
+                balanceLocked: info.balanceLocked,
+                hubId,
+              }
+            );
+            const holdingValueUsd = estimateMeTokenHoldingValueUsd({
+              balanceRaw: balance,
+              totalSupply,
+              vaultTvlUsd: tvl,
+            });
+
+            let creatorProfile: CreatorProfile | null = null;
+            try {
+              creatorProfile = await creatorProfileSupabaseService.getCreatorProfileByOwner(info.owner);
+            } catch (profileError) {
+              logger.warn(`Failed to fetch creator profile for ${info.owner}:`, profileError);
+            }
+
+            return {
+              address: meToken,
+              name,
+              symbol,
+              balance: formatEther(balance),
+              balanceRaw: balance,
+              totalSupply,
+              tvl,
+              holdingValueUsd,
+              creatorProfile,
+              ownerAddress: info.owner,
+              isOwnMeToken,
+              hubId,
+              balancePooled: BigInt(info.balancePooled || 0),
+              balanceLocked: BigInt(info.balanceLocked || 0),
+              startTime: BigInt(info.startTime || 0),
+              endTime: BigInt(info.endTime || 0),
+              endCooldown: BigInt(info.endCooldown || 0),
+              targetHubId: Number(info.targetHubId || 0),
+              migration: Boolean(info.migration),
+              collateralSymbol: collateral.symbol,
+              collateralDisplayName: collateral.displayName,
+            } satisfies MeTokenHolding;
           } catch (tokenError) {
-            logger.warn(`Failed to check MeToken ${meToken.id}:`, tokenError);
+            logger.warn(`Failed to hydrate MeToken ${meToken}:`, tokenError);
+            return null;
           }
-          return null;
         })
       );
 
-      // Filter out nulls
       const userHoldings = holdingsResults.filter((h): h is MeTokenHolding => h !== null);
 
-      // Sort holdings: own MeToken first, then by balance descending
       userHoldings.sort((a, b) => {
         if (a.isOwnMeToken && !b.isOwnMeToken) return -1;
         if (!a.isOwnMeToken && b.isOwnMeToken) return 1;
-        return Number(b.balance) - Number(a.balance);
+        return b.holdingValueUsd - a.holdingValueUsd;
       });
 
-      logger.debug(`Found ${userHoldings.length} MeToken holdings`);
-      if (userHoldings.length === 0) {
-        logger.debug('No MeToken holdings found for user');
-      }
       holdingsCache.set(cacheKey, { holdings: userHoldings, timestamp: Date.now() });
       setHoldings(userHoldings);
     } catch (err) {
@@ -359,18 +313,28 @@ export function useMeTokenHoldings(targetAddress?: string): UseMeTokenHoldingsRe
     }
   }, [address, client]);
 
-  // Calculate total portfolio value
-  const totalValue = holdings.reduce((sum, holding) => {
-    // For now, we'll use TVL as a proxy for value
-    // In the future, this could be enhanced with actual market prices
-    return sum + (Number(holding.balance) * (holding.tvl / 1000000)); // Rough estimate
-  }, 0);
+  const totalValue = holdings.reduce(
+    (sum, holding) => sum + (holding.holdingValueUsd || 0),
+    0
+  );
 
-  // Initial fetch (only run once on mount)
+  const fetchHoldingsRef = useRef(fetchHoldings);
+  fetchHoldingsRef.current = fetchHoldings;
+
   useEffect(() => {
     fetchHoldings();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [targetAddress]); // Only re-run when targetAddress changes
+  }, [targetAddress, address, client]);
+
+  useEffect(() => {
+    if (!address) return;
+    const normalized = address.toLowerCase();
+    return subscribeMeTokenBalancesChanged((changedAddress) => {
+      if (changedAddress === normalized) {
+        void fetchHoldingsRef.current(true);
+      }
+    });
+  }, [address]);
 
   return {
     holdings,
@@ -379,15 +343,4 @@ export function useMeTokenHoldings(targetAddress?: string): UseMeTokenHoldingsRe
     totalValue,
     refreshHoldings: fetchHoldings,
   };
-}
-
-// Helper function to calculate TVL (copied from existing utils)
-function calculateTVL(info: any): number {
-  const balancePooled = BigInt(info.balancePooled || 0);
-  const balanceLocked = BigInt(info.balanceLocked || 0);
-
-  // Convert from wei to USD (rough estimate)
-  // This should be enhanced with actual price feeds
-  const totalBalance = balancePooled + balanceLocked;
-  return Number(totalBalance) / 1e18; // Convert from wei to ETH, then to USD estimate
 }

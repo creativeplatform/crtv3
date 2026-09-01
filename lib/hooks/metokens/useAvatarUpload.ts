@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback } from 'react';
-import { useUser } from '@account-kit/react';
+import { useUser } from '@/lib/wallet/react';
 import { IPFSUploadResult } from '@/lib/sdk/ipfs/service';
 import { useCreatorProfile } from './useCreatorProfile';
 import { useToast } from '@/components/ui/use-toast';

@@ -1,13 +1,15 @@
 import { createPublicClient, http, parseAbi, formatEther } from 'viem';
 import { baseMainnet } from '@/lib/utils/chains/base';
 import { logger } from '@/lib/utils/logger';
+import { METOKEN_DIAMOND_BASE, METOKEN_FACTORY_BASE } from '@/lib/contracts/metokens/deployments';
+import { calculateMeTokenVaultTvlUsd } from '@/lib/utils/hubAssetUtils';
 
 // MeTokenFactory ABI - we only need the MeTokenCreated event
 const METOKEN_FACTORY_ABI = parseAbi([
   'event MeTokenCreated(address indexed meToken, address indexed owner, string name, string symbol)'
 ]);
 
-const METOKEN_FACTORY_ADDRESS = '0xb31Ae2583d983faa7D8C8304e6A16E414e721A0B';
+const METOKEN_FACTORY_ADDRESS = METOKEN_FACTORY_BASE;
 
 // Create a public client for reading blockchain data
 const publicClient = createPublicClient({
@@ -124,7 +126,7 @@ export async function extractMeTokenAddressFromTransaction(transactionHash: stri
 
       // Also check for generic contract creation patterns
       // Look for logs from the MeTokenFactory contract
-      const METOKEN_FACTORY = '0xb31Ae2583d983faa7D8C8304e6A16E414e721A0B';
+      const METOKEN_FACTORY = METOKEN_FACTORY_BASE;
       for (const log of receipt.logs) {
         if (log.address.toLowerCase() === METOKEN_FACTORY.toLowerCase()) {
           logger.debug('📍 Found log from MeTokenFactory:', log);
@@ -250,7 +252,7 @@ export async function getMeTokenInfoFromBlockchain(meTokenAddress: string): Prom
     ]);
 
     // Diamond ABI
-    const DIAMOND_ADDRESS = '0xba5502db2aC2cBff189965e991C07109B14eB3f5';
+    const DIAMOND_ADDRESS = METOKEN_DIAMOND_BASE;
     const DIAMOND_ABI = parseAbi([
       'struct MeTokenInfo { address owner; uint256 hubId; uint256 balancePooled; uint256 balanceLocked; uint256 startTime; uint256 endTime; uint256 targetHubId; address migration; }',
       'function getMeTokenInfo(address meToken) view returns (MeTokenInfo)'
@@ -336,7 +338,7 @@ export async function getMeTokenProtocolInfo(meTokenAddress: string): Promise<{
       'function getMeTokenInfo(address meToken) view returns (MeTokenInfo)'
     ]);
 
-    const DIAMOND_ADDRESS = '0xba5502db2aC2cBff189965e991C07109B14eB3f5'; // Base mainnet diamond
+    const DIAMOND_ADDRESS = METOKEN_DIAMOND_BASE; // Base mainnet diamond
 
     const result = await publicClient.readContract({
       address: DIAMOND_ADDRESS,
@@ -364,93 +366,113 @@ export async function getMeTokenProtocolInfo(meTokenAddress: string): Promise<{
 }
 
 /**
- * Get MeToken information for multiple tokens in a single RPC call (multicall)
- * This significantly reduces RPC usage compared to calling getMeTokenInfoFromBlockchain individually
+ * Get MeToken information for multiple tokens in batched RPC multicalls.
+ * Large address lists are chunked to avoid RPC timeouts and rate limits.
  * @param meTokenAddresses - Array of MeToken contract addresses
  * @returns Map of address -> combined token info
  */
-export async function getBulkMeTokenInfo(meTokenAddresses: string[]): Promise<Record<string, {
+const BULK_METOKEN_BATCH_SIZE = 20;
+
+type BulkMeTokenInfo = Record<string, {
   totalSupply: string;
   owner: string;
   tvl: number;
   price: number;
-} | null>> {
+} | null>;
+
+async function fetchBulkMeTokenInfoBatch(meTokenAddresses: string[]): Promise<BulkMeTokenInfo> {
   if (meTokenAddresses.length === 0) return {};
 
-  try {
-    logger.debug(`📦 Bulk fetching info for ${meTokenAddresses.length} MeTokens...`);
+  const ERC20_ABI = parseAbi([
+    'function totalSupply() view returns (uint256)',
+  ]);
 
-    // ERC20 ABI for basic token info
-    const ERC20_ABI = parseAbi([
-      'function totalSupply() view returns (uint256)'
-    ]);
+  const DIAMOND_ADDRESS = METOKEN_DIAMOND_BASE;
+  const DIAMOND_ABI = parseAbi([
+    'struct MeTokenInfo { address owner; uint256 hubId; uint256 balancePooled; uint256 balanceLocked; uint256 startTime; uint256 endTime; uint256 targetHubId; address migration; }',
+    'function getMeTokenInfo(address meToken) view returns (MeTokenInfo)',
+  ]);
 
-    // Diamond ABI
-    const DIAMOND_ADDRESS = '0xba5502db2aC2cBff189965e991C07109B14eB3f5';
-    const DIAMOND_ABI = parseAbi([
-      'struct MeTokenInfo { address owner; uint256 hubId; uint256 balancePooled; uint256 balanceLocked; uint256 startTime; uint256 endTime; uint256 targetHubId; address migration; }',
-      'function getMeTokenInfo(address meToken) view returns (MeTokenInfo)'
-    ]);
+  const calls = [];
 
-    // Construct all calls into a single array
-    const calls = [];
-
-    // Add totalSupply calls
-    for (const address of meTokenAddresses) {
-      calls.push({
-        address: address as `0x${string}`,
-        abi: ERC20_ABI,
-        functionName: 'totalSupply'
-      });
-    }
-
-    // Add Diamond info calls
-    for (const address of meTokenAddresses) {
-      calls.push({
-        address: DIAMOND_ADDRESS as `0x${string}`,
-        abi: DIAMOND_ABI,
-        functionName: 'getMeTokenInfo',
-        args: [address as `0x${string}`]
-      });
-    }
-
-    // Execute single multicall
-    const results = await publicClient.multicall({ contracts: calls });
-
-    const parsedResults: Record<string, any> = {};
-    const count = meTokenAddresses.length;
-
-    // Process results
-    for (let i = 0; i < count; i++) {
-      const address = meTokenAddresses[i];
-      // results[i] is totalSupply, results[i + count] is diamond info
-      const supplyResult = results[i] as { status: string, result: any };
-      const diamondResult = results[i + count] as { status: string, result: any };
-
-      if (supplyResult.status === 'success' && diamondResult.status === 'success') {
-        const totalSupply = supplyResult.result as bigint;
-        const info = diamondResult.result as any;
-
-        const balancePooled = BigInt(info.balancePooled || 0);
-        const balanceLocked = BigInt(info.balanceLocked || 0);
-        const totalBalance = balancePooled + balanceLocked;
-
-        const tvl = parseFloat(formatEther(totalBalance));
-        const supplyLog = parseFloat(formatEther(totalSupply));
-        const price = supplyLog > 0 ? tvl / supplyLog : 0;
-
-        parsedResults[address] = {
-          totalSupply: totalSupply.toString(),
-          owner: info.owner,
-          tvl,
-          price
-        };
-      }
-    }
-
-    return parsedResults;
-  } catch (err) {
-    logger.error('❌ Failed to bulk fetch MeToken info:', err);
-    return {};
+  for (const address of meTokenAddresses) {
+    calls.push({
+      address: address as `0x${string}`,
+      abi: ERC20_ABI,
+      functionName: 'totalSupply',
+    });
   }
+
+  for (const address of meTokenAddresses) {
+    calls.push({
+      address: DIAMOND_ADDRESS as `0x${string}`,
+      abi: DIAMOND_ABI,
+      functionName: 'getMeTokenInfo',
+      args: [address as `0x${string}`],
+    });
+  }
+
+  const results = await publicClient.multicall({ contracts: calls });
+
+  const parsedResults: BulkMeTokenInfo = {};
+  const count = meTokenAddresses.length;
+
+  for (let i = 0; i < count; i++) {
+    const address = meTokenAddresses[i];
+    const supplyResult = results[i] as { status: string; result: unknown };
+    const diamondResult = results[i + count] as { status: string; result: unknown };
+
+    if (supplyResult.status === 'success' && diamondResult.status === 'success') {
+      const totalSupply = supplyResult.result as bigint;
+      const info = diamondResult.result as {
+        owner: string;
+        hubId?: bigint | number;
+        balancePooled?: bigint;
+        balanceLocked?: bigint;
+      };
+
+      const balancePooled = BigInt(info.balancePooled || 0);
+      const balanceLocked = BigInt(info.balanceLocked || 0);
+      const hubId = Number(info.hubId ?? 0);
+
+      const tvl = calculateMeTokenVaultTvlUsd(balancePooled, balanceLocked, hubId);
+      const supplyLog = parseFloat(formatEther(totalSupply));
+      const price = supplyLog > 0 ? tvl / supplyLog : 0;
+
+      parsedResults[address] = {
+        totalSupply: totalSupply.toString(),
+        owner: info.owner,
+        tvl,
+        price,
+      };
+    }
+  }
+
+  return parsedResults;
+}
+
+export async function getBulkMeTokenInfo(meTokenAddresses: string[]): Promise<BulkMeTokenInfo> {
+  if (meTokenAddresses.length === 0) return {};
+
+  logger.debug(`📦 Bulk fetching info for ${meTokenAddresses.length} MeTokens...`);
+
+  const merged: BulkMeTokenInfo = {};
+
+  for (let i = 0; i < meTokenAddresses.length; i += BULK_METOKEN_BATCH_SIZE) {
+    const batch = meTokenAddresses.slice(i, i + BULK_METOKEN_BATCH_SIZE);
+    const batchNumber = Math.floor(i / BULK_METOKEN_BATCH_SIZE) + 1;
+    const totalBatches = Math.ceil(meTokenAddresses.length / BULK_METOKEN_BATCH_SIZE);
+
+    try {
+      const batchResults = await fetchBulkMeTokenInfoBatch(batch);
+      Object.assign(merged, batchResults);
+    } catch (err) {
+      logger.error(
+        `❌ Failed bulk fetch batch ${batchNumber}/${totalBatches} (${batch.length} tokens):`,
+        err,
+      );
+    }
+  }
+
+  return merged;
 }

@@ -12,6 +12,7 @@ export interface TokenMarketData {
     name: string;
     symbol: string;
     owner: string;
+    decimals?: number;
 }
 
 /**

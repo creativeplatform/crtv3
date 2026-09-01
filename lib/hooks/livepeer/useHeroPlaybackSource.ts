@@ -1,44 +1,29 @@
 import { getSrc } from "@livepeer/react/external";
 import { Src } from "@livepeer/react";
-import { LIVEPEER_HERO_PLAYBACK_ID, HERO_VIDEO_ASSET_ID } from "../../../context/context";
+import { LIVEPEER_HERO_PLAYBACK_ID } from "../../../context/context";
 import { logger } from '@/lib/utils/logger';
-
 
 export type HeroPlaybackSource = {
   src: Src[];
   playbackId: string;
 };
 
+/**
+ * Resolves playback sources for the homepage hero intro video.
+ * Uses the static LIVEPEER_HERO_PLAYBACK_ID from context — not the app video library —
+ * so the hero keeps working if the asset is removed from Supabase.
+ */
 export const getHeroPlaybackSource = async (): Promise<HeroPlaybackSource | null> => {
   try {
-    // First, try to fetch the asset by asset ID via our API route (server-side, avoids CORS)
-    let playbackId: string | null = null;
+    const playbackId = LIVEPEER_HERO_PLAYBACK_ID;
 
-    if (HERO_VIDEO_ASSET_ID) {
-      try {
-        const response = await fetch(`/api/livepeer/asset/${HERO_VIDEO_ASSET_ID}`);
-        if (response.ok) {
-          const assetResponse = await response.json();
-          if (assetResponse?.asset?.playbackId) {
-            playbackId = assetResponse.asset.playbackId;
-          }
-        } else {
-          logger.warn(`Failed to fetch hero video asset: ${response.status} ${response.statusText}`);
-        }
-      } catch (error) {
-        logger.warn("Error fetching hero video asset by ID, falling back to default playback ID:", error);
-      }
-    }
-
-    // Fallback to default playback ID if asset fetch failed
-    if (!playbackId) {
-      playbackId = LIVEPEER_HERO_PLAYBACK_ID;
-    }
-
-    // Fetch playback info via our API route (server-side, avoids CORS)
-    const playbackResponse = await fetch(`/api/livepeer/playback-info?playbackId=${playbackId}`);
+    const playbackResponse = await fetch(
+      `/api/internal/playback-info?playbackId=${encodeURIComponent(playbackId)}`,
+    );
     if (!playbackResponse.ok) {
-      throw new Error(`Failed to fetch playback info: ${playbackResponse.status} ${playbackResponse.statusText}`);
+      throw new Error(
+        `Failed to fetch playback info: ${playbackResponse.status} ${playbackResponse.statusText}`,
+      );
     }
 
     const playbackInfo = await playbackResponse.json();
@@ -48,7 +33,7 @@ export const getHeroPlaybackSource = async (): Promise<HeroPlaybackSource | null
     }
     return { src, playbackId };
   } catch (error) {
-    logger.error("Error fetching playback source:", error);
+    logger.error("Error fetching hero playback source:", error);
     return null;
   }
 };

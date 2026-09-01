@@ -1,6 +1,6 @@
 'use server';
 
-import { checkBotId } from 'botid/server';
+import { checkBotIdDeep } from '@/lib/middleware/botIdGuard';
 import { createServiceClient } from '@/lib/sdk/supabase/service';
 import type { Address } from 'viem';
 import { serverLogger } from '@/lib/utils/logger';
@@ -30,7 +30,7 @@ export async function saveCreatorCollectionAction(
     collectionName: string,
     collectionSymbol: string
 ) {
-    const verification = await checkBotId();
+    const verification = await checkBotIdDeep();
     if (verification.isBot) {
         throw new Error('Access denied');
     }

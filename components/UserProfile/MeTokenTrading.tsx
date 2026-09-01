@@ -8,14 +8,18 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useMeTokensSupabase, MeTokenData } from '@/lib/hooks/metokens/useMeTokensSupabase';
 import { Loader2, TrendingUp, TrendingDown, AlertCircle, CheckCircle, Lock, ExternalLink } from 'lucide-react';
-import { formatEther, parseEther, encodeFunctionData } from 'viem';
-import { useSmartAccountClient, useChain, useAuthModal, useUser } from '@account-kit/react';
-import { DAI_TOKEN_ADDRESSES, getDaiTokenContract } from '@/lib/contracts/DAIToken';
-import { erc20Abi } from 'viem';
+import { formatEther, formatUnits, parseEther, parseUnits, encodeFunctionData, type Address } from 'viem';
+import { useSmartAccountClient, useChain, useAuthModal, useUser } from '@/lib/wallet/react';
 import { MeTokenSubscription } from './MeTokenSubscription';
-import { DaiFundingOptions } from '@/components/wallet/funding/DaiFundingOptions';
+import { FundingOptions } from '@/components/wallet/buy/FundingOptions';
 import { useToast } from '@/components/ui/use-toast';
 import { logger } from '@/lib/utils/logger';
+import { getErc20Balance } from '@/lib/viem';
+import { resolveHubAsset } from '@/lib/utils/hubAssetUtils';
+import {
+  clearMeTokenHoldingsCache,
+} from '@/lib/hooks/metokens/useMeTokenHoldings';
+import { notifyMeTokenBalancesChanged } from '@/lib/hooks/metokens/meTokenBalanceEvents';
 
 interface MeTokenTradingProps {
   meToken: MeTokenData;
@@ -23,6 +27,7 @@ interface MeTokenTradingProps {
 }
 
 export function MeTokenTrading({ meToken, onRefresh }: MeTokenTradingProps) {
+  const collateral = resolveHubAsset(Number(meToken.info?.hubId ?? meToken.hubId));
   const [buyAmount, setBuyAmount] = useState('');
   const [sellAmount, setSellAmount] = useState('');
   const [buyPreview, setBuyPreview] = useState('0');
@@ -42,13 +47,14 @@ export function MeTokenTrading({ meToken, onRefresh }: MeTokenTradingProps) {
   const [isSubscribed, setIsSubscribed] = useState<boolean | null>(() =>
     getInitialSubscriptionStatus(meToken)
   );
-  const [daiBalance, setDaiBalance] = useState<bigint>(BigInt(0));
+  const [collateralBalance, setCollateralBalance] = useState<bigint>(BigInt(0));
   const [isCheckingSubscription, setIsCheckingSubscription] = useState(false);
 
   const { client } = useSmartAccountClient({});
   const { chain } = useChain();
   const { openAuthModal } = useAuthModal();
   const user = useUser();
+  const walletAddress = client?.account?.address ?? user?.address;
   const { toast } = useToast();
   const isConnected = !!user && !!client;
 
@@ -105,26 +111,22 @@ export function MeTokenTrading({ meToken, onRefresh }: MeTokenTradingProps) {
     }
   }, [client, meToken]);
 
-  // Check DAI balance
-  const checkDaiBalance = useCallback(async () => {
+  // Check collateral balance
+  const checkCollateralBalance = useCallback(async () => {
     if (!client) return;
 
     try {
-      const daiContract = getDaiTokenContract('base');
+      const balance = await getErc20Balance({
+        token: collateral.address as Address,
+        owner: client.account?.address as Address,
+      });
 
-      const balance = await client.readContract({
-        address: daiContract.address as `0x${string}`,
-        abi: erc20Abi,
-        functionName: 'balanceOf',
-        args: [client.account?.address as `0x${string}`],
-      }) as bigint;
-
-      setDaiBalance(balance);
+      setCollateralBalance(balance);
     } catch (err) {
-      logger.error('Failed to check DAI balance:', err);
-      setDaiBalance(BigInt(0));
+      logger.error('Failed to check collateral balance:', err);
+      setCollateralBalance(BigInt(0));
     }
-  }, [client]);
+  }, [client, collateral.address]);
 
 
 
@@ -133,9 +135,8 @@ export function MeTokenTrading({ meToken, onRefresh }: MeTokenTradingProps) {
   // Check subscription status on mount and when meToken data changes
   useEffect(() => {
     checkSubscriptionStatus();
-    checkSubscriptionStatus();
-    checkDaiBalance();
-  }, [meToken.address, meToken.info?.balancePooled, meToken.info?.balanceLocked, meToken.hubId, checkSubscriptionStatus, checkDaiBalance]);
+    checkCollateralBalance();
+  }, [meToken.address, meToken.info?.balancePooled, meToken.info?.balanceLocked, meToken.hubId, checkSubscriptionStatus, checkCollateralBalance]);
 
   // Calculate buy preview when amount changes
   useEffect(() => {
@@ -256,12 +257,14 @@ export function MeTokenTrading({ meToken, onRefresh }: MeTokenTradingProps) {
       });
 
       // Refresh balances
-      await checkDaiBalance();
+      await checkCollateralBalance();
 
-      // Refresh parent data
+      if (walletAddress) {
+        clearMeTokenHoldingsCache(walletAddress);
+        notifyMeTokenBalancesChanged(walletAddress);
+      }
       if (onRefresh) {
-        // Add a small delay for RPC sync
-        setTimeout(() => onRefresh(), 2000);
+        await onRefresh();
       }
     } catch (err) {
       logger.error('❌ Error in handleBuy:', err);
@@ -369,16 +372,18 @@ export function MeTokenTrading({ meToken, onRefresh }: MeTokenTradingProps) {
       // Show success toast
       toast({
         title: "Sale Successful",
-        description: `Successfully sold ${sellAmount} ${meToken.symbol} for ${parseFloat(sellPreview).toFixed(4)} DAI`,
+        description: `Successfully sold ${sellAmount} ${meToken.symbol} for ${parseFloat(sellPreview).toFixed(4)} ${collateral.symbol}`,
       });
 
       // Refresh balances
-      await checkDaiBalance();
+      await checkCollateralBalance();
 
-      // Refresh parent data
+      if (walletAddress) {
+        clearMeTokenHoldingsCache(walletAddress);
+        notifyMeTokenBalancesChanged(walletAddress);
+      }
       if (onRefresh) {
-        // Add a small delay for RPC sync
-        setTimeout(() => onRefresh(), 2000);
+        await onRefresh();
       }
     } catch (err) {
       logger.error('❌ Error in handleSell:', err);
@@ -467,8 +472,8 @@ export function MeTokenTrading({ meToken, onRefresh }: MeTokenTradingProps) {
     );
   }
 
-  // Show DAI funding options first if user has no DAI
-  if (daiBalance === BigInt(0)) {
+  // Show collateral funding options first if user has no collateral
+  if (collateralBalance === BigInt(0)) {
     return (
       <div className="space-y-4">
         <Card>
@@ -478,14 +483,14 @@ export function MeTokenTrading({ meToken, onRefresh }: MeTokenTradingProps) {
               <AlertCircle className="h-5 w-5 text-orange-500" />
             </CardTitle>
             <CardDescription>
-              You need DAI to trade {meToken.name} tokens.
+              You need {collateral.symbol} to trade {meToken.name} tokens.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <Alert>
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>
-                Trading requires DAI. Please get DAI first to enable trading.
+                Trading requires {collateral.symbol}. Please get {collateral.symbol} first to enable trading.
               </AlertDescription>
             </Alert>
 
@@ -495,18 +500,52 @@ export function MeTokenTrading({ meToken, onRefresh }: MeTokenTradingProps) {
                 <li>Total Supply: {parseFloat(formatEther(meToken.totalSupply)).toLocaleString(undefined, { maximumFractionDigits: 4 })} {meToken.symbol}</li>
                 <li>TVL: ${meToken.tvl.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</li>
                 <li>Your Balance: {parseFloat(formatEther(meToken.balance)).toLocaleString(undefined, { maximumFractionDigits: 4 })} {meToken.symbol}</li>
-                <li>Your DAI Balance: {parseFloat(formatEther(daiBalance)).toLocaleString(undefined, { maximumFractionDigits: 4 })} DAI</li>
+                <li>Your {collateral.symbol} Balance: {parseFloat(formatUnits(collateralBalance, collateral.decimals)).toLocaleString(undefined, { maximumFractionDigits: 4 })} {collateral.symbol}</li>
               </ul>
             </div>
           </CardContent>
         </Card>
 
-        <DaiFundingOptions
-          onBalanceUpdate={(newBalance) => {
-            setDaiBalance(newBalance);
-            // If user gets DAI, we'll automatically show the trading interface
-          }}
-        />
+        {collateral.symbol === 'USDC' ? (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <AlertCircle className="h-5 w-5 text-orange-500" />
+                Get {collateral.symbol}
+              </CardTitle>
+              <CardDescription>
+                You need {collateral.symbol} to trade {meToken.name} tokens.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <FundingOptions
+                asset="USDC"
+                presetFiatAmount={50}
+                onSuccess={() => checkCollateralBalance()}
+              />
+            </CardContent>
+          </Card>
+        ) : (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <AlertCircle className="h-5 w-5 text-orange-500" />
+                Get {collateral.symbol}
+              </CardTitle>
+              <CardDescription>
+                You need {collateral.symbol} to trade this MeToken.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Alert>
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  {collateral.symbol} is not available via direct on-ramp. Please swap from another token (e.g. USDC, ETH) using a DEX aggregator like Uniswap or Aerodrome.
+                </AlertDescription>
+              </Alert>
+            </CardContent>
+          </Card>
+        )}
       </div>
     );
   }
@@ -569,7 +608,19 @@ export function MeTokenTrading({ meToken, onRefresh }: MeTokenTradingProps) {
 
           <TabsContent value="buy" className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="buyAmount">DAI Amount to Spend</Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="buyAmount">{collateral.symbol} Amount to Spend</Label>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 px-2 text-xs"
+                  disabled={isLoading || !isConnected}
+                  onClick={() => setBuyAmount(formatUnits(collateralBalance, collateral.decimals))}
+                >
+                  MAX
+                </Button>
+              </div>
               <Input
                 id="buyAmount"
                 type="number"
@@ -586,22 +637,31 @@ export function MeTokenTrading({ meToken, onRefresh }: MeTokenTradingProps) {
               {buyAmount && parseFloat(buyAmount) > 0 && (
                 <div className="text-sm space-y-1">
                   <div>
-                    {daiBalance >= parseEther(buyAmount) ? (
-                      <span className="text-green-600">✓ DAI balance sufficient</span>
+                    {collateralBalance >= parseUnits(buyAmount, collateral.decimals) ? (
+                      <span className="text-green-600">✓ {collateral.symbol} balance sufficient</span>
                     ) : (
-                      <span className="text-red-600">⚠ Insufficient DAI balance</span>
+                      <span className="text-red-600">⚠ Insufficient {collateral.symbol} balance</span>
                     )}
                   </div>
                 </div>
               )}
             </div>
 
-            {buyAmount && parseFloat(buyAmount) > 0 && daiBalance < parseEther(buyAmount) && (
-              <DaiFundingOptions
-                requiredAmount={parseEther(buyAmount).toString()}
-                onBalanceUpdate={setDaiBalance}
-                className="mb-4"
-              />
+            {buyAmount && parseFloat(buyAmount) > 0 && collateralBalance < parseUnits(buyAmount, collateral.decimals) && (
+              collateral.symbol === 'USDC' ? (
+                <FundingOptions
+                  asset="USDC"
+                  presetFiatAmount={Math.ceil(parseFloat(buyAmount))}
+                  onSuccess={() => checkCollateralBalance()}
+                />
+              ) : (
+                <Alert className="mb-4">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>
+                    Insufficient {collateral.symbol} balance. Please swap for {collateral.symbol} using a DEX aggregator like Uniswap or Aerodrome.
+                  </AlertDescription>
+                </Alert>
+              )
             )}
 
             {!isConnected ? (
@@ -614,7 +674,7 @@ export function MeTokenTrading({ meToken, onRefresh }: MeTokenTradingProps) {
             ) : (
               <Button
                 onClick={handleBuy}
-                disabled={isLoading || !buyAmount || parseFloat(buyAmount) <= 0 || daiBalance < parseEther(buyAmount || '0')}
+                disabled={isLoading || !buyAmount || parseFloat(buyAmount) <= 0 || collateralBalance < parseUnits(buyAmount || '0', collateral.decimals)}
                 className="w-full bg-green-600 hover:bg-green-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isLoading ? (
@@ -631,7 +691,19 @@ export function MeTokenTrading({ meToken, onRefresh }: MeTokenTradingProps) {
 
           <TabsContent value="sell" className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="sellAmount">{meToken.symbol} Amount to Sell</Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="sellAmount">{meToken.symbol} Amount to Sell</Label>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 px-2 text-xs"
+                  disabled={isLoading || !isConnected || meToken.balance <= 0n}
+                  onClick={() => setSellAmount(formatEther(meToken.balance))}
+                >
+                  MAX
+                </Button>
+              </div>
               <Input
                 id="sellAmount"
                 type="number"
@@ -644,7 +716,7 @@ export function MeTokenTrading({ meToken, onRefresh }: MeTokenTradingProps) {
                 max={formatEther(meToken.balance)}
               />
               <p className="text-sm text-muted-foreground">
-                You will receive approximately {parseFloat(sellPreview).toLocaleString(undefined, { maximumFractionDigits: 4 })} DAI
+                You will receive approximately {parseFloat(sellPreview).toLocaleString(undefined, { maximumFractionDigits: 4 })} {collateral.symbol}
               </p>
             </div>
 

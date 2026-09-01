@@ -7,7 +7,7 @@ import { stack } from "@/lib/sdk/stack/stackClient";
 import { Button } from "../ui/button";
 import { FaSpinner, FaTrophy } from "react-icons/fa";
 import Link from "next/link";
-import { useUser } from "@account-kit/react";
+import { useUser } from "@/lib/wallet/react";
 import { Address, getAddress } from "viem";
 import { logger } from '@/lib/utils/logger';
 

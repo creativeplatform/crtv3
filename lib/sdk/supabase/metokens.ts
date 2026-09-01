@@ -81,6 +81,28 @@ export class MeTokenSupabaseService {
     }
   }
 
+  async getMeTokensHeldByOwner(ownerAddress: string): Promise<MeToken[]> {
+    try {
+      const { data, error } = await supabase
+        .from('metokens')
+        .select('*')
+        .eq('owner_address', ownerAddress.toLowerCase());
+
+      if (error) {
+        serverLogger.error('Supabase error fetching MeTokens by owner:', error);
+        throw new Error(`Failed to fetch MeTokens by owner: ${error.message}`);
+      }
+
+      return data || [];
+    } catch (error) {
+      serverLogger.error('Error in getMeTokensHeldByOwner:', error);
+      if (error instanceof Error) {
+        throw error;
+      }
+      throw new Error('Unknown error occurred while fetching MeTokens by owner');
+    }
+  }
+
   // Get all MeTokens with pagination and sorting
   async getAllMeTokens(options: {
     limit?: number;
@@ -537,20 +559,38 @@ export class MeTokenSupabaseService {
       .subscribe();
   }
 
+  // Get all MeToken balances for a user (Turbo pipeline / manual sync)
+  async getUserMeTokenBalances(userAddress: string): Promise<
+    Array<MeTokenBalance & { metoken?: MeToken | null }>
+  > {
+    const { data, error } = await supabase
+      .from('metoken_balances')
+      .select(`
+        *,
+        metoken:metokens(*)
+      `)
+      .eq('user_address', userAddress.toLowerCase())
+      .gt('balance', 0);
+
+    if (error) {
+      throw new Error(`Failed to fetch user MeToken balances: ${error.message}`);
+    }
+
+    return data || [];
+  }
+
   // Search MeTokens
   async searchMeTokens(query: string, limit: number = 20): Promise<MeToken[]> {
-    const { data, error } = await supabase
-      .from('metokens')
-      .select('*')
-      .or(`name.ilike.%${query}%,symbol.ilike.%${query}%`)
-      .limit(limit)
-      .order('tvl', { ascending: false });
+    const { data, error } = await supabase.rpc("search_metokens_ilike", {
+      search_query: query,
+      result_limit: limit,
+    });
 
     if (error) {
       throw new Error(`Failed to search MeTokens: ${error.message}`);
     }
 
-    return data || [];
+    return (data as MeToken[]) || [];
   }
 
   // Get trending MeTokens (highest TVL growth)

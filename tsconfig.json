@@ -41,6 +41,9 @@
     "examples",
     "supabase/functions",
     "vitest.config.ts",
-    "subgraphs"
+    "subgraphs",
+    "packages/metokens",
+    "**/*.test.ts",
+    "**/*.test.tsx"
   ]
 }

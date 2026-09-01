@@ -1,8 +1,8 @@
 "use client";
 import Image from "next/image";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Ban, Repeat2 } from "lucide-react";
 import { convertFailingGateway, isIpfsUrl } from '@/lib/utils/image-gateway';
+import { getPassDisplayName } from "@/lib/access/membership-labels";
 
 export type MemberCardProps = {
   member: any;
@@ -52,7 +52,7 @@ const MemberCard = ({ member, nft, points }: MemberCardProps) => {
         <div className="flex flex-1 flex-col justify-between space-y-6 p-4 lg:p-6">
           <div className="space-y-4">
             <h1 className="text-2xl font-bold tracking-tight lg:text-3xl">
-              {nft.metadata?.name}
+              {getPassDisplayName(nft?.lockAddress ?? nft?.metadata?.contract)}
             </h1>
             <div className="flex flex-col space-y-2">
               <p className="text-sm font-medium text-muted-foreground">

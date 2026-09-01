@@ -29,6 +29,11 @@ export interface StoryLicenseTerms {
   revenueShare?: number; // Revenue share percentage (0-100)
   /** URI for the license terms (e.g. app video page or license doc). Links IP license back to source video. */
   licenseTermsUri?: string;
+  /**
+   * Minting fee in whole WIP/$DATA tokens (human-readable).
+   * Converted to wei (18 decimals) when attaching PIL terms. Default 0 = free.
+   */
+  defaultMintingFee?: number;
 }
 
 /**

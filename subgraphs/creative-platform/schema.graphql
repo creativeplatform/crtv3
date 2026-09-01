@@ -59,6 +59,30 @@ type Register @entity(immutable: true) {
   encodedVaultArgs: Bytes!
 }
 
+# Mutable hub registry derived from Register events
+type Hub @entity(immutable: false) {
+  id: ID!
+  owner: Bytes!
+  asset: Bytes!
+  vault: Bytes!
+  refundRatio: BigInt!
+  baseY: BigInt!
+  reserveWeight: BigInt!
+  encodedVaultArgs: Bytes!
+  active: Boolean!
+  block_number: BigInt!
+  timestamp_: BigInt!
+}
+
+# User MeToken balances aggregated from Subscribe / Mint / Burn / Transfer
+type MeTokenBalance @entity(immutable: false) {
+  id: ID!
+  user: Bytes!
+  meToken: Bytes!
+  balance: BigInt!
+  updatedAt: BigInt!
+}
+
 type Question @entity(immutable: false) {
   id: Bytes!
   template_id: BigInt!

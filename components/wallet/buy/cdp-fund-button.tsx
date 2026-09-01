@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { getOnrampBuyUrl } from "@coinbase/onchainkit/fund";
-import { useSmartAccountClient } from "@account-kit/react";
+import { useSmartAccountClient } from "@/lib/wallet/react";
 import { useState } from "react";
 import { logger } from '@/lib/utils/logger';
 

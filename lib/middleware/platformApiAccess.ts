@@ -49,17 +49,21 @@ export function isSameOriginAppRequest(request: NextRequest): boolean {
 
 async function tryAllowSameOriginAppRequest(
   request: NextRequest,
+  resource?: string,
 ): Promise<PlatformApiAccessResult | null> {
   if (!isSameOriginAppRequest(request)) {
     return null;
   }
 
-  const rl = await rateLimiters.generous(request);
+  const rl =
+    resource === 'playback.info'
+      ? await rateLimiters.playbackInfo(request)
+      : await rateLimiters.generous(request);
   if (rl) {
     return { allowed: false, response: mergePlatformApiHeaders(rl) };
   }
 
-  return { allowed: true, tier: "public" };
+  return { allowed: true, tier: 'public' };
 }
 
 export async function requirePlatformApiAccess(
@@ -98,7 +102,7 @@ export async function requirePlatformApiAccess(
     return { allowed: false, response: unauthorizedResponse("Invalid API key") };
   }
 
-  const sameOriginResult = await tryAllowSameOriginAppRequest(request);
+  const sameOriginResult = await tryAllowSameOriginAppRequest(request, options.resource);
   if (sameOriginResult) {
     return sameOriginResult;
   }

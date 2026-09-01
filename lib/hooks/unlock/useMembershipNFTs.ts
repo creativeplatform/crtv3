@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useUser, useSmartAccountClient } from "@account-kit/react";
+import { useUser, useSmartAccountClient } from "@/lib/wallet/react";
 import { unlockService } from "@/lib/sdk/unlock/services";
 import type { LockAddress } from "@/lib/sdk/unlock/services";
 import { logger } from '@/lib/utils/logger';

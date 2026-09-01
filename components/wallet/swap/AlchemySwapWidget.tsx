@@ -6,35 +6,131 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Loader2, ArrowRightLeft, CheckCircle, XCircle, ExternalLink, DollarSign } from 'lucide-react';
+import { Loader2, ArrowRightLeft, CheckCircle, XCircle, ExternalLink, DollarSign, ChevronDown } from 'lucide-react';
 import Image from 'next/image';
-import { useSmartAccountClient } from '@account-kit/react';
+import { useSmartAccountClient, useChain, usePrepareSwap, useSignAndSendPreparedCalls } from '@/lib/wallet/react';
 import { type Hex, type Address, parseEther, formatEther, encodeFunctionData, erc20Abi, parseUnits, maxUint256 } from 'viem';
-import { alchemySwapService, AlchemySwapService, type TokenSymbol, BASE_TOKENS, TOKEN_INFO } from '@/lib/sdk/alchemy/swap-service';
+import { AlchemySwapService, type TokenSymbol, BASE_TOKENS, TOKEN_INFO, SWAP_UI_TOKENS, emptyTokenBalances, emptyTokenPrices } from '@/lib/sdk/alchemy/swap-service';
 import { priceService, PriceService } from '@/lib/sdk/alchemy/price-service';
 import { CurrencyConverter } from '@/lib/utils/currency-converter';
 import { logger } from '@/lib/utils/logger';
-import { swapActions } from "@account-kit/wallet-client/experimental";
+import { getTokenIcon } from '@/lib/utils/token-icons';
+import { getEthBalance, getErc20Balance } from '@/lib/viem';
+import { cn } from '@/lib/utils';
 
-const getTokenIcon = (symbol: string, chainId?: number) => {
-  const isBase = chainId === 8453;
-  switch (symbol) {
-    case "ETH":
-      return isBase ? "/images/tokens/ETH_on_Base.svg" : "/images/tokens/eth-logo.svg";
-    case "USDC":
-      return isBase ? "/images/tokens/USDC_on_Base.svg" : "/images/tokens/usdc-logo.svg";
-    case "DAI":
-      return isBase ? "/images/tokens/DAI_on_Base.svg" : "/images/tokens/dai-logo.svg";
-    default:
-      return "/images/tokens/eth-logo.svg";
+function SwapTokenSelect({
+  value,
+  onValueChange,
+  chainId,
+  disabled,
+}: {
+  value: TokenSymbol;
+  onValueChange: (token: TokenSymbol) => void;
+  chainId?: number;
+  disabled?: boolean;
+}) {
+  return (
+    <div
+      className={cn(
+        'relative flex h-10 w-[7.25rem] shrink-0 items-center gap-1.5 overflow-hidden rounded-md border bg-background px-2',
+        'sm:w-32 sm:gap-2 sm:px-3',
+        disabled && 'opacity-50',
+      )}
+    >
+      {/* Native select covers the box on mobile */}
+      <select
+        className="absolute inset-0 z-10 cursor-pointer opacity-0 md:hidden"
+        value={value}
+        disabled={disabled}
+        onChange={(e) => onValueChange(e.target.value as TokenSymbol)}
+        aria-label="Select token"
+      >
+        {SWAP_UI_TOKENS.map((token) => (
+          <option key={token} value={token}>
+            {token}
+          </option>
+        ))}
+      </select>
+
+      <Image
+        src={getTokenIcon(value, chainId)}
+        alt=""
+        width={24}
+        height={24}
+        className="h-6 w-6 shrink-0"
+        aria-hidden
+      />
+
+      {/* Mobile visual: label + chevron stay inside the box */}
+      <span className="min-w-0 flex-1 truncate text-sm font-medium md:hidden">{value}</span>
+      <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-50 md:hidden" aria-hidden />
+
+      {/* Desktop: Radix select */}
+      <Select value={value} onValueChange={(v) => onValueChange(v as TokenSymbol)} disabled={disabled}>
+        <SelectTrigger
+          className={cn(
+            'hidden h-auto min-w-0 flex-1 border-0 bg-transparent p-0 shadow-none',
+            'focus:ring-0 focus:ring-offset-0 md:flex',
+            '[&>span]:min-w-0 [&>span]:truncate',
+          )}
+        >
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {SWAP_UI_TOKENS.map((token) => (
+            <SelectItem key={token} value={token}>
+              {token}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
+
+function formatSwapError(error: unknown): string {
+  const errorStr = error instanceof Error ? error.message : String(error);
+  const lower = errorStr.toLowerCase();
+
+  if (
+    lower.includes('typed signature') ||
+    lower.includes('signpreparedcalls') ||
+    lower.includes('secp256k1') ||
+    lower.includes('eoa signature') ||
+    lower.includes('not a function')
+  ) {
+    return 'Swap could not be signed. Please try again or contact support if this persists.';
   }
-};
+  if (errorStr.includes('AA23')) {
+    return 'Transaction validation failed (AA23). Check balances and gas.';
+  }
+  if (errorStr.includes('Multicall3')) {
+    return 'Swap failed (Multicall3). Ensure you have sufficient token balance and your account is deployed.';
+  }
+  if (errorStr.includes('User rejected')) {
+    return 'User rejected the request.';
+  }
+  if (errorStr.includes('raw calls')) {
+    return 'Swap route is unavailable for smart accounts. Try a different token pair.';
+  }
+  return errorStr || 'Swap execution failed';
+}
+
+const ERC20_BALANCE_ABI = [{
+  name: 'balanceOf',
+  type: 'function',
+  stateMutability: 'view',
+  inputs: [{ name: 'account', type: 'address' }],
+  outputs: [{ name: 'balance', type: 'uint256' }],
+}] as const;
 
 interface AlchemySwapWidgetProps {
   onSwapSuccess?: () => void;
   className?: string;
   hideHeader?: boolean;
   defaultToToken?: TokenSymbol;
+  /** If true, reduces spacing and presets for a compact side-panel view */
+  compact?: boolean;
 }
 
 interface SwapState {
@@ -49,9 +145,35 @@ interface SwapState {
   transactionHash: string | null;
 }
 
-export function AlchemySwapWidget({ onSwapSuccess, className, hideHeader = false, defaultToToken = 'USDC' }: AlchemySwapWidgetProps) {
+export function AlchemySwapWidget({ onSwapSuccess, className, hideHeader = false, defaultToToken = 'USDC', compact = false }: AlchemySwapWidgetProps) {
 
   const { address, client } = useSmartAccountClient({});
+  const { chain } = useChain();
+  const { prepareSwapAsync, isPreparingSwap } = usePrepareSwap({ client });
+  const { signAndSendPreparedCallsAsync, isSigningAndSendingPreparedCalls } =
+    useSignAndSendPreparedCalls({ client });
+
+  const buildSwapParams = (amount: string, fromToken: TokenSymbol, toToken: TokenSymbol) => {
+    const paymasterPolicyId = process.env.NEXT_PUBLIC_ALCHEMY_PAYMASTER_POLICY_ID?.replace(
+      /^["']|["']$/g,
+      '',
+    );
+
+    return {
+      from: address as Address,
+      fromToken: BASE_TOKENS[fromToken],
+      toToken: BASE_TOKENS[toToken],
+      fromAmount: AlchemySwapService.formatAmount(amount, fromToken),
+      slippage: '0x32',
+      ...(paymasterPolicyId
+        ? {
+            capabilities: {
+              paymasterService: { policyId: paymasterPolicyId },
+            },
+          }
+        : {}),
+    };
+  };
 
   const [swapState, setSwapState] = useState<SwapState>({
     fromToken: 'ETH',
@@ -67,17 +189,9 @@ export function AlchemySwapWidget({ onSwapSuccess, className, hideHeader = false
 
   const [isApprovingToken, setIsApprovingToken] = useState(false);
 
-  const [balances, setBalances] = useState<Record<TokenSymbol, string>>({
-    ETH: '0',
-    USDC: '0',
-    DAI: '0',
-  });
+  const [balances, setBalances] = useState<Record<TokenSymbol, string>>(emptyTokenBalances());
 
-  const [prices, setPrices] = useState<Record<TokenSymbol, number>>({
-    ETH: 0,
-    USDC: 0,
-    DAI: 0,
-  });
+  const [prices, setPrices] = useState<Record<TokenSymbol, number>>(emptyTokenPrices());
 
   const [usdValues, setUsdValues] = useState<{
     fromAmount: number;
@@ -94,7 +208,7 @@ export function AlchemySwapWidget({ onSwapSuccess, className, hideHeader = false
   useEffect(() => {
     const fetchPrices = async () => {
       try {
-        const tokenPrices = await priceService.getTokenPrices(['ETH', 'USDC', 'DAI']);
+        const tokenPrices = await priceService.getTokenPrices([...SWAP_UI_TOKENS]);
         setPrices(tokenPrices);
       } catch (error) {
         logger.error('Error fetching prices:', error);
@@ -142,56 +256,26 @@ export function AlchemySwapWidget({ onSwapSuccess, className, hideHeader = false
       try {
         logger.debug('Fetching balances for address:', address);
 
-        // Get ETH balance
-        const ethBalance = await client.getBalance({
-          address: address as Address,
-        });
+        // Get ETH balance via public client (smart-account client is write-only)
+        const ethBalance = await getEthBalance(address);
 
         logger.debug('ETH balance (wei):', ethBalance.toString());
 
-        // Get USDC balance (ERC20)
-        let usdcBalance = 0n;
-        try {
-          usdcBalance = await client.readContract({
-            address: BASE_TOKENS.USDC as Address,
-            abi: [{
-              name: 'balanceOf',
-              type: 'function',
-              stateMutability: 'view',
-              inputs: [{ name: 'account', type: 'address' }],
-              outputs: [{ name: 'balance', type: 'uint256' }],
-            }],
-            functionName: 'balanceOf',
-            args: [address as Address],
-          }) as bigint;
-        } catch (e) {
-          logger.warn('Failed to fetch USDC balance:', e);
-        }
+        // Get ERC-20 balances
+        const newBalances = emptyTokenBalances();
+        newBalances.ETH = AlchemySwapService.parseAmount(`0x${ethBalance.toString(16)}` as Hex, 'ETH');
 
-        // Get DAI balance (ERC20)
-        let daiBalance = 0n;
-        try {
-          daiBalance = await client.readContract({
-            address: BASE_TOKENS.DAI as Address,
-            abi: [{
-              name: 'balanceOf',
-              type: 'function',
-              stateMutability: 'view',
-              inputs: [{ name: 'account', type: 'address' }],
-              outputs: [{ name: 'balance', type: 'uint256' }],
-            }],
-            functionName: 'balanceOf',
-            args: [address as Address],
-          }) as bigint;
-        } catch (e) {
-          logger.warn('Failed to fetch DAI balance:', e);
+        for (const token of SWAP_UI_TOKENS.filter((t) => t !== 'ETH')) {
+          try {
+            const raw = await getErc20Balance({
+              token: BASE_TOKENS[token] as Address,
+              owner: address as Address,
+            });
+            newBalances[token] = AlchemySwapService.parseAmount(`0x${raw.toString(16)}` as Hex, token);
+          } catch (e) {
+            logger.warn(`Failed to fetch ${token} balance:`, e);
+          }
         }
-
-        const newBalances: Record<TokenSymbol, string> = {
-          ETH: AlchemySwapService.parseAmount(`0x${ethBalance.toString(16)}` as Hex, 'ETH'),
-          USDC: AlchemySwapService.parseAmount(`0x${usdcBalance.toString(16)}` as Hex, 'USDC'),
-          DAI: AlchemySwapService.parseAmount(`0x${daiBalance.toString(16)}` as Hex, 'DAI'),
-        };
 
         logger.debug('Parsed balances:', newBalances);
         setBalances(newBalances);
@@ -220,7 +304,7 @@ export function AlchemySwapWidget({ onSwapSuccess, className, hideHeader = false
   }, [address, client]);
 
   const fetchQuote = async (amount: string, fromToken: TokenSymbol, toToken: TokenSymbol) => {
-    if (!amount || parseFloat(amount) <= 0 || !address) {
+    if (!amount || parseFloat(amount) <= 0 || !address || !client) {
       setSwapState(prev => ({ ...prev, fromAmount: amount, quote: null, error: null }));
       return;
     }
@@ -228,34 +312,36 @@ export function AlchemySwapWidget({ onSwapSuccess, className, hideHeader = false
     try {
       setSwapState(prev => ({ ...prev, isLoading: true, error: null }));
 
-      const fromAmountHex = AlchemySwapService.formatAmount(amount, fromToken);
-
       logger.debug('Requesting swap quote:', {
         from: address,
         fromToken,
         toToken,
         fromAmount: amount,
-        fromAmountHex,
       });
 
-      const quoteResponse = await alchemySwapService.requestSwapQuote({
-        from: address as Address,
-        fromToken,
-        toToken,
-        fromAmount: fromAmountHex,
-      });
+      const result = await prepareSwapAsync(
+        buildSwapParams(amount, fromToken, toToken),
+      );
 
-      if (quoteResponse.result?.quote) {
+      if (!result) {
+        throw new Error('Failed to prepare swap: No response received');
+      }
+
+      if ("rawCalls" in result && result.rawCalls) {
+        throw new Error('Expected user operation calls, got raw calls');
+      }
+
+      if (result.quote?.minimumToAmount) {
         const toAmount = AlchemySwapService.parseAmount(
-          quoteResponse.result.quote.minimumToAmount,
-          toToken
+          result.quote.minimumToAmount,
+          toToken,
         );
 
         setSwapState(prev => ({
           ...prev,
           fromAmount: amount,
           toAmount,
-          quote: quoteResponse.result,
+          quote: result.quote,
           isLoading: false,
         }));
       } else {
@@ -267,7 +353,7 @@ export function AlchemySwapWidget({ onSwapSuccess, className, hideHeader = false
         ...prev,
         isLoading: false,
         quote: null,
-        error: error instanceof Error ? error.message : 'Failed to get quote',
+        error: formatSwapError(error),
       }));
     }
   };
@@ -430,100 +516,75 @@ export function AlchemySwapWidget({ onSwapSuccess, className, hideHeader = false
 
 
   const handleExecuteSwap = async () => {
-    if (!address || !client) return;
+    if (!address || !client || !swapState.fromAmount) return;
 
     try {
       setSwapState(prev => ({ ...prev, isSwapping: true, error: null }));
 
-
-      // Extend the client with swap actions
-      const swapClient = (client as any).extend(swapActions);
-
       logger.debug('Requesting fresh quote for execution...');
 
-      const fromAmountHex = AlchemySwapService.formatAmount(swapState.fromAmount, swapState.fromToken);
+      const result = await prepareSwapAsync(
+        buildSwapParams(swapState.fromAmount, swapState.fromToken, swapState.toToken),
+      );
 
-      // Request a fresh quote using the SDK
-      // This ensures we have the correct object structure for sign/send
-      const { quote, ...calls } = await swapClient.requestQuoteV0({
-        from: address,
-        fromToken: BASE_TOKENS[swapState.fromToken],
-        toToken: BASE_TOKENS[swapState.toToken],
-        fromAmount: fromAmountHex,
-        slippage: "0x32", // 0.5% (50 bps)
-      });
-
-      logger.debug('Quote received:', quote);
-
-      // Verify calls are not raw (we expect UserOperations)
-      if (calls.rawCalls) {
-        throw new Error("Expected user operation calls, got raw calls");
+      if (!result) {
+        throw new Error('Failed to prepare swap: No response received');
       }
 
-      // Sign the prepared calls
-      logger.debug('Signing prepared calls...');
-      const signedCalls = await swapClient.signPreparedCalls(calls);
+      if ("rawCalls" in result && result.rawCalls) {
+        throw new Error('Expected user operation calls, got raw calls');
+      }
 
-      // Send the prepared calls
-      logger.debug('Sending prepared calls...');
-      const { preparedCallIds } = await swapClient.sendPreparedCalls(signedCalls);
+      const { quote: _quote, ...calls } = result;
+
+      logger.debug('Signing and sending prepared calls...');
+      const { preparedCallIds } = await signAndSendPreparedCallsAsync(calls);
 
       if (!preparedCallIds || preparedCallIds.length === 0) {
-        throw new Error("No prepared call IDs returned");
+        throw new Error('No prepared call IDs returned');
       }
 
       const callId = preparedCallIds[0];
       logger.debug('Swap initiated, Call ID:', callId);
 
-      // Wait for the call to resolve
-      logger.debug('Waiting for call status...');
-      const callStatusResult = await swapClient.waitForCallsStatus({
-        id: callId,
-      });
+      const callStatusResult = await client.waitForCallsStatus({ id: callId });
 
-      // Filter through success or failure cases
-      if (callStatusResult.status === "success" && callStatusResult.receipts && callStatusResult.receipts[0]) {
+      if (
+        callStatusResult.status === 'success' &&
+        callStatusResult.receipts &&
+        callStatusResult.receipts[0]
+      ) {
         const txHash = callStatusResult.receipts[0].transactionHash;
         logger.debug('Swap confirmed! TxHash:', txHash);
 
         setSwapState(prev => ({
           ...prev,
-          transactionHash: txHash,
+          transactionHash: txHash ?? null,
           isSwapping: false,
         }));
 
         onSwapSuccess?.();
       } else {
         logger.error('Swap failed status:', callStatusResult);
-        throw new Error(
-          `Transaction failed with status ${callStatusResult.status}`
-        );
+        throw new Error(`Transaction failed with status ${callStatusResult.status}`);
       }
-
     } catch (error) {
       logger.error('Swap failed:', error);
       setIsApprovingToken(false);
 
-      let userMessage = 'Swap execution failed';
-      const errorStr = error instanceof Error ? error.message : String(error);
-
-      if (errorStr.includes('AA23')) {
-        userMessage = 'Transaction validation failed (AA23). Check balances and gas.';
-      } else if (errorStr.includes('Multicall3')) {
-        userMessage = 'Swap failed (Multicall3). This often means the Swap Validation failed. Ensure you have USDC/ETH and the account is properly deployed.';
-      } else if (errorStr.includes('User rejected')) {
-        userMessage = 'User rejected the request.';
-      } else {
-        userMessage = errorStr;
-      }
-
       setSwapState(prev => ({
         ...prev,
-        error: userMessage,
+        error: formatSwapError(error),
         isSwapping: false,
       }));
     }
   };
+
+  const isSwapBusy =
+    swapState.isLoading ||
+    swapState.isSwapping ||
+    isPreparingSwap ||
+    isSigningAndSendingPreparedCalls;
 
   const canExecuteSwap =
     swapState.fromAmount &&
@@ -531,20 +592,24 @@ export function AlchemySwapWidget({ onSwapSuccess, className, hideHeader = false
     swapState.quote &&
     !swapState.isLoading &&
     !swapState.isSwapping &&
+    !isPreparingSwap &&
+    !isSigningAndSendingPreparedCalls &&
     swapState.fromToken !== swapState.toToken;
 
   // Show loading state while wallet is connecting
   if (!address || !client) {
     return (
       <Card className={className}>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <ArrowRightLeft className="h-5 w-5" />
-            Token Swap
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-center py-8 text-muted-foreground">
+        {(!hideHeader || !compact) && (
+          <CardHeader className={compact ? "pb-2" : undefined}>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <ArrowRightLeft className="h-4 w-4" />
+              Token Swap
+            </CardTitle>
+          </CardHeader>
+        )}
+        <CardContent className={compact ? "p-4" : undefined}>
+          <div className="flex items-center justify-center py-4 text-muted-foreground text-sm">
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             Connecting wallet...
           </div>
@@ -555,13 +620,15 @@ export function AlchemySwapWidget({ onSwapSuccess, className, hideHeader = false
 
   return (
     <Card className={className}>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <ArrowRightLeft className="h-5 w-5" />
-          Token Swap
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
+      {(!hideHeader || !compact) && (
+        <CardHeader className={compact ? "pb-2" : undefined}>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <ArrowRightLeft className="h-4 w-4" />
+            Token Swap
+          </CardTitle>
+        </CardHeader>
+      )}
+      <CardContent className={`${compact ? 'p-4 space-y-3' : 'space-y-4'}`}>
         {swapState.error && (
           <Alert variant="destructive">
             <XCircle className="h-4 w-4" />
@@ -623,7 +690,7 @@ export function AlchemySwapWidget({ onSwapSuccess, className, hideHeader = false
                 size="sm"
                 onClick={handleMaxAmount}
                 className="h-6 px-2 text-xs"
-                disabled={swapState.isLoading || swapState.isSwapping || !address}
+                disabled={isSwapBusy || !address}
               >
                 MAX
               </Button>
@@ -633,45 +700,21 @@ export function AlchemySwapWidget({ onSwapSuccess, className, hideHeader = false
                 size="sm"
                 onClick={handleInputModeToggle}
                 className="h-6 px-2 text-xs"
-                disabled={swapState.isLoading || swapState.isSwapping}
+                disabled={isSwapBusy}
               >
                 <DollarSign className={`h-3 w-3 mr-1 ${inputMode === 'usd' ? 'text-green-600' : ''}`} />
                 {inputMode === 'usd' ? 'USD' : swapState.fromToken}
               </Button>
             </div>
           </div>
-          <div className="flex gap-2">
-            <div className="relative flex items-center space-x-2 px-3 border rounded-md bg-background w-28 sm:w-32 h-10">
-              {/* Native Select for Mobile */}
-              <select
-                className="absolute inset-0 w-full h-full opacity-0 z-10 cursor-pointer md:hidden"
-                value={swapState.fromToken}
-                onChange={(e) => handleFromTokenChange(e.target.value as TokenSymbol)}
-              >
-                <option value="ETH">ETH</option>
-                <option value="USDC">USDC</option>
-                <option value="DAI">DAI</option>
-              </select>
-
-              <Image
-                src={getTokenIcon(swapState.fromToken, client?.chain?.id)}
-                alt={swapState.fromToken}
-                width={32}
-                height={32}
-                className="w-8 h-8 shrink-0"
-              />
-              <Select value={swapState.fromToken} onValueChange={handleFromTokenChange}>
-                <SelectTrigger className="w-full bg-transparent border-none outline-none p-0 h-auto focus:ring-0">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ETH">ETH</SelectItem>
-                  <SelectItem value="USDC">USDC</SelectItem>
-                  <SelectItem value="DAI">DAI</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex-1 relative">
+          <div className="flex items-center gap-2">
+            <SwapTokenSelect
+              value={swapState.fromToken}
+              onValueChange={handleFromTokenChange}
+              chainId={client?.chain?.id ?? chain?.id}
+              disabled={isSwapBusy}
+            />
+            <div className="relative min-w-0 flex-1">
               <Input
                 type="number"
                 placeholder={inputMode === 'usd' ? '0.00' : '0.0'}
@@ -681,11 +724,11 @@ export function AlchemySwapWidget({ onSwapSuccess, className, hideHeader = false
                     ? handleUSDInputChange(e.target.value)
                     : handleFromAmountChange(e.target.value)
                 }
-                className={inputMode === 'usd' ? 'pl-6 pr-20 h-10' : 'pr-20 h-10'}
-                disabled={swapState.isLoading || swapState.isSwapping}
+                className={inputMode === 'usd' ? 'h-10 pl-6 pr-20' : 'h-10 pr-20'}
+                disabled={isSwapBusy}
               />
               {inputMode === 'usd' && (
-                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground pointer-events-none">
+                <div className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
                   $
                 </div>
               )}
@@ -704,7 +747,7 @@ export function AlchemySwapWidget({ onSwapSuccess, className, hideHeader = false
           <div className="flex justify-between text-xs text-muted-foreground">
             <div className="flex items-center space-x-1">
               <Image
-                src={getTokenIcon(swapState.fromToken, client?.chain?.id)}
+                src={getTokenIcon(swapState.fromToken, client?.chain?.id ?? chain?.id)}
                 alt={swapState.fromToken}
                 width={20}
                 height={20}
@@ -718,7 +761,7 @@ export function AlchemySwapWidget({ onSwapSuccess, className, hideHeader = false
           </div>
 
           {/* Quick Amount Presets */}
-          {inputMode === 'usd' && (
+          {inputMode === 'usd' && !compact && (
             <div className="space-y-2">
               <div className="flex gap-2 pt-1">
                 {[10, 25, 50, 100].map((amount) => (
@@ -728,7 +771,7 @@ export function AlchemySwapWidget({ onSwapSuccess, className, hideHeader = false
                     variant="outline"
                     size="sm"
                     onClick={() => handlePresetAmount(amount)}
-                    disabled={swapState.isLoading || swapState.isSwapping || !address}
+                    disabled={isSwapBusy || !address}
                     className="flex-1 h-8 text-xs"
                   >
                     ${amount}
@@ -754,7 +797,7 @@ export function AlchemySwapWidget({ onSwapSuccess, className, hideHeader = false
             variant="outline"
             size="sm"
             onClick={handleSwapTokens}
-            disabled={swapState.isLoading || swapState.isSwapping}
+            disabled={isSwapBusy}
           >
             <ArrowRightLeft className="h-4 w-4" />
           </Button>
@@ -763,44 +806,20 @@ export function AlchemySwapWidget({ onSwapSuccess, className, hideHeader = false
         {/* To Token */}
         <div className="space-y-2">
           <label className="text-sm font-medium">You Receive</label>
-          <div className="flex gap-2">
-            <div className="relative flex items-center space-x-2 px-3 border rounded-md bg-background w-28 sm:w-32 h-10">
-              {/* Native Select for Mobile */}
-              <select
-                className="absolute inset-0 w-full h-full opacity-0 z-10 cursor-pointer md:hidden"
-                value={swapState.toToken}
-                onChange={(e) => handleToTokenChange(e.target.value as TokenSymbol)}
-              >
-                <option value="ETH">ETH</option>
-                <option value="USDC">USDC</option>
-                <option value="DAI">DAI</option>
-              </select>
-
-              <Image
-                src={getTokenIcon(swapState.toToken, client?.chain?.id)}
-                alt={swapState.toToken}
-                width={32}
-                height={32}
-                className="w-8 h-8 shrink-0"
-              />
-              <Select value={swapState.toToken} onValueChange={handleToTokenChange}>
-                <SelectTrigger className="w-full bg-transparent border-none outline-none p-0 h-auto focus:ring-0">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ETH">ETH</SelectItem>
-                  <SelectItem value="USDC">USDC</SelectItem>
-                  <SelectItem value="DAI">DAI</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex-1 relative">
+          <div className="flex items-center gap-2">
+            <SwapTokenSelect
+              value={swapState.toToken}
+              onValueChange={handleToTokenChange}
+              chainId={client?.chain?.id ?? chain?.id}
+              disabled={isSwapBusy}
+            />
+            <div className="relative min-w-0 flex-1">
               <Input
                 type="number"
                 placeholder="0.0"
                 value={swapState.toAmount}
                 readOnly
-                className="bg-muted pr-20 h-10"
+                className="h-10 bg-muted pr-20"
               />
               {usdValues.toAmount > 0 && (
                 <div className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
@@ -812,7 +831,7 @@ export function AlchemySwapWidget({ onSwapSuccess, className, hideHeader = false
           <div className="flex justify-between text-xs text-muted-foreground">
             <div className="flex items-center space-x-1">
               <Image
-                src={getTokenIcon(swapState.toToken, client?.chain?.id)}
+                src={getTokenIcon(swapState.toToken, client?.chain?.id ?? chain?.id)}
                 alt={swapState.toToken}
                 width={20}
                 height={20}
@@ -865,7 +884,7 @@ export function AlchemySwapWidget({ onSwapSuccess, className, hideHeader = false
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               Approving {swapState.fromToken}...
             </>
-          ) : swapState.isSwapping ? (
+          ) : isSwapBusy ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               Executing Swap...
@@ -884,8 +903,8 @@ export function AlchemySwapWidget({ onSwapSuccess, className, hideHeader = false
         </Button>
 
         {/* Supported Tokens Info */}
-        <div className="text-xs text-muted-foreground">
-          <p>Supported tokens on Base: ETH, USDC, DAI</p>
+        <div className={`text-xs text-muted-foreground ${compact ? 'hidden' : ''}`}>
+          <p>Supported tokens on Base: ETH, USDC, USDS, DAI, GHO</p>
           <p>Swaps powered by Alchemy Smart Wallets</p>
         </div>
       </CardContent>

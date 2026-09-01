@@ -1,6 +1,7 @@
 "use client";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { MembershipVerifiedBadge } from "@/components/User/MembershipVerifiedBadge";
 import { useMeTokenByOwner } from "@/lib/hooks/metokens/useMeTokenByOwner";
 import { useCreatorProfile } from "@/lib/hooks/metokens/useCreatorProfile";
 import { formatAddress } from "@/lib/helpers";
@@ -55,10 +56,8 @@ export function UserDisplay({
   className,
   variant = "inline",
 }: UserDisplayProps) {
-  const { meToken, loading: meTokenLoading } = useMeTokenByOwner(address);
-  const { profile, loading: profileLoading } = useCreatorProfile(address);
-
-  const isLoading = meTokenLoading || profileLoading;
+  const { meToken } = useMeTokenByOwner(address);
+  const { profile } = useCreatorProfile(address);
 
   // Determine what to display
   const displayName = profile?.username || meToken?.name || null;
@@ -89,18 +88,33 @@ export function UserDisplay({
       </Avatar>
       <div className={cn("flex flex-col", variant === "vertical" && "items-start")}>
         {displayName && (
-          <span className={cn("font-medium", textSizes[avatarSize])}>
+          <span className={cn("inline-flex items-center gap-1 font-medium", textSizes[avatarSize])}>
             {displayName}
+            <MembershipVerifiedBadge
+              address={address}
+              size={avatarSize === "lg" ? "md" : "sm"}
+            />
           </span>
         )}
         {displaySymbol && (
-          <span className={cn("text-muted-foreground", textSizes[avatarSize === "sm" ? "sm" : "xs"])}>
+          <span
+            className={cn(
+              "text-muted-foreground",
+              textSizes[avatarSize === "sm" ? "sm" : "xs"],
+            )}
+          >
             {displaySymbol}
           </span>
         )}
         {showAddress && (!displayName || !displaySymbol) && (
-          <span className={cn("text-muted-foreground font-mono", textSizes[avatarSize === "sm" ? "sm" : "xs"])}>
+          <span
+            className={cn(
+              "inline-flex items-center gap-1 font-mono text-muted-foreground",
+              textSizes[avatarSize === "sm" ? "sm" : "xs"],
+            )}
+          >
             {shortenAddress(address)}
+            {!displayName && <MembershipVerifiedBadge address={address} />}
           </span>
         )}
       </div>
@@ -109,7 +123,7 @@ export function UserDisplay({
 
   if (clickable) {
     return (
-      <Link href={`/profile/${address}`} className="hover:opacity-80 transition-opacity">
+      <Link href={`/profile/${address}`} className="transition-opacity hover:opacity-80">
         {content}
       </Link>
     );
@@ -150,11 +164,19 @@ export function UserDisplayCompact({
           {avatarFallback}
         </AvatarFallback>
       </Avatar>
-      <span className={cn("font-medium", textSizes[avatarSize])}>
-        {displayName || displaySymbol || (showAddress ? shortenAddress(address) : formatAddress(address))}
+      <span className={cn("inline-flex items-center gap-1 font-medium", textSizes[avatarSize])}>
+        {displayName ||
+          displaySymbol ||
+          (showAddress ? shortenAddress(address) : formatAddress(address))}
+        <MembershipVerifiedBadge address={address} />
       </span>
       {displaySymbol && displayName && (
-        <span className={cn("text-muted-foreground", textSizes[avatarSize === "sm" ? "sm" : "xs"])}>
+        <span
+          className={cn(
+            "text-muted-foreground",
+            textSizes[avatarSize === "sm" ? "sm" : "xs"],
+          )}
+        >
           ({displaySymbol})
         </span>
       )}
@@ -183,14 +205,21 @@ export function UserNameDisplay({
   const displaySymbol = meToken?.symbol || null;
 
   return (
-    <span className={cn("font-medium", textSizes[size], className)}>
-      {displayName || displaySymbol || (showAddress ? shortenAddress(address) : formatAddress(address))}
+    <span className={cn("inline-flex items-center gap-1 font-medium", textSizes[size], className)}>
+      {displayName ||
+        displaySymbol ||
+        (showAddress ? shortenAddress(address) : formatAddress(address))}
+      <MembershipVerifiedBadge address={address} size={size === "lg" ? "md" : "sm"} />
       {displaySymbol && displayName && (
-        <span className={cn("text-muted-foreground ml-1", textSizes[size === "sm" ? "sm" : "xs"])}>
+        <span
+          className={cn(
+            "ml-0.5 text-muted-foreground",
+            textSizes[size === "sm" ? "sm" : "xs"],
+          )}
+        >
           ({displaySymbol})
         </span>
       )}
     </span>
   );
 }
-

@@ -20,6 +20,7 @@ import { Asset } from "livepeer/models/components";
 import { Collapsible } from "@/components/ui/collapsible";
 import { SplitsCollaboratorsForm } from "./SplitsCollaboratorsForm";
 import { Users } from "lucide-react";
+import { VIDEO_GENRES } from "@/lib/constants/video-genres";
 
 type CreateDetailsAndUploadProps = {
     onPressNext: (formData: TVideoMetaForm, livepeerAsset: Asset) => void;
@@ -87,7 +88,7 @@ const CreateDetailsAndUpload = ({ onPressNext }: CreateDetailsAndUploadProps) =>
                                     <FormField
                                         control={form.control}
                                         name="description"
-                                        rules={{ required: true, maxLength: 500 }}
+                                        rules={{ required: true, maxLength: 1000 }}
                                         render={({ field }) => (
                                             <FormItem>
                                                 <Label>Description</Label>
@@ -96,11 +97,11 @@ const CreateDetailsAndUpload = ({ onPressNext }: CreateDetailsAndUploadProps) =>
                                                         <textarea
                                                             className="flex min-h-[120px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 resize-y pb-6"
                                                             placeholder="Video Description (Markdown supported)"
-                                                            maxLength={500}
+                                                            maxLength={1000}
                                                             {...field}
                                                         />
                                                         <div className="absolute bottom-2 right-2 text-xs text-muted-foreground">
-                                                            {field.value?.length || 0}/500
+                                                            {field.value?.length || 0}/1000
                                                         </div>
                                                     </div>
                                                 </FormControl>
@@ -135,22 +136,11 @@ const CreateDetailsAndUpload = ({ onPressNext }: CreateDetailsAndUploadProps) =>
                                                             </SelectTrigger>
                                                         </FormControl>
                                                         <SelectContent>
-                                                            <SelectItem value="Pop">Pop</SelectItem>
-                                                            <SelectItem value="Rock">Rock</SelectItem>
-                                                            <SelectItem value="Hip-Hop/Rap">Hip-Hop/Rap</SelectItem>
-                                                            <SelectItem value="R&B/Soul">R&B/Soul</SelectItem>
-                                                            <SelectItem value="EDM">EDM</SelectItem>
-                                                            <SelectItem value="Country">Country</SelectItem>
-                                                            <SelectItem value="Jazz">Jazz</SelectItem>
-                                                            <SelectItem value="Blues">Blues</SelectItem>
-                                                            <SelectItem value="Classical">Classical</SelectItem>
-                                                            <SelectItem value="Folk">Folk</SelectItem>
-                                                            <SelectItem value="Reggae">Reggae</SelectItem>
-                                                            <SelectItem value="Latin">Latin</SelectItem>
-                                                            <SelectItem value="Metal">Metal</SelectItem>
-                                                            <SelectItem value="Original">Original</SelectItem>
-                                                            <SelectItem value="Podcast">Podcast</SelectItem>
-                                                            <SelectItem value="World">World Music</SelectItem>
+                                                            {VIDEO_GENRES.map((genre) => (
+                                                                <SelectItem key={genre.value} value={genre.value}>
+                                                                    {genre.label}
+                                                                </SelectItem>
+                                                            ))}
                                                         </SelectContent>
                                                     </Select>
                                                 </FormItem>
@@ -217,7 +207,7 @@ const CreateDetailsAndUpload = ({ onPressNext }: CreateDetailsAndUploadProps) =>
                 {/* Right Column: Upload */}
                 <div className="flex-1">
                     <h4 className="text-xl font-semibold mb-6">Video File</h4>
-                    <div className="bg-card border rounded-lg p-4">
+                    <div className="bg-card border rounded-lg p-4 relative">
                         <FileUpload
                             onFileSelect={() => {
                                 setLivepeerAsset(null);

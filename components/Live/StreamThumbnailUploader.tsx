@@ -6,6 +6,8 @@ import { Loader2, Upload, ImageIcon } from "lucide-react";
 import { toast } from "sonner";
 import { uploadThumbnailToIPFS } from "@/lib/services/thumbnail-upload";
 import { updateStream } from "@/services/streams";
+import { useWalletAuth } from "@/lib/auth/useWalletAuth";
+import { walletAuthHeadersToArgs } from "@/lib/auth/require-wallet";
 import { logger } from "@/lib/utils/logger";
 import { LivestreamThumbnail } from "./LivestreamThumbnail";
 
@@ -24,6 +26,7 @@ export function StreamThumbnailUploader({
 }: StreamThumbnailUploaderProps) {
     const [isUploading, setIsUploading] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const { getAuthHeaders } = useWalletAuth();
 
     const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -48,9 +51,12 @@ export function StreamThumbnailUploader({
             const newThumbnailUrl = result.thumbnailUrl;
 
             // 2. Update Stream Record
-            await updateStream(creatorAddress, {
-                thumbnail_url: newThumbnailUrl
-            });
+            const auth = walletAuthHeadersToArgs(await getAuthHeaders());
+            await updateStream(
+                creatorAddress,
+                { thumbnail_url: newThumbnailUrl },
+                auth,
+            );
 
             // 3. Update UI
             onThumbnailUpdated(newThumbnailUrl);

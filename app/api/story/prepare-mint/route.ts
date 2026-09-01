@@ -4,7 +4,7 @@
  * and submit via eth_sendRawTransaction (e.g. through /api/story/rpc-proxy).
  */
 import { NextRequest, NextResponse } from "next/server";
-import { checkBotId } from "botid/server";
+import { checkBotIdDeep } from "@/lib/middleware/botIdGuard";
 import { createStoryClient, getStoryRpcUrl } from "@/lib/sdk/story/client";
 import { getOrCreateCreatorCollection } from "@/lib/sdk/story/collection-service";
 import { mintAndRegisterIp } from "@/lib/sdk/story/spg-service";
@@ -12,6 +12,7 @@ import { createCaptureTransport, getCapturedTxs } from "@/lib/sdk/story/capture-
 import type { Address } from "viem";
 import { serverLogger } from "@/lib/utils/logger";
 import { rateLimiters } from "@/lib/middleware/rateLimit";
+import { requireWalletAuthFor, WalletAuthError } from "@/lib/auth/require-wallet";
 
 function serializeTx(tx: { to: Address; data: `0x${string}`; value?: bigint; gas?: bigint; gasPrice?: bigint; chainId?: number }) {
   return {
@@ -25,7 +26,7 @@ function serializeTx(tx: { to: Address; data: `0x${string}`; value?: bigint; gas
 }
 
 export async function POST(request: NextRequest) {
-  const verification = await checkBotId();
+  const verification = await checkBotIdDeep();
   if (verification.isBot) {
     return NextResponse.json({ error: "Access denied" }, { status: 403 });
   }
@@ -48,6 +49,25 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid address format" }, { status: 400 });
     }
 
+    const normalizedCreator = creatorAddress.toLowerCase();
+    const normalizedRecipient = recipient.toLowerCase();
+
+    try {
+      await requireWalletAuthFor(request, normalizedCreator);
+    } catch (authErr) {
+      if (authErr instanceof WalletAuthError) {
+        return NextResponse.json({ error: authErr.message }, { status: authErr.status });
+      }
+      throw authErr;
+    }
+
+    if (normalizedRecipient !== normalizedCreator) {
+      return NextResponse.json(
+        { error: "recipient must match creatorAddress for prepare-mint" },
+        { status: 400 },
+      );
+    }
+
     const privateKey = process.env.STORY_PROTOCOL_PRIVATE_KEY;
     if (!privateKey) {
       return NextResponse.json(
@@ -67,19 +87,19 @@ export async function POST(request: NextRequest) {
     const fundingClient = createStoryClient(fundingAddress, privateKey);
     const collectionAddress = await getOrCreateCreatorCollection(
       fundingClient,
-      creatorAddress as Address,
+      normalizedCreator as Address,
       collectionName,
       collectionSymbol
     );
 
     const captureKey = `prepare-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const captureTransport = createCaptureTransport(rpcUrl, captureKey);
-    const captureClient = createStoryClient(creatorAddress as Address, undefined, captureTransport);
+    const captureClient = createStoryClient(normalizedCreator as Address, undefined, captureTransport);
 
     try {
       await mintAndRegisterIp(captureClient, {
         collectionAddress,
-        recipient: recipient as Address,
+        recipient: normalizedRecipient as Address,
         metadataURI,
         allowDuplicates: false,
       });

@@ -28,7 +28,7 @@ describe('Real-time viewership API route', () => {
   });
 
   it('returns 503 if Livepeer token is not configured', async () => {
-    vi.mocked(resolveLivepeerStudioAuthToken).mockReturnValueOnce(null);
+    vi.mocked(resolveLivepeerStudioAuthToken).mockReturnValueOnce('' as unknown as undefined);
 
     const request = new NextRequest('http://localhost/api/livepeer/views/realtime/p1');
     const response = await GET(request, { params: Promise.resolve({ playbackId: 'p1' }) });
@@ -66,7 +66,9 @@ describe('Real-time viewership API route', () => {
         headers: expect.any(Headers),
       }),
     );
-    const [, options] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const firstCall = fetchMock.mock.calls[0];
+    expect(firstCall.length).toBeGreaterThanOrEqual(2);
+    const [, options] = firstCall as unknown as [string, RequestInit];
     expect((options.headers as Headers).get('Authorization')).toBe('Bearer test-token');
   });
 

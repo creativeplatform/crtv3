@@ -1,9 +1,10 @@
 import type { Helia } from 'helia';
 import type { UnixFS } from '@helia/unixfs';
-import { LighthouseService } from './lighthouse-service';
 import { FilecoinFirstService } from './filecoin-first-service';
 import { groveService } from '@/lib/sdk/grove/service';
 import { serverLogger } from '@/lib/utils/logger';
+
+const DEFAULT_IPFS_GATEWAY = 'https://api.grove.storage/ipfs';
 
 export interface IPFSUploadResult {
   success: boolean;
@@ -14,8 +15,6 @@ export interface IPFSUploadResult {
 }
 
 export interface IPFSConfig {
-  /** Optional paid mirror; uploads try Lens Grove first. */
-  lighthouseApiKey?: string;
   filecoinFirstApiKey?: string;
   gateway?: string;
   enableFilecoinArchival?: boolean;
@@ -25,6 +24,7 @@ export interface IPFSConfig {
 
 let fallbackHeliaInstance: Helia | null = null;
 let fallbackHeliaFs: UnixFS | null = null;
+let fallbackHeliaPromise: Promise<void> | null = null;
 
 function toUploadableFile(file: File | Blob, fallbackName = 'upload'): File {
   if (file instanceof File) return file;
@@ -43,38 +43,24 @@ function isLikelyIpfsCid(value: string): boolean {
 }
 
 export class IPFSService {
-  private lighthouseApiKey?: string;
   private filecoinFirstApiKey?: string;
   private enableFilecoinArchival: boolean;
   private gateway: string;
-  private lighthouseService?: LighthouseService;
   private filecoinFirstService?: FilecoinFirstService;
   private helia?: Helia;
   private fs?: UnixFS;
   private initialized = false;
 
   constructor(config: IPFSConfig) {
-    this.lighthouseApiKey = config.lighthouseApiKey;
     this.filecoinFirstApiKey = config.filecoinFirstApiKey;
     this.enableFilecoinArchival = config.enableFilecoinArchival ?? false;
-    this.gateway =
-      config.gateway ||
-      (config.lighthouseApiKey
-        ? 'https://gateway.lighthouse.storage/ipfs'
-        : 'https://w3s.link/ipfs');
+    this.gateway = config.gateway || DEFAULT_IPFS_GATEWAY;
 
     if (config.helia && config.fs) {
       this.helia = config.helia;
       this.fs = config.fs;
       this.initialized = true;
       serverLogger.debug('[IPFSService] Using Helia instance from context');
-    }
-
-    if (this.lighthouseApiKey) {
-      this.lighthouseService = new LighthouseService({
-        apiKey: this.lighthouseApiKey,
-        gateway: this.gateway,
-      });
     }
 
     if (this.filecoinFirstApiKey && this.enableFilecoinArchival) {
@@ -84,14 +70,22 @@ export class IPFSService {
     }
   }
 
-  /** Helia + native node-datachannel: load only when Grove/Lighthouse are insufficient (avoids SSR crash). */
+  /** Helia + native node-datachannel: load only when Grove is insufficient (avoids SSR crash). */
   private async initializeFallbackHelia(): Promise<void> {
     if (this.initialized && this.fs) {
       return;
     }
 
-    try {
-      if (!fallbackHeliaInstance) {
+    if (fallbackHeliaPromise) {
+      await fallbackHeliaPromise;
+      this.helia = fallbackHeliaInstance!;
+      this.fs = fallbackHeliaFs!;
+      this.initialized = true;
+      return;
+    }
+
+    fallbackHeliaPromise = (async () => {
+      try {
         serverLogger.debug('[IPFSService] Initializing fallback Helia (dynamic import)...');
         const [{ createNode }, { unixfs }] = await Promise.all([
           import('./helia-config'),
@@ -99,19 +93,22 @@ export class IPFSService {
         ]);
         fallbackHeliaInstance = await createNode();
         fallbackHeliaFs = unixfs(fallbackHeliaInstance);
+      } catch (error) {
+        fallbackHeliaPromise = null;
+        serverLogger.error('[IPFSService] Fallback Helia failed:', error);
+        throw error;
       }
-      this.helia = fallbackHeliaInstance;
-      this.fs = fallbackHeliaFs!;
-      this.initialized = true;
-      serverLogger.debug('[IPFSService] Fallback Helia ready');
-    } catch (error) {
-      serverLogger.error('[IPFSService] Fallback Helia failed:', error);
-      throw error;
-    }
+    })();
+
+    await fallbackHeliaPromise;
+    this.helia = fallbackHeliaInstance!;
+    this.fs = fallbackHeliaFs!;
+    this.initialized = true;
+    serverLogger.debug('[IPFSService] Fallback Helia ready');
   }
 
   /**
-   * Upload order: Lens Grove (primary) → Lighthouse (if API key) → Helia (context or dynamic fallback).
+   * Upload order: Lens Grove (primary) → Helia (context or dynamic fallback).
    */
   async uploadFile(
     file: File | Blob,
@@ -144,26 +141,6 @@ export class IPFSService {
       serverLogger.warn('[IPFSService] Grove upload failed:', err);
     }
 
-    if (this.lighthouseService) {
-      try {
-        const lighthouseResult = await this.lighthouseService.uploadFile(asFile);
-        if (lighthouseResult.success && lighthouseResult.hash) {
-          serverLogger.debug('[IPFSService] ✅ Lighthouse upload successful');
-          const finalHash = lighthouseResult.hash;
-          const finalUrl =
-            lighthouseResult.url || `${this.gateway}/${finalHash}`;
-          this.maybeFilecoinArchival(finalHash);
-          return { success: true, url: finalUrl, hash: finalHash };
-        }
-        serverLogger.warn(
-          '[IPFSService] Lighthouse upload failed:',
-          lighthouseResult.error
-        );
-      } catch (err) {
-        serverLogger.warn('[IPFSService] Lighthouse upload error:', err);
-      }
-    }
-
     if (this.fs) {
       return this.uploadViaHelia(asFile);
     }
@@ -174,7 +151,7 @@ export class IPFSService {
         return {
           success: false,
           error:
-            'IPFS upload failed: Grove and Lighthouse unavailable and Helia could not start.',
+            'IPFS upload failed: Grove unavailable and Helia could not start.',
         };
       }
       return this.uploadViaHelia(asFile);
@@ -182,7 +159,7 @@ export class IPFSService {
       return {
         success: false,
         error:
-          'IPFS upload failed after Grove/Lighthouse; Helia fallback could not load (native node may be missing on server).',
+          'IPFS upload failed after Grove; Helia fallback could not load (native node may be missing on server).',
       };
     }
   }
@@ -266,15 +243,10 @@ export class IPFSService {
   }
 }
 
-/** Default instance: Grove first; optional Lighthouse / Filecoin via env. */
+/** Default instance: Grove first; optional Filecoin archival via env. */
 export const ipfsService = new IPFSService({
-  lighthouseApiKey: process.env.NEXT_PUBLIC_LIGHTHOUSE_API_KEY,
   filecoinFirstApiKey: process.env.NEXT_PUBLIC_FILECOIN_FIRST_API_KEY,
   enableFilecoinArchival:
     process.env.NEXT_PUBLIC_ENABLE_FILECOIN_ARCHIVAL === 'true',
-  gateway:
-    process.env.NEXT_PUBLIC_IPFS_GATEWAY ||
-    (process.env.NEXT_PUBLIC_LIGHTHOUSE_API_KEY
-      ? 'https://gateway.lighthouse.storage/ipfs'
-      : 'https://w3s.link/ipfs'),
+  gateway: process.env.NEXT_PUBLIC_IPFS_GATEWAY || DEFAULT_IPFS_GATEWAY,
 });

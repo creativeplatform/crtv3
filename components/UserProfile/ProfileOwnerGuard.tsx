@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useUser, useSmartAccountClient } from "@account-kit/react";
+import { useUser, useSmartAccountClient } from "@/lib/wallet/react";
 import useModularAccount from "@/lib/hooks/accountkit/useModularAccount";
 import { isAddress } from "viem";
 import { logger } from "@/lib/utils/logger";

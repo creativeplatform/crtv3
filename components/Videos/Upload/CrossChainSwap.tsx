@@ -7,12 +7,13 @@ import {
     useSignAndSendPreparedCalls,
     useWaitForCallsStatus,
     useUser,
-} from "@account-kit/react";
+} from "@/lib/wallet/react";
+import { getEthBalance } from "@/lib/viem";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Loader2, ArrowRightLeft, CheckCircle, Wallet } from "lucide-react";
-import { toHex, parseUnits, formatUnits, formatEther, parseEther, type Address } from "viem";
+import { toHex, parseEther, formatEther, type Address } from "viem";
 import { logger } from '@/lib/utils/logger';
 
 
@@ -80,22 +81,20 @@ export function CrossChainSwap({ onSwapSuccess, requiredAmount, recipientAddress
 
     // Fetch ETH balance
     const fetchEthBalance = React.useCallback(async () => {
-        if (!client?.account.address) {
+        const addr = client?.account?.address ?? client?.scaAddress;
+        if (!addr) {
             setEthBalance(null);
             return;
         }
 
         try {
-            const balance = await client.getBalance({
-                address: client.account.address as Address,
-            });
-
+            const balance = await getEthBalance(addr);
             setEthBalance(formatEther(balance));
         } catch (err) {
             logger.error("Error fetching ETH balance:", err);
             setEthBalance(null);
         }
-    }, [client]);
+    }, [client?.scaAddress, client?.account?.address]);
 
     // Fetch balance on mount and when address changes
     React.useEffect(() => {
@@ -103,7 +102,8 @@ export function CrossChainSwap({ onSwapSuccess, requiredAmount, recipientAddress
     }, [fetchEthBalance]);
 
     const handleRequestQuote = async () => {
-        if (!client?.account.address) return;
+        const addr = client?.account?.address ?? client?.scaAddress;
+        if (!addr) return;
         setError(null);
         setQuote(null);
         setIsCheckingBalance(true);
@@ -112,9 +112,7 @@ export function CrossChainSwap({ onSwapSuccess, requiredAmount, recipientAddress
 
         try {
             // First, check ETH balance
-            const balance = await client.getBalance({
-                address: client.account.address as Address,
-            });
+            const balance = await getEthBalance(addr);
 
             balanceFormatted = formatEther(balance);
             setEthBalance(balanceFormatted);
@@ -137,10 +135,10 @@ export function CrossChainSwap({ onSwapSuccess, requiredAmount, recipientAddress
 
             // Determine recipient address priority: Prop > Env Var > Client Address
             const storyFundingWallet = process.env.NEXT_PUBLIC_STORY_FUNDING_WALLET_ADDRESS;
-            const targetRecipient = propRecipientAddress || storyFundingWallet || client.account.address;
+            const targetRecipient = propRecipientAddress || storyFundingWallet || addr;
 
             const swapParams: any = {
-                from: client.account.address,
+                from: addr,
                 fromToken: TOKENS.NATIVE, // ETH on Base (native token)
                 toChainId: toHex(targetChainId),
                 toToken: storyTokenAddress, // Native IP token on Story Protocol
@@ -155,13 +153,20 @@ export function CrossChainSwap({ onSwapSuccess, requiredAmount, recipientAddress
             };
 
             // If target recipient is different from sender, try to use it
-            if (targetRecipient && targetRecipient.toLowerCase() !== client.account.address.toLowerCase()) {
+            if (targetRecipient && targetRecipient.toLowerCase() !== addr.toLowerCase()) {
                 logger.debug("🎯 Using custom recipient address for swap:", targetRecipient);
                 // Try standard 'to' parameter (API specific support)
                 swapParams.to = targetRecipient;
             }
 
-            const result = await prepareSwapAsync(swapParams);
+            const result = await prepareSwapAsync(swapParams) as {
+                quote: { minimumToAmount?: string | bigint };
+                [key: string]: unknown;
+            } | null | undefined;
+
+            if (!result) {
+                throw new Error("Failed to prepare swap: no result returned");
+            }
 
             const { quote: swapQuote, ...calls } = result;
 
@@ -172,7 +177,10 @@ export function CrossChainSwap({ onSwapSuccess, requiredAmount, recipientAddress
             });
 
             if (swapQuote.minimumToAmount) {
-                const rawAmount = BigInt(swapQuote.minimumToAmount);
+                const rawAmount =
+                    typeof swapQuote.minimumToAmount === "bigint"
+                        ? swapQuote.minimumToAmount
+                        : BigInt(swapQuote.minimumToAmount);
                 const formattedAmount = formatEther(rawAmount);
                 const ipAmount = parseFloat(formattedAmount);
 
@@ -247,8 +255,10 @@ export function CrossChainSwap({ onSwapSuccess, requiredAmount, recipientAddress
 
     // Determine which address gets the funds for display text
     const storyFundingWallet = process.env.NEXT_PUBLIC_STORY_FUNDING_WALLET_ADDRESS;
-    const targetRecipient = propRecipientAddress || storyFundingWallet || client?.account?.address;
-    const isUsingFundingWallet = targetRecipient && client?.account?.address && targetRecipient.toLowerCase() !== client.account.address.toLowerCase();
+    const clientAddr = client?.account?.address ?? client?.scaAddress;
+    const targetRecipient = propRecipientAddress || storyFundingWallet || clientAddr;
+    const isUsingFundingWallet =
+        targetRecipient && clientAddr && targetRecipient.toLowerCase() !== clientAddr.toLowerCase();
 
     return (
         <Card className="w-full">

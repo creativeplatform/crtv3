@@ -1,5 +1,5 @@
 import useModularAccount from "./useModularAccount";
-import { useAccount } from "@account-kit/react";
+import { useAccount } from "@/lib/wallet/react";
 
 /**
  * Returns the best available wallet address (SCA or EOA) and its type.

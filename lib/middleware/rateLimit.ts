@@ -197,6 +197,26 @@ export const rateLimiters = {
       windowMs: 60 * 1000,
     }),
 
+  /** Playback grids burst many IDs on one page view */
+  playbackInfo: (request: NextRequest) =>
+    rateLimit(request, {
+      maxRequests: process.env.NODE_ENV === 'development' ? 200 : 100,
+      windowMs: 60 * 1000,
+      errorMessage: 'Too many playback info requests. Please try again shortly.',
+    }),
+
+  /**
+   * View increments: namespaced by route so shared `standard` traffic cannot
+   * exhaust this bucket (false 429s on legitimate plays).
+   */
+  viewIncrement: (request: NextRequest) =>
+    rateLimit(request, {
+      maxRequests: 30,
+      windowMs: 60 * 1000,
+      keyGenerator: (req) => `view-increment:${getClientIp(req)}`,
+      errorMessage: 'Too many view increments. Please try again shortly.',
+    }),
+
   /** API key-based rate limiter: 100 requests per minute */
   apiKey: (request: NextRequest, apiKey: string) =>
     rateLimit(request, {

@@ -1,0 +1,186 @@
+{
+  "status": "SUCCESS",
+  "data": {
+    "event": {
+      "type": "FOOTBALL_EVENT",
+      "id": "world-cup-2026",
+      "title": "World Cup 2026",
+      "description": "FIFA 2026 World Cup watch markets, team support, and live match activity.",
+      "icon": "https://media.orbapi.xyz/thumbnailDimension256/https://gw.ipfs-lens.dev/ipfs/QmV9idy4hhK9XyNDTf3XJCypkJaUABTU8gciTpA5rGtYJ1",
+      "background": "https://api.grove.storage/5f12a73e13fb0a7f55f4b4d9188c37ffafa53a179bf0cf927a3583a5308fd15a",
+      "startDate": "2026-06-11",
+      "endDate": "2026-07-19",
+      "dateLabel": "11 Jun 2026 - 19 Jul 2026",
+      "location": "United States & Mexico",
+      "provider": {
+        "id": "polymarket",
+        "label": "Polymarket"
+      }
+    },
+    "categories": [
+      "games",
+      "table",
+      "teams"
+    ],
+    "category": "games",
+    "items": [
+      {
+        "id": "2026-06-11",
+        "title": "11 June",
+        "date": "2026-06-11",
+        "games": [
+          {
+            "type": "FOOTBALL_GAME",
+            "id": "world-cup-2026-001",
+            "title": "Mexico vs South Africa",
+            "stage": "Group A",
+            "status": "scheduled",
+            "period": "pre",
+            "clock": {
+              "label": null,
+              "minute": null,
+              "addedMinutes": null,
+              "periodStartedAt": null
+            },
+            "finishType": null,
+            "kickoffTimestamp": 1781204400000,
+            "image": "https://api.grove.storage/ecc289d8a488cf5c07c678329c98f8841b4945e13535634bb4b65d0a6039258e",
+            "homeTeam": {
+              "type": "FOOTBALL_TEAM",
+              "id": "mex",
+              "code": "MEX",
+              "name": "Mexico",
+              "country": "Mexico",
+              "tag": "#mex26",
+              "flag": "https://api.grove.storage/eafd59b31f2d2616b5af26be39235ab5e1871ef20931807ed54456130cc11f23",
+              "icon": "https://api.grove.storage/eafd59b31f2d2616b5af26be39235ab5e1871ef20931807ed54456130cc11f23",
+              "supportersCount": 4,
+              "friendsCount": 0,
+              "isMyTeam": true,
+              "options": [
+                {
+                  "id": "mex",
+                  "kind": "HOME",
+                  "label": "MEX",
+                  "longLabel": "Mexico Win",
+                  "marketId": null,
+                  "clobTokenId": "111",
+                  "conditionId": "0xc1",
+                  "price": 0.68,
+                  "probability": 68,
+                  "tickSize": "0.001",
+                  "negativeRisk": false
+                }
+              ],
+              "events": [],
+              "friends": []
+            },
+            "awayTeam": {
+              "type": "FOOTBALL_TEAM",
+              "id": "rsa",
+              "code": "RSA",
+              "name": "South Africa",
+              "country": "South Africa",
+              "tag": "#rsa26",
+              "flag": "https://api.grove.storage/3893e3956b4e03a8737f42aceadbd156d6c1b2398cd7c52b90d5ccff89ff8018",
+              "icon": "https://api.grove.storage/3893e3956b4e03a8737f42aceadbd156d6c1b2398cd7c52b90d5ccff89ff8018",
+              "supportersCount": 2,
+              "friendsCount": 0,
+              "isMyTeam": false,
+              "options": [
+                {
+                  "id": "rsa",
+                  "kind": "AWAY",
+                  "label": "RSA",
+                  "longLabel": "South Africa Win",
+                  "marketId": null,
+                  "clobTokenId": "333",
+                  "conditionId": "0xc3",
+                  "price": 0.12,
+                  "probability": 12,
+                  "tickSize": "0.001",
+                  "negativeRisk": false
+                }
+              ],
+              "events": [],
+              "friends": []
+            },
+            "score": {
+              "home": 0,
+              "away": 0,
+              "penalties": null
+            },
+            "shootout": null,
+            "volumeUsd": 0,
+            "volumeLabel": ""
+          }
+        ]
+      },
+      {
+        "id": "2026-06-28",
+        "title": "28 June",
+        "date": "2026-06-28",
+        "games": [
+          {
+            "type": "FOOTBALL_GAME",
+            "id": "world-cup-2026-073",
+            "title": "TBD vs TBD",
+            "stage": "Round of 32",
+            "status": "scheduled",
+            "period": "pre",
+            "clock": {
+              "label": null,
+              "minute": null,
+              "addedMinutes": null,
+              "periodStartedAt": null
+            },
+            "finishType": null,
+            "kickoffTimestamp": 1782673200000,
+            "image": "https://api.grove.storage/ecc289d8a488cf5c07c678329c98f8841b4945e13535634bb4b65d0a6039258e",
+            "homeTeam": {
+              "type": "FOOTBALL_TEAM",
+              "id": "tbd",
+              "code": "TBD",
+              "name": "TBD",
+              "country": "TBD",
+              "tag": "#tbd26",
+              "flag": "",
+              "icon": "",
+              "supportersCount": 0,
+              "friendsCount": 0,
+              "isMyTeam": false,
+              "options": [],
+              "events": [],
+              "friends": []
+            },
+            "awayTeam": {
+              "type": "FOOTBALL_TEAM",
+              "id": "tbd",
+              "code": "TBD",
+              "name": "TBD",
+              "country": "TBD",
+              "tag": "#tbd26",
+              "flag": "",
+              "icon": "",
+              "supportersCount": 0,
+              "friendsCount": 0,
+              "isMyTeam": false,
+              "options": [],
+              "events": [],
+              "friends": []
+            },
+            "score": {
+              "home": 0,
+              "away": 0,
+              "penalties": null
+            },
+            "shootout": null,
+            "volumeUsd": 0,
+            "volumeLabel": ""
+          }
+        ]
+      }
+    ],
+    "tables": []
+  }
+}

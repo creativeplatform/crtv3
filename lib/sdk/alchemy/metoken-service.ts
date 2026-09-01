@@ -3,6 +3,7 @@ import { createPublicClient, createWalletClient, http, parseEther, formatEther, 
 import { baseMainnet } from "@/lib/utils/chains/base";
 import { privateKeyToAccount } from "viem/accounts";
 import { serverLogger } from "@/lib/utils/logger";
+import { METOKEN_DIAMOND_BASE, METOKEN_FACTORY_BASE } from '@/lib/contracts/metokens/deployments';
 
 // Alchemy SDK configuration
 const alchemyConfig = {
@@ -14,8 +15,8 @@ export const alchemy = new Alchemy(alchemyConfig);
 
 // Contract addresses for Base mainnet
 export const METOKEN_CONTRACTS = {
-  DIAMOND: '0xba5502db2aC2cBff189965e991C07109B14eB3f5' as const,
-  FACTORY: '0xb31Ae2583d983faa7D8C8304e6A16E414e721A0B' as const,
+  DIAMOND: METOKEN_DIAMOND_BASE,
+  FACTORY: METOKEN_FACTORY_BASE,
   DAI: '0x50c5725949a6f0c72e6c4a641f24049a917db0cb' as const,
 } as const;
 

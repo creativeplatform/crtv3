@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { useSmartAccountClient, useUser, useAuthModal } from "@account-kit/react";
+import { useSmartAccountClient, useUser, useAuthModal } from "@/lib/wallet/react";
 import { getBuyArgs, getSellArgs, getQuote } from "@/app/actions/paragraph";
 import { parseEther, encodeFunctionData, parseAbi, formatEther } from "viem";
 import { Loader2, ArrowRightLeft } from "lucide-react";

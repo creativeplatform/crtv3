@@ -1,4 +1,4 @@
-import { PublicClient, mainnet, testnet, type SessionClient } from '@lens-protocol/client';
+import { PublicClient, type SessionClient } from '@lens-protocol/client';
 import {
   CredentialsStorage,
   InMemoryStorageProvider,
@@ -6,10 +6,7 @@ import {
 import type { AccessToken, IdToken, RefreshToken } from '@lens-protocol/types';
 import type { StoredOrbSession } from '@/lib/sdk/orb/login';
 import { isStaleOrbSessionError } from '@/lib/sdk/orb/session-errors';
-
-function getLensEnvironment() {
-  return process.env.NEXT_PUBLIC_LENS_ENV === 'production' ? mainnet : testnet;
-}
+import { getLensSdkEnvironment } from '@/lib/sdk/lens/create-client';
 
 const sessionCache = new Map<string, Promise<SessionClient>>();
 
@@ -38,7 +35,7 @@ export async function resumeLensSessionFromOrb(
   if (cached) return cached;
 
   const sessionPromise = (async () => {
-    const environment = getLensEnvironment();
+    const environment = getLensSdkEnvironment();
     const storageProvider = new InMemoryStorageProvider();
     const publicClient = PublicClient.create({
       environment,

@@ -12,7 +12,7 @@
  */
 
 import { useCallback, useEffect, useRef } from "react";
-import { useSignMessage, useSmartAccountClient, useUser } from "@account-kit/react";
+import { useSignMessage, useUser } from "@/lib/wallet/react";
 import useModularAccount from "@/lib/hooks/accountkit/useModularAccount";
 import { logger } from "@/lib/utils/logger";
 
@@ -41,9 +41,8 @@ function buildMessage(address: string, timestamp: number): string {
 
 export function useWalletAuth() {
   const user = useUser();
-  const { smartAccountClient, address: smartAccountAddress } = useModularAccount();
-  const { client: fallbackClient } = useSmartAccountClient({});
-  const accountClient = smartAccountClient || fallbackClient;
+  const { smartAccountClient: accountClient, address: smartAccountAddress } =
+    useModularAccount();
   const address = (smartAccountAddress || user?.address || "").toLowerCase();
 
   const cacheRef = useRef<AuthCache | null>(null);

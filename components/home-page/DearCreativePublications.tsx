@@ -5,7 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { NewsletterModal } from "./NewsletterModal";
 import { getPublicationPosts, getSubscriberCount, getCoinData } from "@/app/actions/paragraph";
-import { useUser } from "@account-kit/react";
+import { useUser } from "@/lib/wallet/react";
 import { Newspaper } from "lucide-react";
 import { logger } from '@/lib/utils/logger';
 

@@ -66,7 +66,7 @@ export function useMarketData(options: UseMarketDataOptions = {}): UseMarketData
   });
   const [currentPage, setCurrentPage] = useState(0);
 
-  const fetchMarketData = useCallback(async (isBackground = false) => {
+  const fetchMarketData = useCallback(async (isBackground = false, useFresh = false) => {
     if (!isBackground) {
       setLoading(true);
       setError(null);
@@ -83,7 +83,14 @@ export function useMarketData(options: UseMarketDataOptions = {}): UseMarketData
         includeStats: 'true',
       });
 
-      const response = await fetch(`/api/market/tokens?${params.toString()}`);
+      if (useFresh) {
+        params.set('fresh', 'true');
+        params.set('_t', Date.now().toString());
+      }
+
+      const response = await fetch(`/api/market/tokens?${params.toString()}`, {
+        cache: useFresh ? 'no-store' : 'default',
+      });
 
       if (!response.ok) {
         throw new Error(`Failed to fetch market data: ${response.statusText}`);
@@ -180,7 +187,7 @@ export function useMarketData(options: UseMarketDataOptions = {}): UseMarketData
   }, []);
 
   const refresh = useCallback(async () => {
-    await fetchMarketData();
+    await fetchMarketData(false, true);
   }, [fetchMarketData]);
 
   // Debounce ref for global refresh
@@ -214,9 +221,8 @@ export function useMarketData(options: UseMarketDataOptions = {}): UseMarketData
 
       globalRefreshTimeoutRef.current = setTimeout(() => {
         logger.debug('⚡ Triggering global market data refresh from real-time event');
-        // Pass true to indicate this is a background refresh (no loading spinner)
-        fetchMarketData(true);
-      }, 5000); // 5 second debounce
+        fetchMarketData(true, true);
+      }, 2000);
 
     } catch (error) {
       logger.error('Failed to fetch fresh token data:', error);

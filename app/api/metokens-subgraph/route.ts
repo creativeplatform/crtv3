@@ -1,154 +1,139 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { checkBotId } from 'botid/server';
 import { serverLogger } from '@/lib/utils/logger';
 import { rateLimiters } from '@/lib/middleware/rateLimit';
-
-// MeTokens subgraph endpoint - now using Goldsky
-// Deployment ID: QmVaWYhk4HKhk9rNQi11RKujTVS4KHF1uHGNVUF4f7xJ53
-const DEFAULT_PROJECT_ID = 'project_cmh0iv6s500dbw2p22vsxcfo6';
-const PROJECT_ID = process.env.GOLDSKY_PROJECT_ID || DEFAULT_PROJECT_ID;
-
-const getSubgraphUrl = (subgraphName: string, version: string, specificAccessType?: 'public' | 'private') => {
-  const isPrivate = !!process.env.GOLDSKY_API_KEY;
-  const accessType = specificAccessType || (isPrivate ? 'private' : 'public');
-  return `https://api.goldsky.com/api/${accessType}/${PROJECT_ID}/subgraphs/${subgraphName}/${version}/gn`;
-};
-
-type ProviderMode = 'goldsky' | 'studio' | 'dual';
-
-const getProviderMode = (): ProviderMode => {
-  const rawMode = process.env.SUBGRAPH_PROVIDER_MODE?.toLowerCase();
-  if (rawMode === 'studio' || rawMode === 'dual' || rawMode === 'goldsky') return rawMode;
-  return 'goldsky';
-};
-
-const getStudioUrl = () => process.env.GRAPH_STUDIO_CREATIVE_PLATFORM_URL;
+import {
+  asGraphQlRequestBody,
+  buildSubgraphRequestHeaders,
+  formatGraphQlErrors,
+  getGraphQlResponseErrors,
+  getSubgraphProviderMode,
+  GOLDSKY_ROLLBACK_HINT,
+  isGraphQlResponseSuccessful,
+  resolveSubgraphEndpoints,
+  STUDIO_URL_HINT,
+} from '@/lib/subgraph/creative-platform-proxy';
 
 export async function POST(request: NextRequest) {
-  const verification = await checkBotId();
-  if (verification.isBot) {
-    return NextResponse.json({ error: 'Access denied' }, { status: 403 });
-  }
   const rl = await rateLimiters.generous(request);
   if (rl) return rl;
 
-  // Read body once at the start so we can reuse it in error handlers
-  let body: any;
+  let body: unknown;
   try {
     body = await request.json();
-  } catch (parseError) {
+  } catch {
     return NextResponse.json(
       {
         error: 'Invalid Request Body',
         message: 'Failed to parse request body as JSON',
       },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
   try {
+    const bodyObj = asGraphQlRequestBody(body);
     serverLogger.debug('Subgraph proxy received request:', {
-      query: body.query?.substring(0, 100) + '...',
-      variables: body.variables,
+      query: bodyObj.query?.substring(0, 100) + '...',
+      variables: bodyObj.variables,
+      providerMode: getSubgraphProviderMode(),
     });
 
-    const providerMode = getProviderMode();
-    const studioEndpoint = getStudioUrl();
+    const candidateEndpoints = resolveSubgraphEndpoints('metokens');
 
-    // Determine Goldsky endpoints
-    const isPrivate = !!process.env.GOLDSKY_API_KEY;
-    const privateEndpoint = getSubgraphUrl('metokens', '1.0.2', 'private');
-    const publicEndpoint = getSubgraphUrl('metokens', '1.0.2', 'public');
-    const goldskyPrimary = isPrivate ? privateEndpoint : publicEndpoint;
-
-    const candidateEndpoints: string[] = [];
-    if (providerMode === 'studio' || providerMode === 'dual') {
-      if (studioEndpoint) candidateEndpoints.push(studioEndpoint);
-    }
-    if (providerMode === 'goldsky' || providerMode === 'dual' || !studioEndpoint) {
-      candidateEndpoints.push(goldskyPrimary);
-    }
-    if (isPrivate) candidateEndpoints.push(publicEndpoint);
-
-    // Prepare headers
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-    };
-
-    if (isPrivate && process.env.GOLDSKY_API_KEY) {
-      headers['Authorization'] = `Bearer ${process.env.GOLDSKY_API_KEY}`;
+    if (candidateEndpoints.length === 0) {
+      return NextResponse.json(
+        {
+          error: 'MeTokens Subgraph Not Configured',
+          hint: STUDIO_URL_HINT,
+        },
+        { status: 503 },
+      );
     }
 
-    // Helper to perform fetch
-    const performFetch = async (url: string, headers: Record<string, string>) => {
-      return fetch(url, {
+    let lastHttpError: { status: number; details: string; endpoint: string } | null = null;
+    let lastGraphQlError: { message: string; endpoint: string } | null = null;
+
+    for (const endpoint of candidateEndpoints) {
+      const headers = buildSubgraphRequestHeaders(endpoint);
+      serverLogger.debug(`Forwarding MeTokens query to endpoint: ${endpoint}`);
+
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers,
         body: JSON.stringify(body),
       });
-    };
 
-    if (candidateEndpoints.length === 0) {
-      throw new Error('No subgraph endpoints configured. Set GRAPH_STUDIO_CREATIVE_PLATFORM_URL or Goldsky variables.');
-    }
-
-    let response: Response | null = null;
-    let subgraphEndpoint = '';
-
-    for (const endpoint of candidateEndpoints) {
-      subgraphEndpoint = endpoint;
-      const endpointHeaders = endpoint.includes('goldsky.com') ? headers : { 'Content-Type': 'application/json' };
-      if (!endpoint.includes('goldsky.com') && endpointHeaders['Authorization']) {
-        delete endpointHeaders['Authorization'];
+      if (!response.ok) {
+        const errorText = await response.text();
+        lastHttpError = { status: response.status, details: errorText, endpoint };
+        serverLogger.error('MeTokens subgraph HTTP error:', lastHttpError);
+        continue;
       }
-      response = await performFetch(endpoint, endpointHeaders);
-      if (response.ok) break;
-    }
 
-    if (!response) throw new Error('No subgraph endpoint available');
+      let data: unknown;
+      try {
+        data = await response.json();
+      } catch (jsonError) {
+        lastHttpError = {
+          status: response.status,
+          details: 'Failed to parse JSON response',
+          endpoint,
+        };
+        serverLogger.error('MeTokens subgraph JSON parse error:', jsonError);
+        continue;
+      }
 
+      if (!isGraphQlResponseSuccessful(data)) {
+        const message = formatGraphQlErrors(getGraphQlResponseErrors(data));
+        lastGraphQlError = { message, endpoint };
+        serverLogger.error('MeTokens subgraph GraphQL error:', { endpoint, message });
+        continue;
+      }
 
-    serverLogger.debug('Subgraph response status:', response.status);
+      const payload = data as { data: Record<string, unknown> };
 
-    if (!response.ok) {
-      // Use stored error text if available, otherwise read from response
-      const errorText = await response.text();
-      serverLogger.error('Subgraph request failed:', {
-        status: response.status,
-        statusText: response.statusText,
-        error: errorText,
+      serverLogger.debug('Subgraph query successful:', {
+        endpoint,
+        dataKeys: payload.data ? Object.keys(payload.data) : [],
       });
 
+      return NextResponse.json(data);
+    }
+
+    if (lastGraphQlError) {
+      const isDeploymentMissing = lastGraphQlError.message.toLowerCase().includes('does not exist');
       return NextResponse.json(
         {
-          error: 'Subgraph Query Failed',
-          details: errorText,
-          status: response.status,
-          hint: response.status === 404
-            ? 'Subgraph not found. Verify Studio URL or Goldsky deployment details.'
-            : response.status === 429
-              ? 'Rate limit exceeded. Please try again later.'
-              : 'Subgraph server error.',
+          errors: [{ message: lastGraphQlError.message }],
+          hint: isDeploymentMissing
+            ? `${STUDIO_URL_HINT} ${GOLDSKY_ROLLBACK_HINT}`
+            : 'Subgraph query failed. Verify Graph Studio deployment is synced.',
         },
-        { status: response.status }
+        { status: 502 },
       );
     }
 
-    const data = await response.json();
-
-    // Check for GraphQL errors in the response
-    if (data.errors && data.errors.length > 0) {
-      serverLogger.error('GraphQL errors in response:', data.errors);
-      return NextResponse.json(data); // Return errors to client
+    if (lastHttpError) {
+      return NextResponse.json(
+        {
+          error: 'Subgraph Query Failed',
+          details: lastHttpError.details,
+          status: lastHttpError.status,
+          hint:
+            lastHttpError.status === 404
+              ? STUDIO_URL_HINT
+              : lastHttpError.status === 429
+                ? 'Rate limit exceeded. Please try again later.'
+                : 'Subgraph server error.',
+        },
+        { status: lastHttpError.status },
+      );
     }
 
-    serverLogger.debug('Subgraph query successful:', {
-      hasData: !!data.data,
-      dataKeys: data.data ? Object.keys(data.data) : [],
-    });
-
-    return NextResponse.json(data);
-
+    return NextResponse.json(
+      { error: 'No subgraph endpoint available', hint: STUDIO_URL_HINT },
+      { status: 503 },
+    );
   } catch (error) {
     serverLogger.error('Error proxying subgraph request:', error);
 
@@ -156,14 +141,13 @@ export async function POST(request: NextRequest) {
       {
         error: 'Internal Server Error',
         message: error instanceof Error ? error.message : 'Unknown error',
-        hint: 'Check server logs for more details. Using Goldsky (Deployment ID: QmVaWYhk4HKhk9rNQi11RKujTVS4KHF1uHGNVUF4f7xJ53).',
+        hint: STUDIO_URL_HINT,
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
 
-// Handle preflight requests for CORS
 export async function OPTIONS() {
   return new NextResponse(null, {
     status: 200,

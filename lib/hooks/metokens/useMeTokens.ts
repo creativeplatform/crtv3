@@ -1,15 +1,17 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useUser, useSendUserOperation, useSmartAccountClient } from '@account-kit/react';
+import { useUser, useSendUserOperation, useSmartAccountClient } from '@/lib/wallet/react';
 import { useGasSponsorship } from "@/lib/hooks/wallet/useGasSponsorship";
 import { parseEther, formatEther, encodeFunctionData } from 'viem';
 import { meTokensSubgraph, MeToken } from '@/lib/sdk/metokens/subgraph';
 import { logger } from '@/lib/utils/logger';
 import { appendBuilderCode } from "@/lib/utils/builder-code";
-
+import { METOKEN_DIAMOND_BASE, METOKEN_FACTORY_BASE } from '@/lib/contracts/metokens/deployments';
+import { publicClient } from '@/lib/viem';
+import { calculateMeTokenVaultTvlUsd } from '@/lib/utils/hubAssetUtils';
 
 // MeTokens contract addresses on Base
-const METOKEN_FACTORY = '0xb31Ae2583d983faa7D8C8304e6A16E414e721A0B';
-const DIAMOND = '0xba5502db2aC2cBff189965e991C07109B14eB3f5';
+const METOKEN_FACTORY = METOKEN_FACTORY_BASE;
+const DIAMOND = METOKEN_DIAMOND_BASE;
 
 // ABI for MeToken Factory
 const METOKEN_FACTORY_ABI = [
@@ -363,7 +365,7 @@ export function useMeTokens() {
       for (const meToken of meTokens) {
         try {
           // Get MeToken info from Diamond contract
-          const info = await client.readContract({
+          const info = await publicClient.readContract({
             address: DIAMOND,
             abi: DIAMOND_ABI,
             functionName: 'getMeTokenInfo',
@@ -373,25 +375,25 @@ export function useMeTokens() {
           // Check if this MeToken belongs to the current user
           if (info && info.owner.toLowerCase() === address.toLowerCase()) {
             // Get ERC20 token info
-            const name = await client.readContract({
+            const name = await publicClient.readContract({
               address: meToken.id as `0x${string}`,
               abi: ERC20_ABI,
               functionName: 'name',
             }) as string;
 
-            const symbol = await client.readContract({
+            const symbol = await publicClient.readContract({
               address: meToken.id as `0x${string}`,
               abi: ERC20_ABI,
               functionName: 'symbol',
             }) as string;
 
-            const totalSupply = await client.readContract({
+            const totalSupply = await publicClient.readContract({
               address: meToken.id as `0x${string}`,
               abi: ERC20_ABI,
               functionName: 'totalSupply',
             }) as bigint;
 
-            const balance = await client.readContract({
+            const balance = await publicClient.readContract({
               address: meToken.id as `0x${string}`,
               abi: ERC20_ABI,
               functionName: 'balanceOf',
@@ -540,11 +542,13 @@ export function useMeTokens() {
     }
   };
 
-  // Calculate TVL
+  // Calculate TVL using hub collateral decimals (USDC=6; DAI/USDS/GHO=18)
   const calculateTVL = (info: MeTokenInfo): number => {
-    const totalBalance = info.balancePooled + info.balanceLocked;
-    // Convert from wei to ether and assume 1:1 with USD for DAI
-    return parseFloat(formatEther(totalBalance));
+    return calculateMeTokenVaultTvlUsd(
+      info.balancePooled,
+      info.balanceLocked,
+      Number(info.hubId)
+    );
   };
 
   // Check for a specific MeToken by address (useful for newly created MeTokens)
@@ -553,7 +557,7 @@ export function useMeTokens() {
 
     try {
       // Get MeToken info from Diamond contract
-      const info = await client.readContract({
+      const info = await publicClient.readContract({
         address: DIAMOND,
         abi: DIAMOND_ABI,
         functionName: 'getMeTokenInfo',
@@ -563,25 +567,25 @@ export function useMeTokens() {
       // Check if this MeToken belongs to the current user
       if (info && info.owner.toLowerCase() === address.toLowerCase()) {
         // Get ERC20 token info
-        const name = await client.readContract({
+        const name = await publicClient.readContract({
           address: meTokenAddress as `0x${string}`,
           abi: ERC20_ABI,
           functionName: 'name',
         }) as string;
 
-        const symbol = await client.readContract({
+        const symbol = await publicClient.readContract({
           address: meTokenAddress as `0x${string}`,
           abi: ERC20_ABI,
           functionName: 'symbol',
         }) as string;
 
-        const totalSupply = await client.readContract({
+        const totalSupply = await publicClient.readContract({
           address: meTokenAddress as `0x${string}`,
           abi: ERC20_ABI,
           functionName: 'totalSupply',
         }) as bigint;
 
-        const balance = await client.readContract({
+        const balance = await publicClient.readContract({
           address: meTokenAddress as `0x${string}`,
           abi: ERC20_ABI,
           functionName: 'balanceOf',
@@ -676,7 +680,7 @@ export function useMeTokens() {
     try {
       if (!client) return '0';
 
-      const result = await client.readContract({
+      const result = await publicClient.readContract({
         address: DIAMOND,
         abi: DIAMOND_ABI,
         functionName: 'calculateMeTokensMinted',
@@ -695,7 +699,7 @@ export function useMeTokens() {
     try {
       if (!client || !address) return '0';
 
-      const result = await client.readContract({
+      const result = await publicClient.readContract({
         address: DIAMOND,
         abi: DIAMOND_ABI,
         functionName: 'calculateAssetsReturned',

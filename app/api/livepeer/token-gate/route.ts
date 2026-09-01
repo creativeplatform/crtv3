@@ -1,7 +1,7 @@
 "use server";
 
 import { NextRequest, NextResponse } from "next/server";
-import { checkBotId } from "botid/server";
+import { checkBotIdDeep } from "@/lib/middleware/botIdGuard";
 import { createPublicClient, Address } from "viem";
 import { alchemy, base } from "@account-kit/infra";
 import type { Chain } from "viem";
@@ -43,7 +43,7 @@ export interface WebhookContext {
 }
 
 export async function POST(request: NextRequest) {
-  const verification = await checkBotId();
+  const verification = await checkBotIdDeep();
   if (verification.isBot) {
     return NextResponse.json({ error: "Access denied" }, { status: 403 });
   }

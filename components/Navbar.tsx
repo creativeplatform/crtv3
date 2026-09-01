@@ -4,7 +4,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import Image from "next/image";
 import { useState, useEffect, useRef } from "react";
-import { createPortal } from "react-dom";
 import {
   SITE_LOGO,
   SITE_NAME,
@@ -15,10 +14,9 @@ import { HydrationSafe } from "@/components/ui/hydration-safe";
 import { Button } from "@/components/ui/button"; // Corrected import
 import {
   useAuthModal,
-  useLogout,
   useUser,
   useChain,
-} from "@account-kit/react";
+} from "@/lib/wallet/react";
 import ThemeToggleComponent from "./ThemeToggle/toggleComponent";
 import { toast } from "sonner";
 import { CheckIcon } from "@radix-ui/react-icons";
@@ -36,7 +34,6 @@ import {
   RadioTower,
   Bot,
   ShieldUser,
-  Music2,
   TrendingUp,
 } from "lucide-react";
 import type { User as AccountUser } from "@account-kit/signer";
@@ -50,11 +47,9 @@ import {
   type AccountDropdownHandle,
 } from "@/components/account-dropdown/AccountDropdown";
 import { MobileOrbSection } from "@/components/account-dropdown/MobileOrbSection";
-import { useOrbSession } from "@/context/OrbSessionContext";
 import { useUnifiedLogout } from "@/hooks/useUnifiedLogout";
-import { resetAppSession } from "@/lib/auth/session-recovery";
 import { shortenAddress } from "@/lib/utils/utils";
-import { useMembershipVerification } from "@/lib/hooks/unlock/useMembershipVerification";
+import { useMembershipContext } from "@/lib/context/MembershipContext";
 import { useMeTokensSupabase } from "@/lib/hooks/metokens/useMeTokensSupabase";
 import { useMeTokenHoldings } from "@/lib/hooks/metokens/useMeTokenHoldings";
 import { MembershipSection } from "./account-dropdown/MembershipSection";
@@ -65,6 +60,19 @@ import { logger } from '@/lib/utils/logger';
 import { AnimatedMenuIcon } from "@/components/navbar/AnimatedMenuIcon";
 import { CreativePlatformAppsDrawer } from "@/components/navbar/CreativePlatformAppsDrawer";
 import { navIconButtonProps } from "@/components/navbar/navButtonStyles";
+import {
+  hasAnyValidPass,
+  hasValidBrandPass,
+  hasValidCreatorPass,
+} from "@/lib/access/creator-membership";
+import {
+  Sheet,
+  SheetClose,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 
 type UseUserResult = (AccountUser & { type: "eoa" | "sca" }) | null;
 
@@ -160,9 +168,7 @@ function NetworkStatus({ isConnected }: { isConnected: boolean }) {
 export default function Navbar() {
   const { openAuthModal } = useAuthModal();
   const user = useUser();
-  const { logout: walletLogout } = useLogout();
   const unifiedLogout = useUnifiedLogout();
-  const { logout: orbLogout } = useOrbSession();
   const { chain: currentChain, setChain, isSettingChain } = useChain();
   const {
     primaryAddress,
@@ -172,7 +178,11 @@ export default function Navbar() {
     client: smartAccountClient,
   } = useSmartWalletDisplayAddress();
   const [isNetworkConnected, setIsNetworkConnected] = useState(true);
-  const { isVerified, hasMembership } = useMembershipVerification();
+  const {
+    isVerified,
+    hasMembership,
+    membershipDetails,
+  } = useMembershipContext();
 
   // Check for MeTokens to conditionally render the section
   const { userMeToken, loading: meTokenLoading } = useMeTokensSupabase();
@@ -181,19 +191,19 @@ export default function Navbar() {
   const shouldShowMetokens = hasMetokens || meTokenLoading || holdingsLoading;
 
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [isMounted, setIsMounted] = useState(false);
   const pathname = usePathname();
   const accountDropdownRef = useRef<AccountDropdownHandle>(null);
   const [copySuccess, setCopySuccess] = useState(false);
 
   useEffect(() => {
-    setIsMounted(true);
-  }, []);
-
-  useEffect(() => {
     const openMobileMenu = () => setIsMenuOpen(true);
-    window.addEventListener('crtv:open-mobile-menu', openMobileMenu);
-    return () => window.removeEventListener('crtv:open-mobile-menu', openMobileMenu);
+    const closeMobileMenu = () => setIsMenuOpen(false);
+    window.addEventListener("crtv:open-mobile-menu", openMobileMenu);
+    window.addEventListener("crtv:close-mobile-menu", closeMobileMenu);
+    return () => {
+      window.removeEventListener("crtv:open-mobile-menu", openMobileMenu);
+      window.removeEventListener("crtv:close-mobile-menu", closeMobileMenu);
+    };
   }, []);
 
   // Close menu when viewport grows past mobile (e.g. rotate tablet) so scroll lock cannot stick
@@ -206,31 +216,11 @@ export default function Navbar() {
     return () => mq.removeEventListener("change", handleChange);
   }, []);
 
-  // Trap scroll inside the mobile menu panel (prevent background page scroll on touch)
-  useEffect(() => {
-    if (!isMenuOpen) return;
-
-    const mq = window.matchMedia(MOBILE_NAV_MEDIA_QUERY);
-    if (!mq.matches) return;
-
-    const html = document.documentElement;
-    const body = document.body;
-    const prevHtmlOverflow = html.style.overflow;
-    const prevBodyOverflow = body.style.overflow;
-
-    html.style.overflow = "hidden";
-    body.style.overflow = "hidden";
-
-    return () => {
-      html.style.overflow = prevHtmlOverflow;
-      body.style.overflow = prevBodyOverflow;
-    };
-  }, [isMenuOpen]);
-
   // Close menu on navigation (e.g. logo link has no explicit close handler)
   useEffect(() => {
     setIsMenuOpen(false);
   }, [pathname]);
+
   const [currentChainName, setCurrentChainName] = useState(currentChain.name);
   const [isScrolled, setIsScrolled] = useState(false);
 
@@ -329,6 +319,7 @@ export default function Navbar() {
     }`;
 
   return (
+    <>
     <header className={headerClassName}>
       <div className="container mx-auto px-4 sm:px-6">
         <div className="flex h-16 items-center justify-between">
@@ -401,33 +392,65 @@ export default function Navbar() {
           </div>
         </div>
       </div>
+    </header>
 
-      {isMounted &&
-        isMenuOpen &&
-        createPortal(
-          <div
-            id="mobile-nav-menu"
-            className={
-              "fixed inset-x-0 top-16 bottom-0 z-50 flex flex-col overflow-hidden md:hidden " +
-              "bg-white dark:bg-gray-900 shadow-md animate-in slide-in-from-top-5"
-            }
-            role="dialog"
-            aria-modal="true"
-            aria-label="Main menu"
+    <Sheet open={isMenuOpen} onOpenChange={setIsMenuOpen}>
+      <SheetContent
+        side="right"
+        overlayClassName="z-[100] bg-black/50 md:hidden"
+        className="fixed inset-y-0 right-0 z-[101] flex h-full w-full flex-col overflow-hidden border-0 p-0 md:hidden bg-background [&>button]:hidden"
+      >
+        <SheetHeader className="sr-only">
+          <SheetTitle>Navigation menu</SheetTitle>
+          <SheetDescription>
+            Site navigation, wallet, and account options.
+          </SheetDescription>
+        </SheetHeader>
+
+        {/** Self-contained mobile menu header so it works even when the page is scrolled. */}
+        <div className="flex h-16 shrink-0 items-center justify-between border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-4">
+          <Link
+            href="/"
+            className="flex items-center space-x-2"
+            onClick={() => setIsMenuOpen(false)}
           >
-            <div
-              className={
-                "flex-1 min-h-0 overflow-y-auto overscroll-contain touch-pan-y " +
-                "[-webkit-overflow-scrolling:touch] p-4 " +
-                "pb-[calc(2rem+env(safe-area-inset-bottom,0px))]"
-              }
+            <Image
+              src={SITE_LOGO}
+              alt={SITE_NAME}
+              width={30}
+              height={30}
+              priority
+              style={{ width: "30px", height: "30px" }}
+              className="rounded-md"
+            />
+            <span className="text-lg" style={{ fontFamily: "ConthraxSb-Regular, sans-serif" }}>
+              {SITE_ORG}
+              <span className="ml-1 text-xl font-bold text-red-500" style={{ fontFamily: "sans-serif" }}>
+                {SITE_PRODUCT}
+              </span>
+            </span>
+          </Link>
+          <SheetClose asChild>
+            <Button
+              {...navIconButtonProps}
+              className="md:hidden"
+              aria-label="Close main menu"
+              onClick={() => setIsMenuOpen(false)}
             >
-            <div
-              className={
-                "relative grid gap-4 rounded-md " +
-                "text-popover-foreground"
-              }
-            >
+              <AnimatedMenuIcon isOpen={true} />
+            </Button>
+          </SheetClose>
+        </div>
+
+        <div
+          className={
+            "flex-1 min-h-0 overflow-y-auto overscroll-contain touch-pan-y " +
+            "[-webkit-overflow-scrolling:touch] p-4 " +
+            "pb-[calc(2rem+env(safe-area-inset-bottom,0px))]"
+          }
+        >
+          <div className="relative grid gap-4 rounded-md text-popover-foreground">
+
               {/* User Account Section or Get Started */}
               <HydrationSafe>
                 {user ? (
@@ -501,14 +524,6 @@ export default function Navbar() {
                   Home
                 </Link>
                 <Link
-                  href="/songchain"
-                  className={mobileNavLinkClass}
-                  onClick={handleLinkClick}
-                  id="mobile-nav-songchain-link"
-                >
-                  <Music2 className="mr-2 h-4 w-4" /> Songchain
-                </Link>
-                <Link
                   href="/discover"
                   className={mobileNavLinkClass}
                   onClick={handleLinkClick}
@@ -577,46 +592,54 @@ export default function Navbar() {
                         <MembershipSection onNavigate={handleLinkClick} />
                       </div>
 
-                      {isVerified && hasMembership && (
+                      {isVerified && user && (
                         <>
                           <div className="mt-4 mb-1 text-xs text-muted-foreground font-semibold">
                             Member Access
                           </div>
-                          <Link
-                            href="/live"
-                            className={mobileMemberNavLinkClass}
-                            onClick={handleLinkClick}
-                          >
-                            <RadioTower className="mr-2 h-4 w-4" /> Live
-                          </Link>
-                          <Link
-                            href="https://create.creativeplatform.xyz"
-                            className={mobileMemberNavLinkClass}
-                            onClick={handleLinkClick}
-                          >
-                            <Bot className="mr-2 h-4 w-4" /> Pixels
-                            <span className="ml-2 px-2 py-0.5 rounded bg-muted-foreground/10 text-xs text-muted-foreground">
-                              Beta
-                            </span>
-                          </Link>
-                          <Link
-                            href="/vote/create"
-                            className="flex w-full items-center rounded-md p-2 text-sm font-medium
-                                hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors
-                                text-green-600 dark:text-green-400"
-                            onClick={handleLinkClick}
-                          >
-                            <Plus className="mr-2 h-4 w-4 text-green-500" /> Poll
-                          </Link>
-                          <Link
-                            href="/predict/create"
-                            className="flex w-full items-center rounded-md p-2 text-sm font-medium
-                                hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors
-                                text-blue-600 dark:text-blue-400"
-                            onClick={handleLinkClick}
-                          >
-                            <TrendingUp className="mr-2 h-4 w-4 text-blue-500" /> Predict
-                          </Link>
+                          {(hasValidCreatorPass(membershipDetails) || hasValidBrandPass(membershipDetails)) && (
+                            <Link
+                              href="/live"
+                              className={mobileMemberNavLinkClass}
+                              onClick={handleLinkClick}
+                            >
+                              <RadioTower className="mr-2 h-4 w-4" /> Live
+                            </Link>
+                          )}
+                          {hasAnyValidPass(membershipDetails) && (
+                            <Link
+                              href="https://create.creativeplatform.xyz"
+                              className={mobileMemberNavLinkClass}
+                              onClick={handleLinkClick}
+                            >
+                              <Bot className="mr-2 h-4 w-4" /> Pixels
+                              <span className="ml-2 px-2 py-0.5 rounded bg-muted-foreground/10 text-xs text-muted-foreground">
+                                Beta
+                              </span>
+                            </Link>
+                          )}
+                          {hasValidBrandPass(membershipDetails) && (
+                            <Link
+                              href="/vote/create"
+                              className="flex w-full items-center rounded-md p-2 text-sm font-medium
+                                  hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors
+                                  text-green-600 dark:text-green-400"
+                              onClick={handleLinkClick}
+                            >
+                              <Plus className="mr-2 h-4 w-4 text-green-500" /> Campaigns
+                            </Link>
+                          )}
+                          {!hasValidCreatorPass(membershipDetails) && !hasValidBrandPass(membershipDetails) && (
+                            <Link
+                              href="/predict/create"
+                              className="flex w-full items-center rounded-md p-2 text-sm font-medium
+                                  hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors
+                                  text-blue-600 dark:text-blue-400"
+                              onClick={handleLinkClick}
+                            >
+                              <TrendingUp className="mr-2 h-4 w-4 text-blue-500" /> Predict
+                            </Link>
+                          )}
                         </>
                       )}
                     </>
@@ -648,8 +671,13 @@ export default function Navbar() {
                       <ChainSelect className="w-full" />
                     </div>
 
+                    {/* Balances */}
+                    <div className="mt-4">
+                      <TokenBalance />
+                    </div>
+
                     {/* Wallet Actions */}
-                    <div className="mt-4 grid grid-cols-3 gap-2 pb-4 border-b border-gray-200 dark:border-gray-700">
+                    <div className="mt-4 grid grid-cols-3 gap-2">
                       <Button
                         variant="outline"
                         size="sm"
@@ -679,12 +707,7 @@ export default function Navbar() {
                       </Button>
                     </div>
 
-                    {/* Add TokenBalance here */}
-                    <div className="mt-4">
-                      <TokenBalance />
-                    </div>
-
-                    {/* Add MeTokenBalances here */}
+                    {/* MeTokenBalances */}
                     {shouldShowMetokens && (
                       <div className="mt-4">
                         <MeTokenBalances />
@@ -692,7 +715,7 @@ export default function Navbar() {
                     )}
 
                     {/* Logout Button */}
-                    <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700 space-y-2">
+                    <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
                       <button
                         onClick={() => {
                           void unifiedLogout();
@@ -704,31 +727,14 @@ export default function Navbar() {
                         <LogOut className="mr-2 h-4 w-4" />
                         Logout
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          void resetAppSession({
-                            walletLogout: async () => {
-                              await walletLogout();
-                            },
-                            orbLogout,
-                          });
-                        }}
-                        className="flex w-full items-center rounded-md p-2 text-xs font-medium
-                            text-muted-foreground hover:bg-muted transition-colors"
-                      >
-                        Reset session (fix login loops)
-                      </button>
                     </div>
                   </>
                 )}
               </HydrationSafe>
-
-            </div>
-            </div>
-          </div>,
-          document.body
-        )}
-    </header>
+          </div>
+        </div>
+      </SheetContent>
+    </Sheet>
+    </>
   );
 }

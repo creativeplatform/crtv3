@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useSmartAccountClient } from '@account-kit/react';
+import { useSmartAccountClient } from '@/lib/wallet/react';
 import { encodeFunctionData, parseEther } from 'viem';
 import { useToast } from '@/components/ui/use-toast';
 import { useGasSponsorship } from '@/lib/hooks/wallet/useGasSponsorship';

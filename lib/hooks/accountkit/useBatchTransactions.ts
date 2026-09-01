@@ -3,7 +3,7 @@
 import { useState } from "react";
 import {
   useSmartAccountClient,
-} from "@account-kit/react";
+} from "@/lib/wallet/react";
 import { toast } from "sonner";
 import { logger } from '@/lib/utils/logger';
 import { appendBuilderCode } from "@/lib/utils/builder-code";

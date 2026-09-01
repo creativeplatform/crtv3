@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useSendUserOperation, useSmartAccountClient } from "@account-kit/react";
+import { useSendUserOperation, useSmartAccountClient } from "@/lib/wallet/react";
 import { encodeFunctionData, type Abi } from "viem";
 import { Button } from "@/components/ui/button";
 import { appendBuilderCode } from "@/lib/utils/builder-code";
@@ -22,11 +22,13 @@ import unlockAbiJson from "@/lib/abis/Unlock.json";
 interface CancelMembershipButtonProps {
     lockAddress: string;
     tokenId: string;
+    onSuccess?: () => void | Promise<void>;
 }
 
 export function CancelMembershipButton({
     lockAddress,
     tokenId,
+    onSuccess,
 }: CancelMembershipButtonProps) {
     const [isOpen, setIsOpen] = useState(false);
     const { client } = useSmartAccountClient({ type: "LightAccount" });
@@ -34,12 +36,11 @@ export function CancelMembershipButton({
     const { sendUserOperation, isSendingUserOperation } = useSendUserOperation({
         client,
         waitForTxn: true,
-        onSuccess: ({ hash }) => {
+        onSuccess: async ({ hash }) => {
             console.log("Cancellation successful:", hash);
             toast.success("Membership cancelled successfully");
             setIsOpen(false);
-            // Optional: Refresh page or invalidate queries to update UI
-            setTimeout(() => window.location.reload(), 2000);
+            await onSuccess?.();
         },
         onError: (error) => {
             console.error("Cancellation error:", error);

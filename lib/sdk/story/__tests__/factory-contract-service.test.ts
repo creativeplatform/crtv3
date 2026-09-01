@@ -21,24 +21,31 @@ import {
 } from './helpers/mocks';
 
 // Mock dependencies
-vi.mock('@/lib/viem', () => ({
-  publicClient: createMockPublicClient(),
+let storyPublicClient: ReturnType<typeof createMockPublicClient>;
+let serviceSupabase: ReturnType<typeof createMockSupabaseClient>;
+
+vi.mock('@/lib/sdk/story/client', () => ({
+  createStoryPublicClient: () => storyPublicClient,
 }));
 
 vi.mock('@/lib/sdk/supabase/service', () => ({
-  createServiceClient: () => createMockSupabaseClient(),
+  createServiceClient: () => serviceSupabase,
 }));
 
 describe('factory-contract-service', () => {
+  mockEnvVars();
+
   let mockSmartAccountClient: ReturnType<typeof createMockSmartAccountClient>;
   let mockPublicClient: ReturnType<typeof createMockPublicClient>;
   let mockSupabase: ReturnType<typeof createMockSupabaseClient>;
 
   beforeEach(() => {
-    mockEnvVars();
     mockSmartAccountClient = createMockSmartAccountClient();
     mockPublicClient = createMockPublicClient();
     mockSupabase = createMockSupabaseClient();
+
+    storyPublicClient = mockPublicClient;
+    serviceSupabase = mockSupabase;
 
     // Setup default mocks
     mockSmartAccountClient.sendUserOperation.mockResolvedValue({
@@ -47,6 +54,7 @@ describe('factory-contract-service', () => {
     mockSmartAccountClient.waitForUserOperationTransaction.mockResolvedValue(
       testData.txHash
     );
+    mockSmartAccountClient.sendTransaction.mockResolvedValue(testData.txHash);
   });
 
   describe('deployCreatorCollection', () => {
@@ -66,7 +74,7 @@ describe('factory-contract-service', () => {
 
       expect(result.collectionAddress).toBe(testData.collectionAddress);
       expect(result.txHash).toBe(testData.txHash);
-      expect(mockSmartAccountClient.sendUserOperation).toHaveBeenCalled();
+      expect(mockSmartAccountClient.sendTransaction).toHaveBeenCalled();
       expect(mockSupabase.from().upsert).toHaveBeenCalled();
     });
 
@@ -122,7 +130,7 @@ describe('factory-contract-service', () => {
     });
 
     it('should handle transaction failure', async () => {
-      mockSmartAccountClient.sendUserOperation.mockRejectedValue(
+      mockSmartAccountClient.sendTransaction.mockRejectedValue(
         new Error('Transaction failed')
       );
 
@@ -160,7 +168,7 @@ describe('factory-contract-service', () => {
 
     it('should fallback to database if factory not configured', async () => {
       process.env.NEXT_PUBLIC_CREATOR_IP_FACTORY_ADDRESS = '';
-      mockSupabase.from().select().eq().single.mockResolvedValue({
+      mockSupabase.from().select().eq().maybeSingle.mockResolvedValue({
         data: { collection_address: testData.collectionAddress },
         error: null,
       });
@@ -209,7 +217,7 @@ describe('factory-contract-service', () => {
         testData.creatorAddress
       );
 
-      expect(result.tokenId).toBe('1');
+      expect(result.tokenId).toBe('2');
       expect(result.txHash).toBe(testData.txHash);
       expect(mockSmartAccountClient.sendUserOperation).toHaveBeenCalled();
     });
@@ -224,7 +232,7 @@ describe('factory-contract-service', () => {
         testData.metadataURI
       );
 
-      expect(result.tokenId).toBe('1');
+      expect(result.tokenId).toBe('2');
       expect(mockSmartAccountClient.sendUserOperation).toHaveBeenCalled();
     });
 

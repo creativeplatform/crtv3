@@ -8,6 +8,7 @@ import {
 describe("platformApiKeys", () => {
   it("parses admin and partner keys from env", () => {
     const keys = parsePlatformApiKeysFromEnv({
+      NODE_ENV: "test",
       CREATIVE_PLATFORM_ADMIN_API_KEYS: "admin_a,admin_b",
       CREATIVE_PLATFORM_PARTNER_API_KEYS: "mixtape:secret_mixtape,create:secret_create",
     });
@@ -24,6 +25,7 @@ describe("platformApiKeys", () => {
 
   it("matches admin and partner keys with constant-time compare semantics", () => {
     const keys = parsePlatformApiKeysFromEnv({
+      NODE_ENV: "test",
       CREATIVE_PLATFORM_ADMIN_API_KEYS: "crtv_admin_test",
       CREATIVE_PLATFORM_PARTNER_API_KEYS: "mixtape:partner_secret",
     });

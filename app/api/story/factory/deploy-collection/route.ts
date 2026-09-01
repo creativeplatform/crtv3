@@ -10,7 +10,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { checkBotId } from "botid/server";
+import { checkBotIdDeep } from "@/lib/middleware/botIdGuard";
 import { createWalletClient, http } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { getStoryRpcUrl } from "@/lib/sdk/story/client";
@@ -18,6 +18,8 @@ import { deployCreatorCollection, getCollectionBytecode, getFactoryContractAddre
 import type { Address } from "viem";
 import { serverLogger } from "@/lib/utils/logger";
 import { rateLimiters } from "@/lib/middleware/rateLimit";
+import { requireWalletAuthFor, WalletAuthError } from "@/lib/auth/require-wallet";
+import { isValidEthAddress, normalizeEthAddress } from "@/lib/auth/validate-address";
 
 /**
  * Story Protocol chain configuration
@@ -28,7 +30,7 @@ const STORY_MAINNET_CHAIN_ID = 1514; // Story mainnet
 const CHAIN_ID = STORY_NETWORK === "mainnet" ? STORY_MAINNET_CHAIN_ID : STORY_TESTNET_CHAIN_ID;
 
 export async function POST(request: NextRequest) {
-  const verification = await checkBotId();
+  const verification = await checkBotIdDeep();
   if (verification.isBot) {
     return NextResponse.json({ error: "Access denied" }, { status: 403 });
   }
@@ -49,6 +51,21 @@ export async function POST(request: NextRequest) {
         { error: "Missing required fields: creatorAddress, collectionName, collectionSymbol" },
         { status: 400 }
       );
+    }
+
+    const normalizedCreator = normalizeEthAddress(String(creatorAddress));
+
+    if (!isValidEthAddress(normalizedCreator)) {
+      return NextResponse.json({ error: "Invalid creatorAddress format" }, { status: 400 });
+    }
+
+    try {
+      await requireWalletAuthFor(request, normalizedCreator);
+    } catch (authErr) {
+      if (authErr instanceof WalletAuthError) {
+        return NextResponse.json({ error: authErr.message }, { status: authErr.status });
+      }
+      throw authErr;
     }
 
     // Check factory configuration
@@ -104,7 +121,7 @@ export async function POST(request: NextRequest) {
     // Deploy collection via factory
     const result = await deployCreatorCollection(
       walletClient,
-      creatorAddress as Address,
+      normalizedCreator as Address,
       collectionName,
       collectionSymbol,
       bytecode

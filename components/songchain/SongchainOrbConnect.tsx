@@ -34,7 +34,7 @@ export function SongchainOrbConnect() {
             ? 'Your Orb session needs a fresh sign-in before you can post or interact on Lens.'
             : lensWrite.needsLink
               ? 'Orb signed in — link your wallet profile to unlock likes and group join.'
-              : 'Browse feeds in read-only mode. Sign in with Orb and link your account to interact.'}
+              : 'Sign in with Orb and link your account to interact.'}
         </span>
       </div>
       <Button

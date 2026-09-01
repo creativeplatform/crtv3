@@ -1,7 +1,7 @@
 "use client";
 
 import { useMembershipVerification } from "./useMembershipVerification";
-import { useUser } from "@account-kit/react";
+import { useUser } from "@/lib/wallet/react";
 import { useEffect, useState } from "react";
 
 /**

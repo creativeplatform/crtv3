@@ -1,114 +1,203 @@
-import { type TokenSymbol } from './swap-service';
-import { serverLogger } from '@/lib/utils/logger';
+import { Network } from "alchemy-sdk";
+import { alchemyClient } from "@/lib/sdk/alchemy/alchemy-client";
+import { BASE_TOKENS, type TokenSymbol } from "./swap-service";
+import { serverLogger } from "@/lib/utils/logger";
 
-// Price data interface
 export interface TokenPrice {
   symbol: TokenSymbol;
-  price: number; // USD price
-  lastUpdated: number; // timestamp
+  price: number;
+  lastUpdated: number;
 }
 
-// Price cache to avoid excessive API calls
 const priceCache = new Map<TokenSymbol, TokenPrice>();
-const CACHE_DURATION = 60000; // 1 minute cache
+const CACHE_DURATION = 60000;
+
+const FALLBACK_PRICES: Record<TokenSymbol, number> = {
+  ETH: 3000,
+  USDC: 1,
+  DAI: 1,
+  USDS: 1,
+  GHO: 1,
+};
+
+/** Base canonical WETH — used as ETH price proxy when symbol lookup fails. */
+const BASE_WETH_ADDRESS = "0x4200000000000000000000000000000000000006";
+
+const ADDRESS_FALLBACK_SYMBOLS: TokenSymbol[] = [
+  "USDC",
+  "DAI",
+  "USDS",
+  "GHO",
+];
+
+const ADDRESS_TO_SYMBOL: Record<string, TokenSymbol> = Object.fromEntries(
+  ADDRESS_FALLBACK_SYMBOLS.map((symbol) => [
+    BASE_TOKENS[symbol].toLowerCase(),
+    symbol,
+  ])
+) as Record<string, TokenSymbol>;
+
+function isValidAddress(value: unknown): value is `0x${string}` {
+  return typeof value === 'string' && /^0x[a-fA-F0-9]{40}$/.test(value);
+}
+
+function parseUsdPrice(
+  prices: Array<{ currency: string; value: string }>
+): number {
+  const usd = prices.find((p) => p.currency.toLowerCase() === "usd");
+  if (!usd) return 0;
+  const value = parseFloat(usd.value);
+  return Number.isFinite(value) ? value : 0;
+}
+
+function cachePrice(symbol: TokenSymbol, price: number): void {
+  priceCache.set(symbol, {
+    symbol,
+    price,
+    lastUpdated: Date.now(),
+  });
+}
 
 export class PriceService {
   private static instance: PriceService;
-  private apiKey: string;
 
-  constructor(apiKey: string) {
-    this.apiKey = apiKey;
-  }
-
-  static getInstance(apiKey?: string): PriceService {
+  static getInstance(): PriceService {
     if (!PriceService.instance) {
-      if (!apiKey) {
-        throw new Error('API key required for first PriceService instantiation');
-      }
-      PriceService.instance = new PriceService(apiKey);
+      PriceService.instance = new PriceService();
     }
     return PriceService.instance;
   }
 
-  /**
-   * Get current USD price for a token
-   */
   async getTokenPrice(symbol: TokenSymbol): Promise<number> {
-    // Check cache first
     const cached = priceCache.get(symbol);
     if (cached && Date.now() - cached.lastUpdated < CACHE_DURATION) {
       return cached.price;
     }
 
     try {
-      const price = await this.fetchTokenPrice(symbol);
-
-      // Update cache
-      priceCache.set(symbol, {
-        symbol,
-        price,
-        lastUpdated: Date.now(),
-      });
-
-      return price;
+      const prices = await this.getTokenPrices([symbol]);
+      return prices[symbol];
     } catch (error) {
       serverLogger.error(`Failed to fetch price for ${symbol}:`, error);
-
-      // Return cached price if available, even if expired
-      if (cached) {
-        return cached.price;
-      }
-
-      // Fallback prices (approximate)
-      const fallbackPrices: Record<TokenSymbol, number> = {
-        ETH: 3000,
-        USDC: 1,
-        DAI: 1,
-      };
-
-      return fallbackPrices[symbol];
+      if (cached) return cached.price;
+      return FALLBACK_PRICES[symbol];
     }
   }
 
-  /**
-   * Fetch price from CoinGecko API
-   */
-  private async fetchTokenPrice(symbol: TokenSymbol): Promise<number> {
-    const coinGeckoIds: Record<TokenSymbol, string> = {
-      ETH: 'ethereum',
-      USDC: 'usd-coin',
-      DAI: 'dai',
-    };
+  private async fetchPricesBySymbol(
+    symbols: TokenSymbol[]
+  ): Promise<Partial<Record<TokenSymbol, number>>> {
+    if (symbols.length === 0) return {};
 
-    const coinId = coinGeckoIds[symbol];
-    if (!coinId) {
-      throw new Error(`Unknown token symbol: ${symbol}`);
+    try {
+      const response = await alchemyClient.prices.getTokenPriceBySymbol(symbols);
+      const prices: Partial<Record<TokenSymbol, number>> = {};
+
+      for (const result of response.data) {
+        try {
+          const symbol = result.symbol.toUpperCase() as TokenSymbol;
+          if (result.error) {
+            serverLogger.error(
+              `Alchemy price error for ${symbol}:`,
+              result.error.message
+            );
+            continue;
+          }
+          const price = parseUsdPrice(result.prices);
+          if (price > 0) {
+            prices[symbol] = price;
+          }
+        } catch (itemErr) {
+          serverLogger.error('Failed to parse price result:', itemErr);
+        }
+      }
+
+      return prices;
+    } catch (batchErr) {
+      serverLogger.error('Failed to fetch prices by symbol:', batchErr);
+      return {};
     }
+  }
 
-    const response = await fetch(
-      `https://api.coingecko.com/api/v3/simple/price?ids=${coinId}&vs_currencies=usd`,
-      {
-        headers: {
-          'Accept': 'application/json',
+  private async fetchPricesByAddress(
+    symbols: TokenSymbol[]
+  ): Promise<Partial<Record<TokenSymbol, number>>> {
+    if (symbols.length === 0) return {};
+
+    try {
+      const response = await alchemyClient.prices.getTokenPriceByAddress(
+        symbols
+          .filter((symbol) => isValidAddress(BASE_TOKENS[symbol]))
+          .map((symbol) => ({
+            network: Network.BASE_MAINNET,
+            address: BASE_TOKENS[symbol],
+          }))
+      );
+
+      const prices: Partial<Record<TokenSymbol, number>> = {};
+
+      for (const result of response.data) {
+        try {
+          if (!isValidAddress(result.address)) continue;
+          const symbol = ADDRESS_TO_SYMBOL[result.address.toLowerCase()];
+          if (!symbol) continue;
+
+          if (result.error) {
+            serverLogger.error(
+              `Alchemy price error for ${symbol}:`,
+              result.error.message
+            );
+            continue;
+          }
+
+          const price = parseUsdPrice(result.prices);
+          if (price > 0) {
+            prices[symbol] = price;
+          }
+        } catch (itemErr) {
+          serverLogger.error('Failed to parse price result by address:', itemErr);
+        }
+      }
+
+      return prices;
+    } catch (batchErr) {
+      serverLogger.error('Failed to fetch prices by address:', batchErr);
+      return {};
+    }
+  }
+
+  private async fetchEthPriceByWeth(): Promise<number | undefined> {
+    try {
+      const response = await alchemyClient.prices.getTokenPriceByAddress([
+        {
+          network: Network.BASE_MAINNET,
+          address: BASE_WETH_ADDRESS,
         },
+      ]);
+
+      const result = response.data[0];
+      if (!result || result.error) {
+        if (result?.error) {
+          serverLogger.error(
+            "Alchemy WETH price error for ETH fallback:",
+            result.error.message
+          );
+        }
+        return undefined;
       }
-    );
 
-    if (!response.ok) {
-      throw new Error(`CoinGecko API error: ${response.status}`);
+      const price = parseUsdPrice(result.prices);
+      return price > 0 ? price : undefined;
+    } catch (batchErr) {
+      serverLogger.error('Failed to fetch WETH price for ETH fallback:', batchErr);
+      return undefined;
     }
-
-    const data = await response.json();
-    return data[coinId]?.usd || 0;
   }
 
-  /**
-   * Get prices for multiple tokens at once
-   */
-  async getTokenPrices(symbols: TokenSymbol[]): Promise<Record<TokenSymbol, number>> {
-    const prices: Record<TokenSymbol, number> = {} as Record<TokenSymbol, number>;
-
-    // Check cache for all tokens first
+  async getTokenPrices(
+    symbols: TokenSymbol[]
+  ): Promise<Record<TokenSymbol, number>> {
+    const prices = {} as Record<TokenSymbol, number>;
     const uncachedSymbols: TokenSymbol[] = [];
 
     for (const symbol of symbols) {
@@ -120,83 +209,68 @@ export class PriceService {
       }
     }
 
-    // Fetch uncached prices
-    if (uncachedSymbols.length > 0) {
-      try {
-        const coinGeckoIds: Record<TokenSymbol, string> = {
-          ETH: 'ethereum',
-          USDC: 'usd-coin',
-          DAI: 'dai',
-        };
+    if (uncachedSymbols.length === 0) return prices;
 
-        const coinIds = uncachedSymbols.map(symbol => coinGeckoIds[symbol]).join(',');
+    try {
+      const symbolPrices = await this.fetchPricesBySymbol(uncachedSymbols);
+      let missingSymbols = uncachedSymbols.filter(
+        (symbol) => symbolPrices[symbol] === undefined
+      );
 
-        const response = await fetch(
-          `https://api.coingecko.com/api/v3/simple/price?ids=${coinIds}&vs_currencies=usd`,
-          {
-            headers: {
-              'Accept': 'application/json',
-            },
-          }
-        );
-
-        if (response.ok) {
-          const data = await response.json();
-
-          for (const symbol of uncachedSymbols) {
-            const coinId = coinGeckoIds[symbol];
-            const price = data[coinId]?.usd || 0;
-
-            prices[symbol] = price;
-
-            // Update cache
-            priceCache.set(symbol, {
-              symbol,
-              price,
-              lastUpdated: Date.now(),
-            });
-          }
-        } else {
-          // Fallback to individual requests
-          for (const symbol of uncachedSymbols) {
-            prices[symbol] = await this.getTokenPrice(symbol);
-          }
+      if (missingSymbols.includes("ETH")) {
+        const ethPrice = await this.fetchEthPriceByWeth();
+        if (ethPrice !== undefined) {
+          symbolPrices.ETH = ethPrice;
+          missingSymbols = missingSymbols.filter((symbol) => symbol !== "ETH");
         }
-      } catch (error) {
-        serverLogger.error('Failed to fetch multiple prices:', error);
+      }
 
-        // Fallback to individual requests
-        for (const symbol of uncachedSymbols) {
-          prices[symbol] = await this.getTokenPrice(symbol);
+      const addressPrices =
+        missingSymbols.length > 0
+          ? await this.fetchPricesByAddress(
+              missingSymbols.filter((symbol) => symbol !== "ETH")
+            )
+          : {};
+
+      for (const symbol of uncachedSymbols) {
+        const apiPrice = symbolPrices[symbol] ?? addressPrices[symbol];
+
+        const price =
+          apiPrice ??
+          priceCache.get(symbol)?.price ??
+          FALLBACK_PRICES[symbol];
+
+        prices[symbol] = price;
+
+        if (apiPrice !== undefined) {
+          cachePrice(symbol, apiPrice);
         }
+      }
+    } catch (error) {
+      serverLogger.error("Failed to fetch Alchemy token prices:", error);
+
+      for (const symbol of uncachedSymbols) {
+        prices[symbol] =
+          priceCache.get(symbol)?.price ?? FALLBACK_PRICES[symbol];
       }
     }
 
     return prices;
   }
 
-  /**
-   * Convert token amount to USD value
-   */
   async convertToUSD(amount: number, symbol: TokenSymbol): Promise<number> {
     const price = await this.getTokenPrice(symbol);
     return amount * price;
   }
 
-  /**
-   * Convert USD value to token amount
-   */
   async convertFromUSD(usdAmount: number, symbol: TokenSymbol): Promise<number> {
     const price = await this.getTokenPrice(symbol);
     return usdAmount / price;
   }
 
-  /**
-   * Format USD value for display
-   */
   static formatUSD(amount: number): string {
     if (amount < 0.01) {
-      return '< $0.01';
+      return "< $0.01";
     }
     if (amount < 1) {
       return `$${amount.toFixed(4)}`;
@@ -213,15 +287,15 @@ export class PriceService {
     return `$${(amount / 1000000).toFixed(1)}M`;
   }
 
-  /**
-   * Format token amount with USD value
-   */
-  static formatTokenWithUSD(amount: number, symbol: TokenSymbol, usdValue: number): string {
-    const formattedAmount = amount.toFixed(6).replace(/\.?0+$/, '');
+  static formatTokenWithUSD(
+    amount: number,
+    symbol: TokenSymbol,
+    usdValue: number
+  ): string {
+    const formattedAmount = amount.toFixed(6).replace(/\.?0+$/, "");
     const formattedUSD = PriceService.formatUSD(usdValue);
     return `${formattedAmount} ${symbol} (${formattedUSD})`;
   }
 }
 
-// Export singleton instance
-export const priceService = PriceService.getInstance(process.env.NEXT_PUBLIC_ALCHEMY_API_KEY);
+export const priceService = PriceService.getInstance();

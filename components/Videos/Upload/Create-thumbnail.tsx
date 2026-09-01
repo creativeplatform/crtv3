@@ -16,11 +16,6 @@ import { toast } from "sonner";
 import { logger } from "@/lib/utils/logger";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Progress } from "@/components/ui/progress";
-import { useCreateVerifiableAttestation } from "@/lib/hooks/livepeer/useCreateVerifiableAttestation";
-import {
-  getIpfsCidFromLivepeerAsset,
-} from "@/lib/livepeer/verifiable-video";
-import { ShieldCheck } from "lucide-react";
 
 type CreateThumbnailProps = {
   livePeerAssetId: string | undefined;
@@ -47,7 +42,6 @@ type CreateThumbnailProps = {
       address: string;
       id: string;
     };
-    livepeerAttestationId?: string;
   }) => Promise<void> | void;
 };
 
@@ -81,19 +75,8 @@ export default function CreateThumbnail({
     address: string;
     id: string;
   } | null>(null);
-  const [livepeerAttestationId, setLivepeerAttestationId] = useState<string | null>(null);
 
   const [isPublishing, setIsPublishing] = useState(false);
-
-  const ipfsCid = livepeerAssetData
-    ? getIpfsCidFromLivepeerAsset(livepeerAssetData)
-    : null;
-  const {
-    createAttestation,
-    isLoading: isAttesting,
-    error: attestationError,
-    canAttest,
-  } = useCreateVerifiableAttestation();
 
   // Log component initialization
   useEffect(() => {
@@ -249,7 +232,6 @@ export default function CreateThumbnail({
         storyConfig: storyConfig,
         nftMintResult: nftMintResult || undefined,
         createdMeToken: createdMeToken || undefined,
-        livepeerAttestationId: livepeerAttestationId ?? undefined,
       });
     } catch (error) {
       logger.error("Publication failed:", error);
@@ -361,54 +343,6 @@ export default function CreateThumbnail({
                 assetId={livepeerAssetData.id}
                 src={getSrc(livepeerPlaybackData) as Src[]}
               />
-            </div>
-          )}
-
-          {attestationError && (
-            <p className="text-sm text-destructive mb-2" role="alert">
-              {attestationError}
-            </p>
-          )}
-          {livepeerAssetData?.status?.phase === "ready" && ipfsCid && (
-            <div className="my-4 flex flex-wrap items-center gap-2">
-              {livepeerAttestationId ? (
-                <span className="inline-flex items-center gap-1.5 text-sm text-muted-foreground">
-                  <ShieldCheck className="h-4 w-4 text-green-600" aria-hidden />
-                  Creator attestation recorded
-                </span>
-              ) : (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="relative"
-                  disabled={!canAttest || isAttesting}
-                  onClick={async () => {
-                    if (!ipfsCid) return;
-                    try {
-                      const id = await createAttestation(ipfsCid);
-                      setLivepeerAttestationId(id);
-                      toast.success("Creator attestation recorded");
-                    } catch (err) {
-                      toast.error(
-                        err instanceof Error ? err.message : "Attestation failed"
-                      );
-                    }
-                  }}
-                  aria-label="Sign and submit creator attestation for this video"
-                >
-                  {isAttesting ? (
-                    <>
-                      <span className="opacity-0">Attest as creator</span>
-                      <span className="absolute inset-0 flex items-center justify-center">
-                        <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                      </span>
-                    </>
-                  ) : (
-                    "Attest as creator"
-                  )}
-                </Button>
-              )}
             </div>
           )}
 

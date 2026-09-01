@@ -6,10 +6,21 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useMeTokensSupabase } from '@/lib/hooks/metokens/useMeTokensSupabase';
-import { useUser } from '@account-kit/react';
+import { useMeTokenHubs } from '@/lib/hooks/metokens/useMeTokenHubs';
+import { CollateralHubGuide, STABLECOIN_SUMMARY } from '@/components/metokens/CollateralHubGuide';
+import { useUser } from '@/lib/wallet/react';
 import { useToast } from '@/components/ui/use-toast';
 import { Loader2, CheckCircle, AlertCircle, Info } from 'lucide-react';
 import { logger } from '@/lib/utils/logger';
+import Image from 'next/image';
+import { getTokenIcon } from '@/lib/utils/token-icons';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 interface MeTokenCreatorProps {
   onMeTokenCreated?: (meTokenAddress: string) => void;
@@ -18,12 +29,26 @@ interface MeTokenCreatorProps {
 export function MeTokenCreator({ onMeTokenCreated }: MeTokenCreatorProps) {
   const [name, setName] = useState('');
   const [symbol, setSymbol] = useState('');
-  const [daiAmount, setDaiAmount] = useState('0');
+  const [collateralAmount, setCollateralAmount] = useState('0');
+  const [selectedHubId, setSelectedHubId] = useState<number | undefined>(undefined);
   const [localError, setLocalError] = useState<string | null>(null);
 
   const user = useUser();
   const { toast } = useToast();
+  const { activeHubs, loading: hubsLoading, defaultHub } = useMeTokenHubs();
   const { createMeToken, isPending, isConfirming, isConfirmed, transactionError, checkUserMeToken, userMeToken } = useMeTokensSupabase();
+
+  const selectedHub = activeHubs.find((h) => h.hubId === selectedHubId) ?? defaultHub ?? activeHubs[0];
+  const collateralSymbol = selectedHub?.symbol ?? 'USDC';
+
+  useEffect(() => {
+    if (
+      activeHubs.length > 0 &&
+      (selectedHubId === undefined || !activeHubs.some((h) => h.hubId === selectedHubId))
+    ) {
+      setSelectedHubId(defaultHub?.hubId ?? activeHubs[0].hubId);
+    }
+  }, [activeHubs, defaultHub, selectedHubId]);
 
   // Debug: Log user state
   useEffect(() => {
@@ -73,7 +98,7 @@ export function MeTokenCreator({ onMeTokenCreated }: MeTokenCreatorProps) {
   }, [transactionError, toast]);
 
   const handleCreateMeToken = async () => {
-    logger.debug('🚀 handleCreateMeToken called', { name, symbol, daiAmount });
+    logger.debug('🚀 handleCreateMeToken called', { name, symbol, collateralAmount });
 
     if (!name.trim() || !symbol.trim()) {
       setLocalError('Please fill in all fields');
@@ -85,9 +110,14 @@ export function MeTokenCreator({ onMeTokenCreated }: MeTokenCreatorProps) {
       return;
     }
 
-    const daiValue = parseFloat(daiAmount || '0');
-    if (daiValue < 0) {
-      setLocalError('DAI amount cannot be negative');
+    const depositValue = parseFloat(collateralAmount || '0');
+    if (depositValue < 0) {
+      setLocalError(`${collateralSymbol} amount cannot be negative`);
+      return;
+    }
+
+    if (!selectedHub) {
+      setLocalError('No active collateral hub available. DAI (Hub 1) is required.');
       return;
     }
 
@@ -134,8 +164,8 @@ export function MeTokenCreator({ onMeTokenCreated }: MeTokenCreatorProps) {
         logger.debug('ℹ️ No existing MeToken found, proceeding with creation...');
       }
 
-      logger.debug('📝 Calling createMeToken with:', name.trim(), symbol.trim().toUpperCase(), daiAmount);
-      await createMeToken(name.trim(), symbol.trim().toUpperCase(), 1, daiAmount);
+      logger.debug('📝 Calling createMeToken with:', name.trim(), symbol.trim().toUpperCase(), selectedHub.hubId, collateralAmount);
+      await createMeToken(name.trim(), symbol.trim().toUpperCase(), selectedHub.hubId, collateralAmount);
       logger.debug('✅ createMeToken completed successfully');
       // Don't set success here - let the hook handle the state
     } catch (err) {
@@ -254,29 +284,98 @@ export function MeTokenCreator({ onMeTokenCreated }: MeTokenCreatorProps) {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="daiAmount">Initial DAI Deposit (Optional)</Label>
+            <Label htmlFor="hubId">Collateral Hub</Label>
+            <Select
+              value={selectedHubId !== undefined ? String(selectedHubId) : undefined}
+              onValueChange={(v) => setSelectedHubId(Number(v))}
+              disabled={isLoading || hubsLoading || activeHubs.length === 0}
+            >
+              <SelectTrigger id="hubId">
+                <SelectValue placeholder="Select collateral asset" />
+              </SelectTrigger>
+              <SelectContent>
+                {activeHubs.map((hub) => (
+                  <SelectItem key={hub.hubId} value={String(hub.hubId)}>
+                    <span className="flex items-center gap-2">
+                      <Image
+                        src={getTokenIcon(hub.symbol, 8453)}
+                        alt={hub.symbol}
+                        width={20}
+                        height={20}
+                        className="h-5 w-5 rounded-full"
+                      />
+                      Hub {hub.hubId} — {hub.displayName}
+                      {hub.recommended ? ' (Recommended)' : ''}
+                      {hub.deprecated ? ' (Legacy)' : ''}
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-sm text-muted-foreground">
+              Every MeToken is backed by a stablecoin you choose. <strong>USDC is recommended</strong> for broad appeal;
+              USDS suits decentralized savings; GHO fits advanced DeFi users.
+            </p>
+            <CollateralHubGuide hub={selectedHub ?? null} className="py-3" />
+            {activeHubs.length > 1 && (
+              <ul className="text-xs text-muted-foreground space-y-1 list-disc list-inside">
+                {(['USDC', 'USDS', 'GHO'] as const).map((sym) => {
+                  const hub = activeHubs.find((h) => h.symbol === sym);
+                  if (!hub) return null;
+                  return <li key={sym}>{STABLECOIN_SUMMARY[sym]}</li>;
+                })}
+              </ul>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="collateralAmount">Initial {collateralSymbol} Deposit (Optional)</Label>
             <Input
-              id="daiAmount"
+              id="collateralAmount"
               type="number"
               placeholder="0"
-              value={daiAmount}
-              onChange={(e) => setDaiAmount(e.target.value)}
+              value={collateralAmount}
+              onChange={(e) => setCollateralAmount(e.target.value)}
               disabled={isLoading}
               min="0"
-              step="0.01"
+              step={collateralSymbol === 'USDC' ? '0.01' : '0.01'}
             />
             <div className="space-y-1">
               <p className="text-sm text-muted-foreground">
-                Amount of DAI to deposit when creating your MeToken
+                Amount of {collateralSymbol} to deposit when creating your MeToken
               </p>
+              {collateralSymbol === 'USDC' && (
               <Alert className="py-2">
                 <Info className="h-3 w-3" />
                 <AlertDescription className="text-xs">
-                  <strong>Need DAI?</strong> Use the account menu to:
-                  <br />1. Click <strong>&quot;Buy&quot;</strong> to purchase USDC with Coinbase
-                  <br />2. Click <strong>&quot;Swap&quot;</strong> to convert USDC → DAI
+                  <strong>Need USDC?</strong> Use the account menu to buy USDC with Coinbase or swap from other tokens.
                 </AlertDescription>
               </Alert>
+              )}
+              {collateralSymbol === 'DAI' && (
+              <Alert className="py-2">
+                <Info className="h-3 w-3" />
+                <AlertDescription className="text-xs">
+                  DAI is legacy collateral. USDC is recommended for new MeTokens; USDS is the decentralized successor to DAI.
+                </AlertDescription>
+              </Alert>
+              )}
+              {collateralSymbol === 'USDS' && (
+              <Alert className="py-2">
+                <Info className="h-3 w-3" />
+                <AlertDescription className="text-xs">
+                  USDS is Sky&apos;s upgrade from DAI. Use the wallet swap tool to convert ETH or USDC into USDS before depositing.
+                </AlertDescription>
+              </Alert>
+              )}
+              {collateralSymbol === 'GHO' && (
+              <Alert className="py-2">
+                <Info className="h-3 w-3" />
+                <AlertDescription className="text-xs">
+                  Need GHO? Swap from ETH or other stables in the account menu, or mint via Aave on Base.
+                </AlertDescription>
+              </Alert>
+              )}
             </div>
           </div>
         </div>
@@ -303,7 +402,7 @@ export function MeTokenCreator({ onMeTokenCreated }: MeTokenCreatorProps) {
         <div className="text-sm text-muted-foreground space-y-2">
           <p><strong>What happens when you create a MeToken:</strong></p>
           <ul className="list-disc list-inside space-y-1 ml-4">
-            <li>Your personal token will be deployed and subscribed to Hub 1 (DAI)</li>
+            <li>Your token is backed by <strong>{selectedHub?.displayName ?? collateralSymbol}</strong> on Hub {selectedHub?.hubId ?? 1}</li>
             <li>It will be tradeable through the MeTokens bonding curve AMM</li>
             <li>Community members can buy and hold your token</li>
             <li>You can earn from trading fees and token appreciation</li>
@@ -312,8 +411,8 @@ export function MeTokenCreator({ onMeTokenCreated }: MeTokenCreatorProps) {
           <Alert className="mt-4">
             <Info className="h-4 w-4" />
             <AlertDescription className="text-xs">
-              <strong>Pro Tip:</strong> You can start with 0 DAI and add liquidity later.
-              Initial DAI deposits help bootstrap your token&apos;s value.
+              <strong>Pro Tip:</strong> You can start with 0 {collateralSymbol} and add liquidity later.
+              Initial deposits help bootstrap your token&apos;s value.
             </AlertDescription>
           </Alert>
         </div>

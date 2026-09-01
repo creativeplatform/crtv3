@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useRef, useCallback } from "react";
-import { useSignTypedData } from "@account-kit/react";
+import { useSignTypedData } from "@/lib/wallet/react";
 import { useUniversalAccount } from "@/lib/hooks/accountkit/useUniversalAccount";
-import { useSmartAccountClient } from "@account-kit/react";
+import { useSmartAccountClient } from "@/lib/wallet/react";
 import {
   VERIFIABLE_VIDEO_DOMAIN,
   VERIFIABLE_VIDEO_TYPES,

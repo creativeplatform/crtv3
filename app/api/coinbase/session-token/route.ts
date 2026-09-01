@@ -1,6 +1,6 @@
 "use server";
 import { NextRequest, NextResponse } from "next/server";
-import { checkBotId } from "botid/server";
+import { checkBotIdDeep } from "@/lib/middleware/botIdGuard";
 import { generateJwt } from "@coinbase/cdp-sdk/auth";
 import { verifyMessage } from "viem";
 import { serverLogger } from "@/lib/utils/logger";
@@ -321,7 +321,7 @@ function getClientIp(request: NextRequest): string {
 }
 
 export async function POST(req: NextRequest) {
-  const verification = await checkBotId();
+  const verification = await checkBotIdDeep();
   if (verification.isBot) {
     return NextResponse.json({ error: "Access denied" }, { status: 403 });
   }

@@ -1,9 +1,9 @@
 "use client";
 import { useState, useEffect, useCallback } from 'react';
-import { useSmartAccountClient } from '@account-kit/react';
-import { formatEther } from 'viem';
-import { erc20Abi } from 'viem';
+import { useSmartAccountClient } from '@/lib/wallet/react';
+import { formatEther, type Address } from 'viem';
 import { DAI_TOKEN_ADDRESSES } from '@/lib/contracts/DAIToken';
+import { getErc20Balance } from '@/lib/viem';
 import { logger } from '@/lib/utils/logger';
 
 
@@ -26,17 +26,10 @@ export function DaiBalanceChecker({ onBalanceUpdate, className }: DaiBalanceChec
     setError(null);
     
     try {
-      const daiContract = {
-        address: DAI_TOKEN_ADDRESSES.base as `0x${string}`,
-        abi: erc20Abi,
-      };
-      
-      const balance = await client.readContract({
-        address: daiContract.address,
-        abi: daiContract.abi,
-        functionName: 'balanceOf',
-        args: [client.account?.address as `0x${string}`],
-      }) as bigint;
+      const balance = await getErc20Balance({
+        token: DAI_TOKEN_ADDRESSES.base as Address,
+        owner: client.account?.address as Address,
+      });
       
       setDaiBalance(balance);
       onBalanceUpdate?.(balance);

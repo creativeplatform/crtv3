@@ -1,7 +1,7 @@
 # Creative Platform Subgraph
 
 Merged Graph Studio subgraph for the Creative Platform on Base:
-- MeTokens entities: `Subscribe`, `Mint`, `Burn`, `Register` (GraphQL field names match Goldsky `metokens/1.0.2`: `timestamp_`, `block_number`, `transactionHash_`, `contractId_`, etc.)
+- MeTokens entities: `Subscribe`, `Mint`, `Burn`, `Register`, `Hub`, `MeTokenBalance` (GraphQL field names match Goldsky `metokens/1.0.3`: `timestamp_`, `block_number`, `transactionHash_`, `contractId_`, etc.)
 - Reality.eth entities: `Question`, `Answer`
 
 ## MeTokens data source

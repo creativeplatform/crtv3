@@ -233,6 +233,14 @@ This application can be deployed on Vercel or any other Next.js-compatible hosti
 
 ## 📚 Additional Resources
 
+### Engineering docs
+
+- [Platform API](./docs/platform-api.md) — tiered playback resolver and x402 gating
+- [Predictions](./docs/predictions.md) — Reality.eth markets, quotas, display enrichment, API routes
+- [Live stream MeToken gate](./docs/live-stream-metoken-gate.md) — gated live playback, JWT auth, linked-wallet balance checks
+
+### External
+
 - [Account Kit Documentation](https://accountkit.alchemy.com/)
 - [Livepeer Documentation](https://docs.livepeer.org/)
 - [Next.js Documentation](https://nextjs.org/docs)

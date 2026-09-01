@@ -1,5 +1,5 @@
 // NOTE: This module is not currently used - Account Kit manages its own signer
-// The useSigner() hook from @account-kit/react should be used instead
+// The useSigner() hook from @/lib/wallet/react should be used instead
 // 
 // The aggressive iframe cleanup that was here has been removed because it was
 // breaking the signer connection. Account Kit's AlchemyAccountProvider manages

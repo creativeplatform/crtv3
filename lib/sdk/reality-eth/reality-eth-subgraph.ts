@@ -2,14 +2,15 @@ import { gql } from "@apollo/client";
 
 /**
  * Reality.eth Subgraph Queries
- * 
- * GraphQL queries for fetching Reality.eth questions and answers
- * from the Goldsky-hosted subgraph
  *
- * Note: The Goldsky `reality-eth/1.0.0` deployment exposes `logNewQuestions`, not `questions`.
+ * Production uses The Graph Studio (`creative-platform` merged subgraph), which exposes
+ * the `questions` entity. Use GET_QUESTIONS_LIST / GET_QUESTION for all app queries.
+ *
+ * GET_LOG_NEW_QUESTIONS_LIST is legacy Goldsky-only (`reality-eth/1.0.0` uses logNewQuestions).
+ * Kept for emergency rollback when SUBGRAPH_PROVIDER_MODE=goldsky.
  */
 
-/** List questions from log entities (Goldsky reality-eth subgraph). */
+/** @deprecated Goldsky reality-eth only — not in Graph Studio schema. Use GET_QUESTIONS_LIST. */
 export const GET_LOG_NEW_QUESTIONS_LIST = gql`
   query GetLogNewQuestionsList($first: Int!, $skip: Int!) {
     logNewQuestions(

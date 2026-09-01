@@ -33,7 +33,7 @@ export async function createModularAccountClient({
   }
 
   const accountClient = await createModularAccountV2Client({
-    mode: "default", // Use default mode for standard functionality
+    mode: "default",
     chain,
     transport: alchemy({
       apiKey,
@@ -46,7 +46,7 @@ export async function createModularAccountClient({
 
 /**
  * Helper function to send a user operation
- * For React components, use useSendUserOperation from @account-kit/react instead
+ * For React components, use useSendUserOperation from @/lib/wallet/react instead
  */
 export async function sendUserOperation({
   client,
