@@ -53,7 +53,7 @@ the user across sessions and across apps.
 
 ```
 ┌─ Layer 3: UI / Continuity ──────────────────────────────┐
-│  OrbGuideChat (persistent, collapsible) in app shell     │
+│  CreativeGuideChat (persistent, collapsible) in app shell     │
 │  + coachmarks on key routes. Memory keyed to Privy ID.   │
 ├─ Layer 2: Agent Orchestrator (local-first) ─────────────┤
 │  Client Orchestrator using `ai` SDK `streamText`+tools.  │
@@ -73,7 +73,7 @@ for staging. Metered/paid tools route through the x402 gate.
 `streamText` with tool-calling. A *lightweight* server proxy is added only when a
 query is too hard for the local path — and only behind billing.
 
-**Layer 3 — Continuity + UX.** A `OrbGuideChat` component in the root layout,
+**Layer 3 — Continuity + UX.** A `CreativeGuideChat` component in the root layout,
 bound to `OrbSessionProvider`. Supabase `agent_memory` table (§6) gives the
 cross-session, cross-app continuity.
 
@@ -104,7 +104,7 @@ Metered tools (mint, membership buy) call the x402 gate before executing.
 
 ## 8. Phased rollout
 
-1. **Spike (staging):** `OrbGuideChat` on **one** route (marketplace) with 4–5
+1. **Spike (staging):** `CreativeGuideChat` on **one** route (marketplace) with 4–5
    tools + Supabase memory. Prove the UX loop. No billing yet.
 2. **Onboarding:** layer the guide into the Privy/Orb flow so wallet creation is
    explained, not just performed.
@@ -123,7 +123,7 @@ Metered tools (mint, membership buy) call the x402 gate before executing.
 
 ## 10. Definition of Done (spike)
 
-- `OrbGuideChat` renders in staging on `/marketplace` (and linked routes).
+- `CreativeGuideChat` renders in staging on `/marketplace` (and linked routes).
 - Agent can `explain_current_route`, read `get_user_state`, and perform ≥1
   write action (mixtape) via tool-call.
 - Memory persists across reload (Supabase `agent_memory`).

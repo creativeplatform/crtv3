@@ -7,6 +7,7 @@ import { fullLivepeer } from "@/lib/sdk/livepeer/fullClient";
 import { getDetailPlaybackSource } from "@/lib/hooks/livepeer/useDetailPlaybackSources";
 import VideoViewMetrics from "@/components/Videos/VideoViewMetrics";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useShoppableAnnotations } from "@/lib/hooks/shoppable/useShoppableAnnotations";
 import { logger } from '@/lib/utils/logger';
 
 
@@ -21,6 +22,7 @@ export default function VideoDetailsPage({
   const [isLoading, setIsLoading] = useState(false);
   const [assetLoading, setAssetLoading] = useState(false);
   const [error, setError] = useState("");
+  const { annotations, campaignId } = useShoppableAnnotations(asset?.playbackId);
 
   useEffect(() => {
     const fetchVideoDetails = async () => {
@@ -104,6 +106,8 @@ export default function VideoDetailsPage({
                   src={playbackSources}
                   playbackId={asset.playbackId}
                   title={asset?.name}
+                  shoppableAnnotations={annotations}
+                  shoppableCampaignId={campaignId ?? undefined}
                 />
               )
             )}

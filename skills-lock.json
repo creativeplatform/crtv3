@@ -36,6 +36,18 @@
       "sourceType": "github",
       "skillPath": "skills/ecosystem/opensea/SKILL.md",
       "computedHash": "44e503f60847825ffa413b7ffe5b7a72936d3cf10d0297e04a8c2624190db98c"
+    },
+    "upstash-qstash-js": {
+      "source": "upstash/skills",
+      "sourceType": "github",
+      "skillPath": "skills/upstash-qstash-js/SKILL.md",
+      "computedHash": "cd248bc0a8a0686da6897295d8bd3f854a778a963adbf024f002e9387d44b9bd"
+    },
+    "upstash-workflow-js": {
+      "source": "upstash/skills",
+      "sourceType": "github",
+      "skillPath": "skills/upstash-workflow-js/SKILL.md",
+      "computedHash": "43c4b1b0445972c9e340bf8893a1aa928a8ed73618fede41df1d9f8931b9ad3a"
     }
   }
 }

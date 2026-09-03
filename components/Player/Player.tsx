@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useRef, useCallback } from "react";
+import React, { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import * as LivepeerPlayer from "@livepeer/react/player";
 import type { PlaybackError } from "@livepeer/react";
 import {
@@ -16,6 +16,10 @@ import "./Player.css";
 import { Src } from "@livepeer/react";
 import { SubtitlesControl } from "./Subtitles";
 import { CreativeBrandOverlay } from "./CreativeBrandOverlay";
+import {
+  ShoppableOverlay,
+  type ShoppableAnnotation,
+} from "./ShoppableOverlay";
 import { FloatingTipHearts } from "@/components/Live/FloatingTipHearts";
 import { safelyPauseVideo } from "@/lib/utils/video-controls";
 import { logger } from '@/lib/utils/logger';
@@ -43,13 +47,28 @@ interface PlayerProps {
   lowLatency?: boolean;
   /** Called when the player has been trying to load too long or the stream goes offline. */
   onStalled?: () => void;
+  /** Shoppable overlay annotations for this VOD (optional). */
+  shoppableAnnotations?: ShoppableAnnotation[];
+  shoppableCampaignId?: string;
 }
 
 /** HLS live warm-up can take ~10–20s; allow headroom before declaring a stall. */
 const HLS_WARMUP_MS = 45_000;
 
 export function Player(props: PlayerProps) {
-  const { src, title, playbackId, assetId, jwt, onPlay, onStalled, autoPlay = true, lowLatency = true } = props;
+  const {
+    src,
+    title,
+    playbackId,
+    assetId,
+    jwt,
+    onPlay,
+    onStalled,
+    autoPlay = true,
+    lowLatency = true,
+    shoppableAnnotations,
+    shoppableCampaignId,
+  } = props;
 
   const [controlsVisible, setControlsVisible] = useState(true);
   const fadeTimeoutRef = useRef<NodeJS.Timeout>();
@@ -59,6 +78,50 @@ export function Player(props: PlayerProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const stalledTimerRef = useRef<NodeJS.Timeout | null>(null);
   const hasPlayedRef = useRef(false);
+  const [activeAnnotations, setActiveAnnotations] = useState<ShoppableAnnotation[]>(
+    []
+  );
+  const activeIdsRef = useRef<Set<string>>(new Set());
+  const lastTickRef = useRef(0);
+
+  const annotationMap = useMemo(() => {
+    const map = new Map<number, ShoppableAnnotation[]>();
+    for (const a of shoppableAnnotations ?? []) {
+      const start = Math.floor(a.startTime);
+      const end = Math.floor(a.endTime);
+      for (let s = start; s <= end; s++) {
+        if (!map.has(s)) map.set(s, []);
+        map.get(s)!.push(a);
+      }
+    }
+    return map;
+  }, [shoppableAnnotations]);
+
+  const handleShoppableTimeUpdate = useCallback(
+    (e: React.SyntheticEvent<HTMLVideoElement>) => {
+      if (!shoppableAnnotations?.length || !shoppableCampaignId) return;
+      const now = performance.now();
+      if (now - lastTickRef.current < 250) return;
+      lastTickRef.current = now;
+
+      const currentTime = e.currentTarget.currentTime;
+      const currentSecond = Math.floor(currentTime);
+      const candidates = annotationMap.get(currentSecond) || [];
+      const nextActive = candidates.filter(
+        (a) => currentTime >= a.startTime && currentTime <= a.endTime
+      );
+      const nextIds = new Set(nextActive.map((a) => a.id));
+      const currentIds = activeIdsRef.current;
+      if (
+        nextIds.size !== currentIds.size ||
+        ![...nextIds].every((id) => currentIds.has(id))
+      ) {
+        activeIdsRef.current = nextIds;
+        setActiveAnnotations(nextActive);
+      }
+    },
+    [annotationMap, shoppableAnnotations, shoppableCampaignId]
+  );
 
   const clearStalledTimer = useCallback(() => {
     if (stalledTimerRef.current) {
@@ -213,6 +276,7 @@ export function Player(props: PlayerProps) {
           className="h-full w-full"
           playsInline
           controls={false}
+          onTimeUpdate={handleShoppableTimeUpdate}
           hlsConfig={{
             manifestLoadingTimeOut: HLS_WARMUP_MS,
             manifestLoadingMaxRetry: 6,
@@ -223,6 +287,13 @@ export function Player(props: PlayerProps) {
         />
 
         <CreativeBrandOverlay />
+        {shoppableCampaignId && shoppableAnnotations?.length ? (
+          <ShoppableOverlay
+            activeAnnotations={activeAnnotations}
+            campaignId={shoppableCampaignId}
+            allAnnotations={shoppableAnnotations}
+          />
+        ) : null}
         {playbackId ? <FloatingTipHearts streamId={playbackId} /> : null}
 
         <LivepeerPlayer.LoadingIndicator

@@ -53,6 +53,11 @@ import Link from "next/link";
 import { LicensePurchaseDialog } from "@/components/Videos/LicensePurchaseDialog";
 import { CreatorDisplay } from "@/components/Creator/CreatorDisplay";
 import { CreativeBrandOverlay } from "@/components/Player/CreativeBrandOverlay";
+import {
+  ShoppableOverlay,
+  type ShoppableAnnotation,
+} from "@/components/Player/ShoppableOverlay";
+import { useShoppableAnnotations } from "@/lib/hooks/shoppable/useShoppableAnnotations";
 
 const STORY_SCAN_IP_BASE =
   process.env.NEXT_PUBLIC_STORY_NETWORK === "mainnet"
@@ -218,6 +223,51 @@ export default function VideoDetails({
   const account = useMemo(() => userToAccount(user), [user]);
   const { openAuthModal } = useAuthModal();
   const isConnected = !!user;
+
+  const { annotations: shoppableAnnotations, campaignId: shoppableCampaignId } =
+    useShoppableAnnotations(asset?.playbackId);
+  const [activeShoppable, setActiveShoppable] = useState<ShoppableAnnotation[]>(
+    []
+  );
+  const activeShoppableIdsRef = useRef<Set<string>>(new Set());
+  const shoppableTickRef = useRef(0);
+
+  const shoppableMap = useMemo(() => {
+    const map = new Map<number, ShoppableAnnotation[]>();
+    for (const a of shoppableAnnotations) {
+      const start = Math.floor(a.startTime);
+      const end = Math.floor(a.endTime);
+      for (let s = start; s <= end; s++) {
+        if (!map.has(s)) map.set(s, []);
+        map.get(s)!.push(a);
+      }
+    }
+    return map;
+  }, [shoppableAnnotations]);
+
+  const handleShoppableTimeUpdate = useCallback(
+    (e: React.SyntheticEvent<HTMLVideoElement>) => {
+      if (!shoppableAnnotations.length || !shoppableCampaignId) return;
+      const now = performance.now();
+      if (now - shoppableTickRef.current < 250) return;
+      shoppableTickRef.current = now;
+      const currentTime = e.currentTarget.currentTime;
+      const candidates = shoppableMap.get(Math.floor(currentTime)) || [];
+      const nextActive = candidates.filter(
+        (a) => currentTime >= a.startTime && currentTime <= a.endTime
+      );
+      const nextIds = new Set(nextActive.map((a) => a.id));
+      const currentIds = activeShoppableIdsRef.current;
+      if (
+        nextIds.size !== currentIds.size ||
+        ![...nextIds].every((id) => currentIds.has(id))
+      ) {
+        activeShoppableIdsRef.current = nextIds;
+        setActiveShoppable(nextActive);
+      }
+    },
+    [shoppableAnnotations, shoppableCampaignId, shoppableMap]
+  );
 
   useEffect(() => {
     // Player (and containerRef) only mount when wallet is connected
@@ -755,8 +805,16 @@ export default function VideoDetails({
                     title={asset?.name}
                     className="h-full w-full"
                     poster={thumbnailUrl || undefined}
+                    onTimeUpdate={handleShoppableTimeUpdate}
                   />
                   <CreativeBrandOverlay />
+                  {shoppableCampaignId && shoppableAnnotations.length > 0 ? (
+                    <ShoppableOverlay
+                      activeAnnotations={activeShoppable}
+                      campaignId={shoppableCampaignId}
+                      allAnnotations={shoppableAnnotations}
+                    />
+                  ) : null}
                   <Player.LoadingIndicator
                     className="relative h-full w-full bg-black/50 backdrop-blur data-[visible=true]:animate-in 
                   data-[visible=false]:animate-out data-[visible=false]:fade-out-0 data-[visible=true]:fade-in-0"

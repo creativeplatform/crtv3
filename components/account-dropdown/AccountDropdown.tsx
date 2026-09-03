@@ -88,6 +88,7 @@ import { LoginButton } from "@/components/auth/LoginButton";
 import { AlchemySwapWidget } from "@/components/wallet/swap/AlchemySwapWidget";
 import { useSmartWalletDisplayAddress } from "@/lib/hooks/accountkit/useSmartWalletDisplayAddress";
 import { TokenBalance } from "@/components/wallet/balance/TokenBalance";
+import { EarnSection } from "@/components/wallet/earn/EarnSection";
 import { MeTokenBalances } from "@/components/wallet/balance/MeTokenBalances";
 import makeBlockie from "ethereum-blockies-base64";
 import { Avatar, AvatarImage } from "@/components/ui/avatar";
@@ -1816,6 +1817,15 @@ export const AccountDropdown = forwardRef<AccountDropdownHandle>(
               <TokenBalance
                 isVisible={isDropdownOpen}
                 refreshKey={balanceRefreshKey}
+              />
+            </div>
+
+            <DropdownMenuSeparator />
+
+            <div className="px-2 py-2">
+              <EarnSection
+                isVisible={isDropdownOpen}
+                onSuccess={() => setBalanceRefreshKey((k) => k + 1)}
               />
             </div>
 

@@ -10,7 +10,7 @@ import Footer from "@/components/Footer";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Analytics } from "@vercel/analytics/next";
 import { LayoutClientChunks } from "@/components/LayoutClientChunks";
-import { OrbGuideChat } from "@/components/agent/OrbGuideChat";
+import { CreativeGuideChat } from "@/components/agent/CreativeGuideChat";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -85,7 +85,7 @@ export default async function RootLayout({
               {!isEmbedRoute ? <Footer /> : null}
             </div>
           </ErrorBoundary>
-          <OrbGuideChat />
+          <CreativeGuideChat />
         </Providers>
         <Toaster />
         <Analytics />

@@ -41,6 +41,7 @@ import { useSmartWalletDisplayAddress } from "@/lib/hooks/accountkit/useSmartWal
 import { base } from "@account-kit/infra";
 import { TokenBalance } from "./wallet/balance/TokenBalance";
 import { MeTokenBalances } from "./wallet/balance/MeTokenBalances";
+import { EarnSection } from "./wallet/earn/EarnSection";
 import type { Chain as ViemChain } from "viem";
 import {
   AccountDropdown,
@@ -674,6 +675,11 @@ export default function Navbar() {
                     {/* Balances */}
                     <div className="mt-4">
                       <TokenBalance />
+                    </div>
+
+                    {/* Earn */}
+                    <div className="mt-4">
+                      <EarnSection isVisible={isMenuOpen} />
                     </div>
 
                     {/* Wallet Actions */}

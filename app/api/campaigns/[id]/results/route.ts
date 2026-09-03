@@ -13,14 +13,14 @@ import { makeServerClient } from "@/lib/apollo-server-client";
  * query with our rate limiting/BotID posture.
  */
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const verification = await checkBotIdDeep();
   if (verification.isBot) {
     return NextResponse.json({ error: "Access denied" }, { status: 403 });
   }
-  const rl = await rateLimiters.standard?.(_request);
+  const rl = await rateLimiters.standard(request);
   if (rl) return rl;
 
   const { id } = await params;

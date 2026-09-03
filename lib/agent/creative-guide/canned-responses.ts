@@ -1,5 +1,5 @@
 /**
- * Canned response layer for OrbGuide.
+ * Canned response layer for Creative Guide.
  *
  * Keeps routine onboarding/upload questions cheap and fast by matching them
  * to pre-written answers. Only unmatched or explicitly advanced queries are
@@ -23,9 +23,6 @@ const UPLOAD_STEPS = [
   'Optionally attach IP licensing — not required to publish.',
   'Hit Publish. Your clip goes live and is mintable.',
 ];
-
-const MIXTAPE_NOTE =
-  'Mixtape curation is open to ALL users and is NEVER gated on IP licensing.';
 
 /** Common question patterns and their exact canned answers. */
 const PATTERNS: { patterns: string[]; response: string }[] = [
@@ -54,7 +51,7 @@ const PATTERNS: { patterns: string[]; response: string }[] = [
       'explain upload flow',
       'how does uploading work',
     ],
-    response: `Here are the steps:\n${UPLOAD_STEPS.map((s, i) => `${i + 1}. ${s}`).join('\n')}\n\n${MIXTAPE_NOTE}`,
+    response: `Here are the steps:\n${UPLOAD_STEPS.map((s, i) => `${i + 1}. ${s}`).join('\n')}`,
   },
   {
     patterns: [
@@ -66,19 +63,7 @@ const PATTERNS: { patterns: string[]; response: string }[] = [
       'explain ip licensing',
     ],
     response:
-      'IP licensing is **optional**. You can publish clips without it. It helps protect and monetize your work, but it is never required to upload or appear on Mixtape.',
-  },
-  {
-    patterns: [
-      'what is mixtape',
-      'how does mixtape work',
-      'who can use mixtape',
-      'mixtape requirements',
-      'curate mixtape',
-    ],
-    response:
-      'Mixtape lets anyone curate and share video playlists. ' +
-      'It is open to all users and does not require IP licensing or a paid membership.',
+      'IP licensing is optional. You can publish clips without it. It helps protect and monetize your work, but it is never required to upload on Creative TV.',
   },
   {
     patterns: [
@@ -93,9 +78,17 @@ const PATTERNS: { patterns: string[]; response: string }[] = [
   },
   {
     patterns: [
-      'what is creative platform',
-      'what is crtv',
       'what is creative tv',
+      'what is crtv',
+      'what is creative platform',
+      'tell me about creative tv',
+      'what is this app',
+    ],
+    response:
+      'Creative TV is the creator video platform on Creative Platform. Upload clips, optionally license your IP, mint on-chain, launch a MeToken, and build your creator economy — all from one place.',
+  },
+  {
+    patterns: [
       'who are you',
       'what can you do',
       'help',
@@ -104,7 +97,42 @@ const PATTERNS: { patterns: string[]; response: string }[] = [
       'hey',
     ],
     response:
-      "I'm Creative Guide. I can walk you through uploading, explain Mixtape, IP licensing, minting, memberships, and more. Ask me anything or tap 'Start my first upload'.",
+      "I'm Creative Guide. I can walk you through uploading on Creative TV, explain IP licensing, minting, MeTokens, memberships, and more. Ask me anything or tap 'Start my first upload'.",
+  },
+  {
+    patterns: [
+      'what is a metoken',
+      'what is me token',
+      'what are metokens',
+      'explain metoken',
+      'what is me token',
+    ],
+    response:
+      'A MeToken is a creator personal token fans can buy and hold. It ties your audience to your success — as you grow, supporters can invest in you directly on Creative TV.',
+  },
+  {
+    patterns: [
+      'how do i create a metoken',
+      'how to create metoken',
+      'create a metoken',
+      'set up metoken',
+      'setup metoken',
+      'launch metoken',
+      'start metoken',
+    ],
+    response:
+      'To create your MeToken: go to Profile (/profile) or Portfolio → Create MeToken (/portfolio). Connect your wallet, pick a name and symbol, then deposit collateral (USDC hub). Confirm the transaction and your MeToken is live.',
+  },
+  {
+    patterns: [
+      'how do i buy metoken',
+      'buy metoken',
+      'subscribe to creator',
+      'how to subscribe',
+      'invest in creator',
+    ],
+    response:
+      'Visit a creator profile, find their MeToken section, and use Subscribe or Buy. You will need a connected wallet and USDC for the purchase.',
   },
   {
     patterns: [
@@ -115,7 +143,7 @@ const PATTERNS: { patterns: string[]; response: string }[] = [
       'do i need a membership',
     ],
     response:
-      'Memberships unlock extra features like gated content, badges, and creator perks. They are optional — you can upload and use Mixtape without one.',
+      'Memberships unlock extra features like gated content, badges, and creator perks. They are optional — you can upload and use Creative TV without one.',
   },
   {
     patterns: [
@@ -139,7 +167,7 @@ const PATTERNS: { patterns: string[]; response: string }[] = [
       'why do i need to pay',
     ],
     response:
-      'Uploading and using Mixtape are free. Advanced agent chats that need the hosted AI cost a small USDC payment per message.',
+      'Uploading on Creative TV is free. Basic help from Creative Guide is free too. Advanced AI questions that need Gemini cost a small USDC payment per message.',
   },
 ];
 
@@ -160,19 +188,16 @@ export function matchCannedResponse(message: string): CannedMatch {
 
   for (const item of PATTERNS) {
     for (const pattern of item.patterns) {
-      // Whole-word-ish substring match; good enough for short onboarding queries.
       if (normalized.includes(pattern) || pattern.includes(normalized)) {
         return { escalate: false, content: item.response };
       }
     }
   }
 
-  // Explicit escalation cue.
   if (/(advanced|detailed|deep|expert|ask the ai|ask gemini)/.test(normalized)) {
     return { escalate: true };
   }
 
-  // No match — escalate to the paid model.
   return { escalate: true };
 }
 

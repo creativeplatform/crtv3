@@ -5,6 +5,8 @@
 /.pnp
 .pnp.js
 .yarn/install-state.gz
+.yarn-cache-local/
+
 # Subgraph build artifacts and deps (keep source code committed)
 /subgraphs/node_modules/
 /subgraphs/build/
